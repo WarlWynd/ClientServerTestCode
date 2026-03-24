@@ -1,0 +1,26 @@
+plugins {
+    id 'java' apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(23)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs += ['--enable-preview']
+        options.release = 23
+    }
+
+    tasks.withType(JavaExec).configureEach {
+        jvmArgs '--enable-preview'
+    }
+}

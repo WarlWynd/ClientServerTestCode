@@ -1,0 +1,36 @@
+plugins {
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'application'
+}
+
+javafx {
+    version = "23"
+    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
+}
+
+dependencies {
+    implementation project(':shared')
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'ch.qos.logback:logback-classic:1.5.8'
+}
+
+application {
+    mainClass = 'com.game.client.ClientMain'
+    applicationDefaultJvmArgs = [
+        '--enable-preview',
+        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+    ]
+}
+
+jar {
+    archiveBaseName = 'game-client'
+    manifest {
+        attributes 'Main-Class': 'com.game.client.ClientMain'
+    }
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

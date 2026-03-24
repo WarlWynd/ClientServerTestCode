@@ -1,0 +1,27 @@
+dependencies {
+    implementation project(':shared')
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'com.mysql:mysql-connector-j:9.0.0'
+    implementation 'org.mindrot:jbcrypt:0.4'
+    implementation 'ch.qos.logback:logback-classic:1.5.8'
+}
+
+jar {
+    archiveBaseName = 'game-server'
+    manifest {
+        attributes 'Main-Class': 'com.game.server.ServerMain'
+    }
+    // Fat JAR: include all runtime dependencies
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+application {
+    mainClass = 'com.game.server.ServerMain'
+}
+
+apply plugin: 'application'
