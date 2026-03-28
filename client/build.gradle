@@ -8,6 +8,10 @@ javafx {
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     implementation project(':shared')
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
