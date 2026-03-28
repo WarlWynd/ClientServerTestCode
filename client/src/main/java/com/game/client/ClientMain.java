@@ -1,6 +1,7 @@
 package com.game.client;
 
 import com.game.client.ui.LoginScreen;
+import com.game.client.ui.UpdateScreen;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
@@ -22,8 +23,15 @@ public class ClientMain extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         ClientConfig config = new ClientConfig();
-        udpClient = new UDPClient(config);
 
+        primaryStage.setResizable(false);
+        primaryStage.setOnCloseRequest(e -> shutdown());
+
+        new UpdateScreen(primaryStage, config.getVersion(), () -> launchGame(primaryStage, config)).show();
+    }
+
+    private void launchGame(Stage primaryStage, ClientConfig config) {
+        udpClient = new UDPClient(config);
         try {
             udpClient.start();
         } catch (Exception e) {
@@ -31,10 +39,6 @@ public class ClientMain extends Application {
             Platform.exit();
             return;
         }
-
-        primaryStage.setResizable(false);
-        primaryStage.setOnCloseRequest(e -> shutdown());
-
         new LoginScreen(primaryStage, udpClient).show();
     }
 

@@ -38,3 +38,28 @@ jar {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+task jpackageImage(type: Exec, dependsOn: jar) {
+    def jpackageExe = "${System.getenv('JAVA_HOME')}/bin/jpackage"
+    def outputDir = "${buildDir}/jpackage"
+
+    doFirst {
+        file(outputDir).deleteDir()
+    }
+
+    commandLine jpackageExe,
+        '--type', 'app-image',
+        '--input', "${buildDir}/libs",
+        '--main-jar', 'game-client.jar',
+        '--name', 'MultiplayerGame',
+        '--app-version', '1.0.0',
+        '--dest', outputDir,
+        '--java-options', '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+}
+
+task packageZip(type: Zip, dependsOn: jpackageImage) {
+    archiveFileName = 'MultiplayerGame-windows.zip'
+    destinationDirectory = file("${buildDir}/dist")
+    from "${buildDir}/jpackage/MultiplayerGame"
+    into 'MultiplayerGame'
+}
