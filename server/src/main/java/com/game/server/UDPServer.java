@@ -153,6 +153,8 @@ public class UDPServer {
         });
     }
 
+    public GameHandler getGameHandler() { return gameHandler; }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private void sendError(DatagramSocket socket, String message,

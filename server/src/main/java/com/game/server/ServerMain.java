@@ -1,6 +1,8 @@
 package com.game.server;
 
 import com.game.server.db.DatabaseManager;
+import com.game.server.ui.AdminApp;
+import javafx.application.Application;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,7 +13,7 @@ import org.slf4j.LoggerFactory;
  *   ./gradlew :server:run
  * or build a fat JAR:
  *   ./gradlew :server:jar
- *   java --enable-preview -jar server/build/libs/game-server.jar
+ *   java -jar server/build/libs/game-server.jar
  */
 public class ServerMain {
 
@@ -40,11 +42,23 @@ public class ServerMain {
                     server.stop();
                 }));
 
-        try {
-            server.start();
-        } catch (Exception e) {
-            log.error("Fatal server error: {}", e.getMessage(), e);
-            System.exit(1);
-        }
+        // Run UDP server on a background thread so JavaFX can own the main thread
+        Thread serverThread = Thread.ofPlatform()
+                .name("udp-server")
+                .start(() -> {
+                    try {
+                        server.start();
+                    } catch (Exception e) {
+                        log.error("Fatal server error: {}", e.getMessage(), e);
+                        System.exit(1);
+                    }
+                });
+
+        // Pass the GameHandler to the admin UI before launching
+        AdminApp.init(server.getGameHandler(), config.getPort());
+        Application.launch(AdminApp.class, args);
+
+        // JavaFX exited — stop the server
+        server.stop();
     }
 }
