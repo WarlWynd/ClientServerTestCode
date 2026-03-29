@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────
 #  Game Server Configuration
 # ─────────────────────────────────────────────
+# Copy this file to server.properties and fill in your values.
 
 # UDP port the server listens on
 server.port=9876
@@ -9,5 +10,5 @@ server.port=9876
 db.host=localhost
 db.port=3306
 db.name=game_db
-db.user=root
+db.user=gamemaster
 db.password=changeme

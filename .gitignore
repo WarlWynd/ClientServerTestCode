@@ -1,0 +1,11 @@
+# Build output
+build/
+.gradle/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Secrets
+server/src/main/resources/server.properties
