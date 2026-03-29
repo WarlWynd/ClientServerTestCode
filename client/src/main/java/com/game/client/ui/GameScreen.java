@@ -17,6 +17,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -123,12 +124,15 @@ public class GameScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         Scene scene = new Scene(root, WORLD_W, WORLD_H + 64);
-        scene.setOnKeyPressed(e  -> heldKeys.add(e.getCode()));
-        scene.setOnKeyReleased(e -> heldKeys.remove(e.getCode()));
+        scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
+        scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> heldKeys.remove(e.getCode()));
 
         stage.setTitle("Multiplayer Game");
         stage.setScene(scene);
         stage.show();
+
+        canvas.setFocusTraversable(true);
+        canvas.requestFocus();
 
         // ── Join game ────────────────────────────────────────────────────────
         sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());

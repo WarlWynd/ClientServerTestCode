@@ -7,7 +7,7 @@
 server.port=9876
 
 # MySQL / MariaDB connection
-db.host=localhost
+db.host=192.168.1.153
 db.port=3306
 db.name=game_db
 db.user=gamemaster
