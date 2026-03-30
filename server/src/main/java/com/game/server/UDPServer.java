@@ -35,7 +35,8 @@ public class UDPServer {
     private static final int  RECV_BUFFER_SIZE  = 4096;
     private static final long PLAYER_TIMEOUT_MS = 30_000;
 
-    private final int port;
+    private final int    port;
+    private final String minClientVersion;
     private final AuthHandler        authHandler;
     private final GameHandler        gameHandler  = new GameHandler();
     private final AdminPacketHandler adminHandler;
@@ -46,10 +47,11 @@ public class UDPServer {
     private ExecutorService           workers;
     private ScheduledExecutorService  scheduler;
 
-    public UDPServer(int port, String serverVersion) {
-        this.port        = port;
-        this.authHandler = new AuthHandler(serverVersion);
-        this.adminHandler = new AdminPacketHandler(authHandler, gameHandler);
+    public UDPServer(int port, String serverVersion, String minClientVersion) {
+        this.port             = port;
+        this.minClientVersion = minClientVersion;
+        this.authHandler      = new AuthHandler(serverVersion);
+        this.adminHandler     = new AdminPacketHandler(authHandler, gameHandler);
     }
 
     // -- Lifecycle --
@@ -97,8 +99,9 @@ public class UDPServer {
             Packet packet = PacketSerializer.deserialize(trimmed);
 
             switch (packet.type) {
-                case LOGIN_REQUEST    -> authHandler.handleLogin(socket, packet, addr, port);
-                case REGISTER_REQUEST -> authHandler.handleRegister(socket, packet, addr, port);
+                case VERSION_CHECK_REQUEST -> handleVersionCheck(socket, packet, addr, port);
+                case LOGIN_REQUEST         -> authHandler.handleLogin(socket, packet, addr, port);
+                case REGISTER_REQUEST      -> authHandler.handleRegister(socket, packet, addr, port);
                 case LOGOUT_REQUEST   -> {
                     authHandler.handleLogout(socket, packet, addr, port);
                     if (packet.sessionToken != null)
@@ -160,6 +163,54 @@ public class UDPServer {
 
     public GameHandler  getGameHandler()  { return gameHandler; }
     public AuthHandler  getAuthHandler()  { return authHandler; }
+
+    // -- Version check --
+
+    private void handleVersionCheck(DatagramSocket socket, Packet packet,
+                                    InetAddress addr, int port) throws Exception {
+        String clientVersion = packet.payload.has("version")
+                ? packet.payload.get("version").asText()
+                : "0.0.0";
+
+        boolean compatible = !isOlderThan(clientVersion, minClientVersion);
+
+        var payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("compatible",    compatible);
+        payload.put("minVersion",    minClientVersion);
+        payload.put("clientVersion", clientVersion);
+        if (!compatible) {
+            payload.put("message", "Client v" + clientVersion
+                    + " is too old. Please update to v" + minClientVersion + " or newer.");
+        }
+
+        log.info("VERSION_CHECK  client={}  compatible={}  from {}:{}",
+                clientVersion, compatible, addr.getHostAddress(), port);
+
+        Packet p    = new Packet(PacketType.VERSION_CHECK_RESPONSE, null, payload);
+        byte[] data = PacketSerializer.serialize(p);
+        socket.send(new DatagramPacket(data, data.length, addr, port));
+    }
+
+    /** Returns true if {@code a} is strictly older (lower semver) than {@code b}. */
+    private static boolean isOlderThan(String a, String b) {
+        int[] va = parseSemver(a);
+        int[] vb = parseSemver(b);
+        for (int i = 0; i < Math.max(va.length, vb.length); i++) {
+            int x = i < va.length ? va[i] : 0;
+            int y = i < vb.length ? vb[i] : 0;
+            if (x != y) return x < y;
+        }
+        return false; // equal → not older
+    }
+
+    private static int[] parseSemver(String v) {
+        String[] parts = v.split("\\.");
+        int[] nums = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            try { nums[i] = Integer.parseInt(parts[i]); } catch (NumberFormatException ignored) {}
+        }
+        return nums;
+    }
 
     // -- Helpers --
 

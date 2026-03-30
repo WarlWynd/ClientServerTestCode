@@ -4,7 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -39,7 +41,7 @@ public final class DatabaseManager {
             """;
 
     private static final String DDL_USERS_ADD_ADMIN_COL =
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;";
+            "ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE;";
 
     private static final String DDL_USERS_ADD_BANNED_COL =
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE;";
@@ -99,12 +101,21 @@ public final class DatabaseManager {
         try (Connection conn = getConnection();
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
-            stmt.execute(DDL_USERS_ADD_ADMIN_COL);
+            if (!columnExists(conn, "users", "is_admin")) {
+                stmt.execute(DDL_USERS_ADD_ADMIN_COL);
+            }
             stmt.execute(DDL_USERS_ADD_BANNED_COL);
             stmt.execute(DDL_USERS_ADD_DEVELOPER_COL);
             stmt.execute(DDL_SESSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
+        }
+    }
+
+    private boolean columnExists(Connection conn, String table, String column) throws SQLException {
+        DatabaseMetaData meta = conn.getMetaData();
+        try (ResultSet rs = meta.getColumns(null, null, table, column)) {
+            return rs.next();
         }
     }
 }

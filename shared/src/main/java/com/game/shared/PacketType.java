@@ -17,6 +17,8 @@ public enum PacketType {
     PING,
     PONG,
     ERROR,
+    VERSION_CHECK_REQUEST,   // client -> server: send client version for compatibility check
+    VERSION_CHECK_RESPONSE,  // server -> client: compatible true/false + min required version
 
     // -- Game --
     GAME_JOIN,

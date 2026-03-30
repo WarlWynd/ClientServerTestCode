@@ -2,6 +2,7 @@ package com.game.client;
 
 import com.game.client.ui.LoginScreen;
 import com.game.client.ui.UpdateScreen;
+import com.game.client.ui.VersionCheckScreen;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
@@ -39,7 +40,8 @@ public class ClientMain extends Application {
             Platform.exit();
             return;
         }
-        new LoginScreen(primaryStage, udpClient, config.getVersion()).show();
+        new VersionCheckScreen(primaryStage, udpClient, config.getVersion(),
+                () -> new LoginScreen(primaryStage, udpClient, config.getVersion()).show()).show();
     }
 
     @Override
