@@ -24,6 +24,9 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.SourceDataLine;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -64,6 +67,7 @@ public class GameScreen {
     private final Map<String, JsonNode> remotePlayers = new ConcurrentHashMap<>();
 
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
+    private boolean wasSpaceHeld = false;
     private long lastSendTime = 0;
 
     private Label pingLabel;
@@ -150,6 +154,10 @@ public class GameScreen {
     // ── Input processing ─────────────────────────────────────────────────────
 
     private void processInput() {
+        boolean spaceNow = heldKeys.contains(KeyCode.SPACE);
+        if (spaceNow && !wasSpaceHeld) playSpaceSound();
+        wasSpaceHeld = spaceNow;
+
         boolean moved = false;
 
         if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
@@ -287,6 +295,31 @@ public class GameScreen {
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();
         new LoginScreen(stage, client).show();
+    }
+
+    // ── Sound ─────────────────────────────────────────────────────────────────
+
+    private void playSpaceSound() {
+        Thread.ofVirtual().start(() -> {
+            try {
+                AudioFormat fmt = new AudioFormat(44100, 16, 1, true, false);
+                try (SourceDataLine line = AudioSystem.getSourceDataLine(fmt)) {
+                    line.open(fmt, 4096);
+                    line.start();
+                    int frames = (int)(44100 * 0.12); // ~120 ms
+                    byte[] buf = new byte[frames * 2];
+                    for (int i = 0; i < frames; i++) {
+                        double t   = i / 44100.0;
+                        double env = 1.0 - (double) i / frames; // linear fade-out
+                        short  s   = (short)(Math.sin(2 * Math.PI * 520 * t) * env * Short.MAX_VALUE * 0.5);
+                        buf[i * 2]     = (byte)(s & 0xFF);
+                        buf[i * 2 + 1] = (byte)(s >> 8);
+                    }
+                    line.write(buf, 0, buf.length);
+                    line.drain();
+                }
+            } catch (Exception ignored) {}
+        });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

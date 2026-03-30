@@ -32,10 +32,14 @@ public final class DatabaseManager {
                 id            BIGINT       AUTO_INCREMENT PRIMARY KEY,
                 username      VARCHAR(50)  NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
+                is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
                 created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 last_login    TIMESTAMP    NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
+
+    private static final String DDL_USERS_ADD_ADMIN_COL =
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;";
 
     private static final String DDL_SESSIONS = """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -89,6 +93,7 @@ public final class DatabaseManager {
         try (Connection conn = getConnection();
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
+            stmt.execute(DDL_USERS_ADD_ADMIN_COL);
             stmt.execute(DDL_SESSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);

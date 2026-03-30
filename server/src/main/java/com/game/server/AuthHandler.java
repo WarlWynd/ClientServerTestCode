@@ -15,6 +15,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Handles all authentication-related UDP packets:
@@ -27,7 +29,10 @@ public class AuthHandler {
     private final UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
 
-    // ── Packet handlers ──────────────────────────────────────────────────────
+    /** In-memory set of session tokens that belong to admin users. */
+    private final Set<String> adminSessions = ConcurrentHashMap.newKeySet();
+
+    // -- Packet handlers --
 
     public void handleLogin(DatagramSocket socket, Packet in,
                             InetAddress addr, int port) throws Exception {
@@ -42,7 +47,13 @@ public class AuthHandler {
             out.put("success",      true);
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
-            log.info("LOGIN  ok  user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            out.put("isAdmin",      user.get().isAdmin());
+            if (user.get().isAdmin()) {
+                adminSessions.add(session.token());
+                log.info("ADMIN LOGIN  user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            } else {
+                log.info("LOGIN  ok  user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            }
         } else {
             out.put("success", false);
             out.put("message", "Invalid username or password.");
@@ -61,7 +72,7 @@ public class AuthHandler {
 
         if (username.length() < 3 || username.length() > 50) {
             out.put("success", false);
-            out.put("message", "Username must be 3–50 characters.");
+            out.put("message", "Username must be 3-50 characters.");
         } else if (!username.matches("[A-Za-z0-9_]+")) {
             out.put("success", false);
             out.put("message", "Username may only contain letters, digits, and underscores.");
@@ -83,6 +94,7 @@ public class AuthHandler {
     public void handleLogout(DatagramSocket socket, Packet in,
                              InetAddress addr, int port) throws Exception {
         if (in.sessionToken != null) {
+            adminSessions.remove(in.sessionToken);
             sessionRepo.invalidate(in.sessionToken);
             log.info("LOGOUT token={}", in.sessionToken);
         }
@@ -91,14 +103,19 @@ public class AuthHandler {
         send(socket, PacketType.LOGOUT_RESPONSE, null, out, addr, port);
     }
 
-    // ── Session validation (used by UDPServer for game packets) ─────────────
+    // -- Session validation --
 
     public Optional<Session> validateSession(String token) {
         if (token == null || token.isBlank()) return Optional.empty();
         return sessionRepo.validate(token);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    /** Returns true if the given token belongs to an admin user. */
+    public boolean isAdminSession(String token) {
+        return token != null && adminSessions.contains(token);
+    }
+
+    // -- Helpers --
 
     private void send(DatagramSocket socket, PacketType type, String token,
                       ObjectNode payload, InetAddress addr, int port) throws Exception {

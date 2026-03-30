@@ -20,9 +20,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Core UDP server.
  *
- * Receive loop runs on the calling thread.  Each incoming datagram is
- * dispatched to a virtual-thread worker (Java 21+ preview, available in 23)
- * so packet handling never blocks the receive loop.
+ * Receive loop runs on the calling thread. Each incoming datagram is
+ * dispatched to a virtual-thread worker so packet handling never blocks
+ * the receive loop.
  *
  * Scheduled tasks:
  *   - every 5 min : purge expired DB sessions
@@ -32,24 +32,25 @@ public class UDPServer {
 
     private static final Logger log = LoggerFactory.getLogger(UDPServer.class);
 
-    private static final int  RECV_BUFFER_SIZE   = 4096;    // bytes
-    private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
+    private static final int  RECV_BUFFER_SIZE  = 4096;
+    private static final long PLAYER_TIMEOUT_MS = 30_000;
 
     private final int port;
-    private final AuthHandler authHandler = new AuthHandler();
-    private final GameHandler gameHandler = new GameHandler();
-    private final SessionRepository sessionRepo = new SessionRepository();
+    private final AuthHandler        authHandler  = new AuthHandler();
+    private final GameHandler        gameHandler  = new GameHandler();
+    private final AdminPacketHandler adminHandler = new AdminPacketHandler(authHandler, gameHandler);
+    private final SessionRepository  sessionRepo  = new SessionRepository();
 
-    private DatagramSocket         socket;
-    private volatile boolean       running = false;
-    private ExecutorService        workers;
-    private ScheduledExecutorService scheduler;
+    private DatagramSocket            socket;
+    private volatile boolean          running = false;
+    private ExecutorService           workers;
+    private ScheduledExecutorService  scheduler;
 
     public UDPServer(int port) {
         this.port = port;
     }
 
-    // ── Lifecycle ────────────────────────────────────────────────────────────
+    // -- Lifecycle --
 
     public void start() throws Exception {
         socket    = new DatagramSocket(port);
@@ -66,12 +67,11 @@ public class UDPServer {
         byte[] recvBuf = new byte[RECV_BUFFER_SIZE];
         while (running) {
             DatagramPacket dp = new DatagramPacket(recvBuf, recvBuf.length);
-            socket.receive(dp);                         // blocks until a datagram arrives
+            socket.receive(dp);
 
-            // copy before handing off to worker thread
-            byte[]      data      = dp.getData().clone();
-            int         length    = dp.getLength();
-            InetAddress addr      = dp.getAddress();
+            byte[]      data       = dp.getData().clone();
+            int         length     = dp.getLength();
+            InetAddress addr       = dp.getAddress();
             int         clientPort = dp.getPort();
 
             workers.submit(() -> dispatch(data, length, addr, clientPort));
@@ -86,7 +86,7 @@ public class UDPServer {
         log.info("Server stopped.");
     }
 
-    // ── Dispatch ─────────────────────────────────────────────────────────────
+    // -- Dispatch --
 
     private void dispatch(byte[] data, int length, InetAddress addr, int port) {
         try {
@@ -102,8 +102,10 @@ public class UDPServer {
                     if (packet.sessionToken != null)
                         gameHandler.removePlayer(packet.sessionToken, socket);
                 }
-                case PING             -> gameHandler.handlePing(socket, packet, addr, port);
-                default               -> dispatchAuthenticated(packet, addr, port);
+                case PING                    -> gameHandler.handlePing(socket, packet, addr, port);
+                case ADMIN_USER_LIST_REQUEST -> adminHandler.handleUserListRequest(socket, packet, addr, port);
+                case ADMIN_KICK_REQUEST      -> adminHandler.handleKickRequest(socket, packet, addr, port);
+                default                      -> dispatchAuthenticated(packet, addr, port);
             }
         } catch (Exception e) {
             log.error("Dispatch error from {}:{} — {}", addr.getHostAddress(), port, e.getMessage(), e);
@@ -128,11 +130,11 @@ public class UDPServer {
             case GAME_JOIN     -> gameHandler.handleJoin(socket, packet, session, addr, port);
             case GAME_LEAVE    -> gameHandler.handleLeave(socket, packet, session);
             case PLAYER_UPDATE -> gameHandler.handlePlayerUpdate(socket, packet, session);
-            default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
+            default -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }
 
-    // ── Scheduled tasks ──────────────────────────────────────────────────────
+    // -- Scheduled tasks --
 
     private void periodicCleanup() {
         try {
@@ -155,7 +157,7 @@ public class UDPServer {
 
     public GameHandler getGameHandler() { return gameHandler; }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // -- Helpers --
 
     private void sendError(DatagramSocket socket, String message,
                            InetAddress addr, int port) throws Exception {

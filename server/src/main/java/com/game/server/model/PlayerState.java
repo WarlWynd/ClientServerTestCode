@@ -14,6 +14,7 @@ public class PlayerState {
     public volatile float y        = 300f;
     public volatile int   score    = 0;
     public volatile long  lastSeen = System.currentTimeMillis();
+    public final    long  joinedAt = System.currentTimeMillis();
 
     public PlayerState(long userId, String username) {
         this.userId   = userId;

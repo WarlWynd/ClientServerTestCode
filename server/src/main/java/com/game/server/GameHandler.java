@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.SessionRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
 import com.game.shared.Packet;
@@ -14,31 +15,32 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tracks all connected players and handles game-related packets.
  *
  * State is kept in two parallel ConcurrentHashMaps keyed by session token:
- *   - players : token → PlayerState  (position, score, etc.)
- *   - clients  : token → ClientAddr  (IP + port, for broadcasting)
+ *   - players : token -> PlayerState  (position, score, etc.)
+ *   - clients : token -> ClientAddr   (IP + port, for broadcasting)
  *
  * After every mutation a full GAME_STATE snapshot is broadcast to all clients.
- * For a larger game you'd switch to delta-compression and fixed-rate ticks, but
- * this is clean and correct for a prototype.
  */
 public class GameHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GameHandler.class);
 
+    private final SessionRepository sessionRepo = new SessionRepository();
+
     private record ClientAddr(InetAddress address, int port) {}
 
-    /** session token → live player state */
+    /** session token -> live player state */
     private final Map<String, PlayerState> players = new ConcurrentHashMap<>();
-    /** session token → client network address */
+    /** session token -> client network address */
     private final Map<String, ClientAddr>  clients = new ConcurrentHashMap<>();
 
-    // ── Packet handlers ──────────────────────────────────────────────────────
+    // -- Packet handlers --
 
     public void handleJoin(DatagramSocket socket, Packet in, Session session,
                            InetAddress addr, int port) throws Exception {
@@ -57,21 +59,19 @@ public class GameHandler {
 
     public void handlePlayerUpdate(DatagramSocket socket, Packet in, Session session) throws Exception {
         PlayerState state = players.get(session.token());
-        if (state == null) return; // player not in game yet — ignore
+        if (state == null) return;
 
-        float x     = in.payload.has("x")     ? (float) in.payload.get("x").asDouble()     : state.x;
-        float y     = in.payload.has("y")     ? (float) in.payload.get("y").asDouble()     : state.y;
-        int   score = in.payload.has("score") ?          in.payload.get("score").asInt()   : state.score;
+        float x     = in.payload.has("x")     ? (float) in.payload.get("x").asDouble()   : state.x;
+        float y     = in.payload.has("y")     ? (float) in.payload.get("y").asDouble()   : state.y;
+        int   score = in.payload.has("score") ?         in.payload.get("score").asInt()  : state.score;
 
-        // Clamp to world bounds (800 × 600)
         x = Math.max(0f, Math.min(800f, x));
         y = Math.max(0f, Math.min(600f, y));
 
         state.update(x, y, score);
 
-        // Update client address in case of NAT rebinding
         clients.put(session.token(), new ClientAddr(
-                clients.get(session.token()).address(), // keep existing — or update if you prefer
+                clients.get(session.token()).address(),
                 clients.get(session.token()).port()));
 
         broadcastGameState(socket);
@@ -85,7 +85,7 @@ public class GameHandler {
         socket.send(new DatagramPacket(data, data.length, addr, port));
     }
 
-    // ── Called externally on timeout / logout ────────────────────────────────
+    // -- Called externally on timeout / logout --
 
     public void removePlayer(String sessionToken, DatagramSocket socket) {
         PlayerState p = players.remove(sessionToken);
@@ -96,19 +96,34 @@ public class GameHandler {
         }
     }
 
-    // ── Broadcast ────────────────────────────────────────────────────────────
+    // -- Admin: kick by username --
+
+    public Optional<String> kickByUsername(String username, DatagramSocket socket) {
+        for (Map.Entry<String, PlayerState> entry : players.entrySet()) {
+            if (entry.getValue().username.equals(username)) {
+                String token = entry.getKey();
+                removePlayer(token, socket);
+                sessionRepo.invalidate(token);
+                log.info("KICK  user='{}' by admin", username);
+                return Optional.of(token);
+            }
+        }
+        log.warn("KICK  user='{}' not found", username);
+        return Optional.empty();
+    }
+
+    // -- Broadcast --
 
     private void broadcastGameState(DatagramSocket socket) throws Exception {
         byte[] data = PacketSerializer.serialize(
                 new Packet(PacketType.GAME_STATE, null, buildSnapshot()));
-
         for (ClientAddr ci : clients.values()) {
             socket.send(new DatagramPacket(data, data.length, ci.address(), ci.port()));
         }
     }
 
     private ObjectNode buildSnapshot() {
-        ObjectNode root      = PacketSerializer.mapper().createObjectNode();
+        ObjectNode root       = PacketSerializer.mapper().createObjectNode();
         ArrayNode  playersArr = root.putArray("players");
 
         for (PlayerState p : players.values()) {
@@ -125,7 +140,7 @@ public class GameHandler {
         return root;
     }
 
-    // ── Accessors ────────────────────────────────────────────────────────────
+    // -- Accessors --
 
     public Map<String, PlayerState> getPlayers() { return players; }
 }

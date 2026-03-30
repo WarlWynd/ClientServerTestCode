@@ -1,6 +1,7 @@
 package com.game.server;
 
 import com.game.server.db.DatabaseManager;
+import com.game.server.db.UserRepository;
 import com.game.server.ui.AdminApp;
 import javafx.application.Application;
 import org.slf4j.Logger;
@@ -32,6 +33,9 @@ public class ServerMain {
                 config.getDbUser(),
                 config.getDbPassword()
         );
+
+        new UserRepository().createAdminIfNotExists(
+                config.getAdminUsername(), config.getAdminPassword());
 
         UDPServer server = new UDPServer(config.getPort());
 
