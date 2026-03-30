@@ -105,6 +105,7 @@ public class UDPServer {
                 case PING                    -> gameHandler.handlePing(socket, packet, addr, port);
                 case ADMIN_USER_LIST_REQUEST -> adminHandler.handleUserListRequest(socket, packet, addr, port);
                 case ADMIN_KICK_REQUEST      -> adminHandler.handleKickRequest(socket, packet, addr, port);
+                case ADMIN_BAN_REQUEST       -> adminHandler.handleBanRequest(socket, packet, addr, port);
                 default                      -> dispatchAuthenticated(packet, addr, port);
             }
         } catch (Exception e) {
@@ -155,7 +156,8 @@ public class UDPServer {
         });
     }
 
-    public GameHandler getGameHandler() { return gameHandler; }
+    public GameHandler  getGameHandler()  { return gameHandler; }
+    public AuthHandler  getAuthHandler()  { return authHandler; }
 
     // -- Helpers --
 

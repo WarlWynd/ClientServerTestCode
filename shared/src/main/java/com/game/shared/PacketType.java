@@ -28,5 +28,7 @@ public enum PacketType {
     ADMIN_USER_LIST_REQUEST,   // admin -> server: poll connected players
     ADMIN_USER_LIST_RESPONSE,  // server -> admin: array of player snapshots
     ADMIN_KICK_REQUEST,        // admin -> server: kick a player by username
-    ADMIN_KICK_RESPONSE        // server -> admin: success/failure of kick
+    ADMIN_KICK_RESPONSE,       // server -> admin: success/failure of kick
+    ADMIN_BAN_REQUEST,         // admin -> server: ban/unban a user by username
+    ADMIN_BAN_RESPONSE         // server -> admin: success/failure of ban
 }

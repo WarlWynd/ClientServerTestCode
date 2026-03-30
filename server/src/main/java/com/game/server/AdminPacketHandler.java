@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -23,8 +24,9 @@ public class AdminPacketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AdminPacketHandler.class);
 
-    private final AuthHandler authHandler;
-    private final GameHandler gameHandler;
+    private final AuthHandler    authHandler;
+    private final GameHandler    gameHandler;
+    private final UserRepository userRepo = new UserRepository();
 
     public AdminPacketHandler(AuthHandler authHandler, GameHandler gameHandler) {
         this.authHandler = authHandler;
@@ -94,6 +96,45 @@ public class AdminPacketHandler {
         }
 
         send(socket, PacketType.ADMIN_KICK_RESPONSE, in.sessionToken, out, addr, port);
+    }
+
+    // -- ADMIN_BAN_REQUEST --
+
+    public void handleBanRequest(DatagramSocket socket, Packet in,
+                                 InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (!authHandler.isAdminSession(in.sessionToken)) {
+            out.put("success", false);
+            out.put("message", "Unauthorised");
+            send(socket, PacketType.ADMIN_BAN_RESPONSE, in.sessionToken, out, addr, port);
+            log.warn("ADMIN_BAN rejected — not an admin token from {}:{}", addr.getHostAddress(), port);
+            return;
+        }
+
+        String  username = in.payload.has("username") ? in.payload.get("username").asText() : "";
+        boolean ban      = !in.payload.has("ban") || in.payload.get("ban").asBoolean();
+
+        if (username.isBlank()) {
+            out.put("success", false);
+            out.put("message", "No username specified");
+            send(socket, PacketType.ADMIN_BAN_RESPONSE, in.sessionToken, out, addr, port);
+            return;
+        }
+
+        boolean updated = userRepo.setBanned(username, ban);
+        if (updated) {
+            if (ban) gameHandler.kickByUsername(username, socket); // kick if currently online
+            out.put("success",  true);
+            out.put("username", username);
+            out.put("banned",   ban);
+            log.info("ADMIN_BAN  user='{}' banned={} by admin at {}:{}", username, ban, addr.getHostAddress(), port);
+        } else {
+            out.put("success", false);
+            out.put("message", "User '" + username + "' not found");
+        }
+
+        send(socket, PacketType.ADMIN_BAN_RESPONSE, in.sessionToken, out, addr, port);
     }
 
     // -- Helper --

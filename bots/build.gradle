@@ -1,0 +1,39 @@
+plugins {
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'application'
+}
+
+javafx {
+    version = "23"
+    modules = ['javafx.controls', 'javafx.graphics']
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':shared')
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'ch.qos.logback:logback-classic:1.5.8'
+}
+
+application {
+    mainClass = 'com.game.bots.BotMain'
+    applicationDefaultJvmArgs = [
+        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+    ]
+}
+
+jar {
+    archiveBaseName = 'game-bots'
+    manifest {
+        attributes 'Main-Class': 'com.game.bots.BotMain'
+    }
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

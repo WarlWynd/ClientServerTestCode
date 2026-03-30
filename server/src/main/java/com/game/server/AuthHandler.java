@@ -31,6 +31,8 @@ public class AuthHandler {
 
     /** In-memory set of session tokens that belong to admin users. */
     private final Set<String> adminSessions = ConcurrentHashMap.newKeySet();
+    /** In-memory set of session tokens that belong to developer users. */
+    private final Set<String> devSessions   = ConcurrentHashMap.newKeySet();
 
     // -- Packet handlers --
 
@@ -39,8 +41,17 @@ public class AuthHandler {
         String username = in.payload.get("username").asText();
         String password = in.payload.get("password").asText();
 
-        Optional<User> user = userRepo.authenticate(username, password);
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (userRepo.isBanned(username)) {
+            out.put("success", false);
+            out.put("message", "This account has been banned.");
+            log.warn("LOGIN  banned user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            send(socket, PacketType.LOGIN_RESPONSE, null, out, addr, port);
+            return;
+        }
+
+        Optional<User> user = userRepo.authenticate(username, password);
 
         if (user.isPresent()) {
             Session session = sessionRepo.create(user.get().id(), user.get().username());
@@ -48,9 +59,13 @@ public class AuthHandler {
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
             out.put("isAdmin",      user.get().isAdmin());
+            out.put("isDeveloper",  user.get().isDeveloper());
             if (user.get().isAdmin()) {
                 adminSessions.add(session.token());
                 log.info("ADMIN LOGIN  user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            } else if (user.get().isDeveloper()) {
+                devSessions.add(session.token());
+                log.info("DEV LOGIN  user='{}' from {}:{}", username, addr.getHostAddress(), port);
             } else {
                 log.info("LOGIN  ok  user='{}' from {}:{}", username, addr.getHostAddress(), port);
             }
@@ -95,6 +110,7 @@ public class AuthHandler {
                              InetAddress addr, int port) throws Exception {
         if (in.sessionToken != null) {
             adminSessions.remove(in.sessionToken);
+            devSessions.remove(in.sessionToken);
             sessionRepo.invalidate(in.sessionToken);
             log.info("LOGOUT token={}", in.sessionToken);
         }
@@ -113,6 +129,11 @@ public class AuthHandler {
     /** Returns true if the given token belongs to an admin user. */
     public boolean isAdminSession(String token) {
         return token != null && adminSessions.contains(token);
+    }
+
+    /** Returns true if the given token belongs to a developer user. */
+    public boolean isDevSession(String token) {
+        return token != null && devSessions.contains(token);
     }
 
     // -- Helpers --

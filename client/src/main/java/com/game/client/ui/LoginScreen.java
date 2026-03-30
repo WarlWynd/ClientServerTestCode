@@ -128,7 +128,9 @@ public class LoginScreen {
                     if (success) {
                         String token    = packet.payload.get("sessionToken").asText();
                         String username = packet.payload.get("username").asText();
-                        SessionStore.set(token, username);
+                        boolean isAdmin = packet.payload.has("isAdmin")
+                                && packet.payload.get("isAdmin").asBoolean();
+                        SessionStore.set(token, username, isAdmin);
                         new GameScreen(stage, client).show();
                     } else {
                         String msg = packet.payload.get("message").asText("Login failed.");

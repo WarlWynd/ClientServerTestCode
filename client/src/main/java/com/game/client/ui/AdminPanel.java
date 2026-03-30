@@ -1,9 +1,9 @@
-package com.game.admin.ui;
+package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.game.admin.AdminSession;
-import com.game.admin.AdminUDPClient;
+import com.game.client.SessionStore;
+import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
@@ -17,63 +17,55 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.Stage;
 import javafx.util.Duration;
 
-public class DashboardScreen {
+/**
+ * Embeddable admin dashboard panel — shown as a tab in GameScreen for admin users.
+ *
+ * Call {@link #buildView()} once to get the root Node, then {@link #start()} to
+ * begin polling, and {@link #stop()} when the user logs out.
+ *
+ * Packet handling is delegated from GameScreen via {@link #onPacket(Packet)}.
+ */
+public class AdminPanel {
 
-    private final Stage          stage;
-    private final AdminUDPClient client;
+    private final UDPClient client;
 
     private Label headerLabel;
-    private Label kickStatusLabel;
+    private Label statusLabel;
     private final ObservableList<PlayerRow> rows = FXCollections.observableArrayList();
+    private Timeline ticker;
 
-    public DashboardScreen(Stage stage, AdminUDPClient client) {
-        this.stage  = stage;
+    public AdminPanel(UDPClient client) {
         this.client = client;
     }
 
-    public void show() {
-        client.setPacketListener(this::onPacket);
+    // ── Build ────────────────────────────────────────────────────────────────
 
-        // -- Header --
-        headerLabel = new Label("Logged in as: " + AdminSession.getUsername());
+    public Node buildView() {
+        headerLabel = new Label("Admin Panel — " + SessionStore.getUsername());
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
         headerLabel.setTextFill(Color.web("#e0e0ff"));
 
-        kickStatusLabel = new Label("");
-        kickStatusLabel.setFont(Font.font("System", 12));
-        kickStatusLabel.setTextFill(Color.web("#80c080"));
+        statusLabel = new Label("");
+        statusLabel.setFont(Font.font("System", 12));
+        statusLabel.setTextFill(Color.web("#80c080"));
 
-        Button logoutBtn = new Button("Logout");
-        logoutBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-size: 11;
-                -fx-background-radius: 4;
-                """);
-        logoutBtn.setOnAction(e -> doLogout());
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox header = new HBox(12, headerLabel, spacer, logoutBtn);
+        HBox header = new HBox(headerLabel);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 6, 14));
         header.setStyle("-fx-background-color: #0f0f1e;");
 
-        HBox statusBar = new HBox(kickStatusLabel);
+        HBox statusBar = new HBox(statusLabel);
         statusBar.setPadding(new Insets(2, 14, 4, 14));
         statusBar.setStyle("-fx-background-color: #0f0f1e;");
 
-        // -- Table --
         TableView<PlayerRow> table = new TableView<>(rows);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.setStyle("""
@@ -89,28 +81,70 @@ public class DashboardScreen {
                 strCol("Score",     "score",          70),
                 strCol("X",         "x",              60),
                 strCol("Y",         "y",              60),
-                kickCol(table),
-                banCol(table)
+                kickCol(),
+                banCol()
         );
 
-        // -- Root --
         VBox root = new VBox(header, statusBar, table);
         VBox.setVgrow(table, Priority.ALWAYS);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setScene(new Scene(root, 640, 420));
-        stage.setResizable(true);
-        stage.setTitle("Admin Console — Dashboard");
-        stage.show();
-
-        // -- Poll every second --
-        Timeline ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
+        ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
+
+        return root;
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    public void start() {
         ticker.play();
         requestPlayerList();
     }
 
-    // -- Table helpers --
+    public void stop() {
+        if (ticker != null) ticker.stop();
+    }
+
+    // ── Packet handling (called by GameScreen) ────────────────────────────────
+
+    public void onPacket(Packet packet) {
+        switch (packet.type) {
+            case ADMIN_USER_LIST_RESPONSE -> Platform.runLater(() -> {
+                if (!packet.payload.get("success").asBoolean()) return;
+                JsonNode players = packet.payload.get("players");
+                rows.clear();
+                if (players != null && players.isArray()) {
+                    for (JsonNode p : players) {
+                        rows.add(new PlayerRow(
+                                p.get("username").asText(),
+                                p.get("joinedAt").asLong(),
+                                p.get("x").asDouble(),
+                                p.get("y").asDouble(),
+                                p.get("score").asInt()));
+                    }
+                }
+                headerLabel.setText(String.format("Admin Panel — %s  |  %d player%s online",
+                        SessionStore.getUsername(), rows.size(), rows.size() == 1 ? "" : "s"));
+            });
+            case ADMIN_KICK_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg = ok
+                        ? "Kicked: "      + packet.payload.get("username").asText()
+                        : "Kick failed: " + packet.payload.get("message").asText();
+                showStatus(msg, ok ? "#80c080" : "#e94560");
+            });
+            case ADMIN_BAN_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg = ok
+                        ? "Banned: "      + packet.payload.get("username").asText()
+                        : "Ban failed: "  + packet.payload.get("message").asText();
+                showStatus(msg, ok ? "#80c080" : "#e94560");
+            });
+        }
+    }
+
+    // ── Table helpers ─────────────────────────────────────────────────────────
 
     private TableColumn<PlayerRow, String> strCol(String title, String field, double width) {
         TableColumn<PlayerRow, String> col = new TableColumn<>(title);
@@ -129,7 +163,7 @@ public class DashboardScreen {
         return col;
     }
 
-    private TableColumn<PlayerRow, Void> kickCol(TableView<PlayerRow> table) {
+    private TableColumn<PlayerRow, Void> kickCol() {
         TableColumn<PlayerRow, Void> col = new TableColumn<>("Action");
         col.setPrefWidth(80);
         col.setCellFactory(c -> new TableCell<>() {
@@ -147,8 +181,7 @@ public class DashboardScreen {
                     doKick(row.username.get());
                 });
             }
-            @Override
-            protected void updateItem(Void item, boolean empty) {
+            @Override protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
                 setGraphic(empty ? null : btn);
             }
@@ -156,7 +189,7 @@ public class DashboardScreen {
         return col;
     }
 
-    private TableColumn<PlayerRow, Void> banCol(TableView<PlayerRow> table) {
+    private TableColumn<PlayerRow, Void> banCol() {
         TableColumn<PlayerRow, Void> col = new TableColumn<>("Ban");
         col.setPrefWidth(80);
         col.setCellFactory(c -> new TableCell<>() {
@@ -174,8 +207,7 @@ public class DashboardScreen {
                     doBan(row.username.get());
                 });
             }
-            @Override
-            protected void updateItem(Void item, boolean empty) {
+            @Override protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
                 setGraphic(empty ? null : btn);
             }
@@ -183,81 +215,35 @@ public class DashboardScreen {
         return col;
     }
 
-    // -- Network --
+    // ── Network ───────────────────────────────────────────────────────────────
 
     private void requestPlayerList() {
         client.send(new Packet(PacketType.ADMIN_USER_LIST_REQUEST,
-                AdminSession.getToken(),
-                PacketSerializer.emptyPayload()));
+                SessionStore.getToken(), PacketSerializer.emptyPayload()));
     }
 
     private void doKick(String username) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
-        client.send(new Packet(PacketType.ADMIN_KICK_REQUEST, AdminSession.getToken(), payload));
+        client.send(new Packet(PacketType.ADMIN_KICK_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void doBan(String username) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
         payload.put("ban", true);
-        client.send(new Packet(PacketType.ADMIN_BAN_REQUEST, AdminSession.getToken(), payload));
-    }
-
-    private void doLogout() {
-        ObjectNode payload = PacketSerializer.emptyPayload();
-        client.send(new Packet(PacketType.LOGOUT_REQUEST, AdminSession.getToken(), payload));
-        AdminSession.clear();
-        new LoginScreen(stage, client).show();
-    }
-
-    private void onPacket(Packet packet) {
-        switch (packet.type) {
-            case ADMIN_USER_LIST_RESPONSE -> Platform.runLater(() -> {
-                if (!packet.payload.get("success").asBoolean()) return;
-                JsonNode players = packet.payload.get("players");
-                rows.clear();
-                if (players != null && players.isArray()) {
-                    for (JsonNode p : players) {
-                        rows.add(new PlayerRow(
-                                p.get("username").asText(),
-                                p.get("joinedAt").asLong(),
-                                p.get("x").asDouble(),
-                                p.get("y").asDouble(),
-                                p.get("score").asInt()));
-                    }
-                }
-                headerLabel.setText(String.format("Logged in as: %s  |  %d player%s online",
-                        AdminSession.getUsername(), rows.size(), rows.size() == 1 ? "" : "s"));
-            });
-            case ADMIN_KICK_RESPONSE -> Platform.runLater(() -> {
-                boolean success = packet.payload.get("success").asBoolean();
-                String msg = success
-                        ? "Kicked: " + packet.payload.get("username").asText()
-                        : "Kick failed: " + packet.payload.get("message").asText();
-                showStatus(msg, success ? "#80c080" : "#e94560");
-            });
-            case ADMIN_BAN_RESPONSE -> Platform.runLater(() -> {
-                boolean success = packet.payload.get("success").asBoolean();
-                String msg = success
-                        ? "Banned: " + packet.payload.get("username").asText()
-                        : "Ban failed: " + packet.payload.get("message").asText();
-                showStatus(msg, success ? "#80c080" : "#e94560");
-            });
-            case ERROR -> Platform.runLater(() ->
-                    showStatus("Server error: " + packet.payload.get("message").asText(), "#e94560"));
-        }
+        client.send(new Packet(PacketType.ADMIN_BAN_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void showStatus(String msg, String color) {
-        kickStatusLabel.setTextFill(Color.web(color));
-        kickStatusLabel.setText(msg);
+        statusLabel.setTextFill(Color.web(color));
+        statusLabel.setText(msg);
         PauseTransition clear = new PauseTransition(Duration.seconds(4));
-        clear.setOnFinished(e -> kickStatusLabel.setText(""));
+        clear.setOnFinished(e -> statusLabel.setText(""));
         clear.play();
     }
 
-    // -- Inner model --
+    // ── Inner model ───────────────────────────────────────────────────────────
 
     static class PlayerRow {
         final StringProperty username      = new SimpleStringProperty();

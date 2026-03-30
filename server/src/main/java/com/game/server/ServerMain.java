@@ -39,11 +39,21 @@ public class ServerMain {
 
         UDPServer server = new UDPServer(config.getPort());
 
+        AssetHttpServer assetServer = new AssetHttpServer(
+                config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler());
+        try {
+            assetServer.start();
+        } catch (Exception e) {
+            log.error("Failed to start asset HTTP server: {}", e.getMessage(), e);
+            System.exit(1);
+        }
+
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform()
                 .name("shutdown-hook")
                 .unstarted(() -> {
                     log.info("Shutdown signal received — stopping server …");
                     server.stop();
+                    assetServer.stop();
                 }));
 
         // Run UDP server on a background thread so JavaFX can own the main thread

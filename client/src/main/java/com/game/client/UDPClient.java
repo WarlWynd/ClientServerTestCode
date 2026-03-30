@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 public class UDPClient {
 
     private static final Logger log = LoggerFactory.getLogger(UDPClient.class);
-    private static final int    RECV_BUFFER_SIZE = 4096;
+    private static final int    RECV_BUFFER_SIZE = 65507; // max UDP payload; needed for admin list responses
 
     private final String serverHost;
     private final int    serverPort;

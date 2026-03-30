@@ -6,6 +6,12 @@
 # UDP port the server listens on
 server.port=9876
 
+# HTTP port for asset file server (used by Developer Console)
+server.http.port=9877
+
+# Directory where asset files are stored (relative to working directory)
+server.assets.dir=assets
+
 # MySQL / MariaDB connection
 db.host=192.168.1.153
 db.port=3306

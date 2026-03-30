@@ -2,6 +2,7 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -14,8 +15,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
+import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
@@ -69,11 +69,14 @@ public class GameScreen {
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
     private boolean wasSpaceHeld = false;
     private long lastSendTime = 0;
+    private long lastHeartbeatTime = 0;
+    private static final long HEARTBEAT_INTERVAL_MS = 10_000;
 
     private Label pingLabel;
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
+    private AdminPanel adminPanel; // non-null only when SessionStore.isAdmin()
 
     public GameScreen(Stage stage, UDPClient client) {
         this.stage  = stage;
@@ -124,10 +127,38 @@ public class GameScreen {
         helpBar.setStyle("-fx-background-color: #0f0f1e;");
 
         // ── Root layout ──────────────────────────────────────────────────────
-        VBox root = new VBox(hud, canvas, helpBar);
+        Tab gameTab = new Tab("Game", new VBox(canvas, helpBar));
+        gameTab.setClosable(false);
+
+        Tab settingsTab = new Tab("Settings", new SettingsPanel().buildView());
+        settingsTab.setClosable(false);
+
+        TabPane tabs = new TabPane(gameTab);
+        tabs.setStyle("-fx-background-color: #1a1a2e;");
+
+        if (SessionStore.isAdmin()) {
+            adminPanel = new AdminPanel(client);
+            Tab adminTab = new Tab("Admin", adminPanel.buildView());
+            adminTab.setClosable(false);
+            tabs.getTabs().add(adminTab);
+        }
+
+        tabs.getTabs().add(settingsTab);
+
+        // Re-focus canvas and clear held keys when returning to the game tab
+        tabs.getSelectionModel().selectedItemProperty().addListener((obs, old, cur) -> {
+            if (cur == gameTab) {
+                heldKeys.clear();
+                canvas.requestFocus();
+            }
+        });
+
+        VBox.setVgrow(tabs, Priority.ALWAYS);
+        VBox root = new VBox(hud, tabs);
+
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        Scene scene = new Scene(root, WORLD_W, WORLD_H + 64);
+        Scene scene = new Scene(root, WORLD_W, WORLD_H + 96);
         scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
         scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> heldKeys.remove(e.getCode()));
 
@@ -140,6 +171,9 @@ public class GameScreen {
 
         // ── Join game ────────────────────────────────────────────────────────
         sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());
+
+        // ── Start admin polling (if applicable) ──────────────────────────────
+        if (adminPanel != null) adminPanel.start();
 
         // ── Game loop ────────────────────────────────────────────────────────
         gameLoop = new AnimationTimer() {
@@ -181,6 +215,14 @@ public class GameScreen {
             payload.put("score", localScore);
             sendPacket(PacketType.PLAYER_UPDATE, payload);
             lastSendTime = now;
+            lastHeartbeatTime = now;
+        } else if (!moved && (now - lastHeartbeatTime) > HEARTBEAT_INTERVAL_MS) {
+            ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+            payload.put("x",     localX);
+            payload.put("y",     localY);
+            payload.put("score", localScore);
+            sendPacket(PacketType.PLAYER_UPDATE, payload);
+            lastHeartbeatTime = now;
         }
     }
 
@@ -283,6 +325,9 @@ public class GameScreen {
                     pingLabel.setStyle("-fx-text-fill: #e94560;");
                 });
             }
+            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE -> {
+                if (adminPanel != null) adminPanel.onPacket(packet);
+            }
             default -> { /* ignore */ }
         }
     }
@@ -291,6 +336,7 @@ public class GameScreen {
 
     private void doLogout() {
         gameLoop.stop();
+        if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();
@@ -300,6 +346,7 @@ public class GameScreen {
     // ── Sound ─────────────────────────────────────────────────────────────────
 
     private void playSpaceSound() {
+        if (!AppSettings.isSoundEnabled()) return;
         Thread.ofVirtual().start(() -> {
             try {
                 AudioFormat fmt = new AudioFormat(44100, 16, 1, true, false);

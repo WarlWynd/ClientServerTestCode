@@ -16,7 +16,7 @@ public class AdminMain extends Application {
     public void start(Stage stage) throws Exception {
         AdminConfig config = new AdminConfig();
 
-        stage.setTitle("Server Admin");
+        stage.setTitle("Admin Console");
         stage.setResizable(false);
         stage.setOnCloseRequest(e -> shutdown());
 

@@ -41,6 +41,12 @@ public final class DatabaseManager {
     private static final String DDL_USERS_ADD_ADMIN_COL =
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;";
 
+    private static final String DDL_USERS_ADD_BANNED_COL =
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE;";
+
+    private static final String DDL_USERS_ADD_DEVELOPER_COL =
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_developer BOOLEAN NOT NULL DEFAULT FALSE;";
+
     private static final String DDL_SESSIONS = """
             CREATE TABLE IF NOT EXISTS sessions (
                 token      VARCHAR(36)  NOT NULL PRIMARY KEY,
@@ -94,6 +100,8 @@ public final class DatabaseManager {
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_USERS_ADD_ADMIN_COL);
+            stmt.execute(DDL_USERS_ADD_BANNED_COL);
+            stmt.execute(DDL_USERS_ADD_DEVELOPER_COL);
             stmt.execute(DDL_SESSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);

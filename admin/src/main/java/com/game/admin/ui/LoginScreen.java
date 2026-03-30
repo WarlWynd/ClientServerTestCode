@@ -34,7 +34,7 @@ public class LoginScreen {
     public void show() {
         client.setPacketListener(this::onPacket);
 
-        Label title = new Label("Server Admin");
+        Label title = new Label("Admin Console");
         title.setFont(Font.font("System", FontWeight.BOLD, 24));
         title.setTextFill(Color.web("#e0e0ff"));
 

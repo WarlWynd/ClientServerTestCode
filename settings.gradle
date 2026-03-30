@@ -1,2 +1,2 @@
 rootProject.name = 'multiplayer-game'
-include 'shared', 'server', 'client', 'admin'
+include 'shared', 'server', 'client', 'admin', 'devconsole', 'bots'

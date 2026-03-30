@@ -47,7 +47,7 @@ public class UserRepository {
      * @return the {@link User} if credentials are correct, otherwise empty.
      */
     public Optional<User> authenticate(String username, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_admin FROM users WHERE username = ?";
+        String sql = "SELECT id, username, password_hash, is_admin, is_developer, banned FROM users WHERE username = ?";
 
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -56,11 +56,14 @@ public class UserRepository {
                 if (rs.next()) {
                     String hash = rs.getString("password_hash");
                     if (BCrypt.checkpw(plainPassword, hash)) {
+                        if (rs.getBoolean("banned")) return Optional.empty();
                         touchLastLogin(rs.getLong("id"), conn);
                         return Optional.of(new User(
                                 rs.getLong("id"),
                                 rs.getString("username"),
-                                rs.getBoolean("is_admin")));
+                                rs.getBoolean("is_admin"),
+                                rs.getBoolean("is_developer"),
+                                false));
                     }
                 }
             }
@@ -68,6 +71,39 @@ public class UserRepository {
             throw new RuntimeException("authenticate() failed", e);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Returns {@code true} if the given username exists and is banned.
+     */
+    public boolean isBanned(String username) {
+        String sql = "SELECT banned FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("banned");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("isBanned() failed", e);
+        }
+    }
+
+    /**
+     * Sets or clears the banned flag for a user.
+     *
+     * @return {@code true} if a row was updated, {@code false} if the username was not found.
+     */
+    public boolean setBanned(String username, boolean banned) {
+        String sql = "UPDATE users SET banned = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, banned);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("setBanned() failed", e);
+        }
     }
 
     /**
