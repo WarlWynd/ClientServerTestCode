@@ -161,8 +161,17 @@ public class GameScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         Scene scene = new Scene(root, WORLD_W, WORLD_H + 96);
-        scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
-        scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> heldKeys.remove(e.getCode()));
+        final Set<KeyCode> movementKeys = Set.of(
+                KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D,
+                KeyCode.UP, KeyCode.DOWN, KeyCode.LEFT, KeyCode.RIGHT);
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            heldKeys.add(e.getCode());
+            if (movementKeys.contains(e.getCode())) e.consume();
+        });
+        scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> {
+            heldKeys.remove(e.getCode());
+            if (movementKeys.contains(e.getCode())) e.consume();
+        });
 
         stage.setTitle("Multiplayer Game");
         stage.setScene(scene);

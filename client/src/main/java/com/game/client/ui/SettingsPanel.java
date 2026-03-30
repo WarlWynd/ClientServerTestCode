@@ -22,18 +22,6 @@ public class SettingsPanel {
 
     public Node buildView() {
 
-        // ── Connection ────────────────────────────────────────────────────────
-        TextField hostField = styledField(AppSettings.getServerHost());
-        TextField portField = styledField(String.valueOf(AppSettings.getServerPort()));
-
-        Label restartNote = new Label("Connection changes take effect after restart.");
-        restartNote.setStyle("-fx-text-fill: #8080a0; -fx-font-size: 10;");
-
-        VBox connectionSection = section("Connection",
-                row("Server Host", hostField),
-                row("Server Port", portField),
-                restartNote);
-
         // ── Audio ─────────────────────────────────────────────────────────────
         CheckBox soundCheck = new CheckBox("Enable sound effects");
         soundCheck.setSelected(AppSettings.isSoundEnabled());
@@ -53,8 +41,7 @@ public class SettingsPanel {
                 comingSoon());
 
         // ── Account ───────────────────────────────────────────────────────────
-        VBox accountSection = section("Account",
-                comingSoon());
+        VBox accountSection = section("Account", comingSoon());
 
         // ── Save / Reset ──────────────────────────────────────────────────────
         Label statusLabel = new Label();
@@ -78,22 +65,11 @@ public class SettingsPanel {
                 """);
 
         saveBtn.setOnAction(e -> {
-            // Validate port
-            int port;
-            try { port = Integer.parseInt(portField.getText().trim()); }
-            catch (NumberFormatException ex) {
-                setStatus(statusLabel, "Invalid port number.", false);
-                return;
-            }
-            AppSettings.setServerHost(hostField.getText().trim());
-            AppSettings.setServerPort(port);
             boolean ok = AppSettings.save();
             setStatus(statusLabel, ok ? "Settings saved." : "Could not write settings file.", ok);
         });
 
         resetBtn.setOnAction(e -> {
-            hostField.setText(AppSettings.getServerHost());
-            portField.setText(String.valueOf(AppSettings.getServerPort()));
             soundCheck.setSelected(AppSettings.isSoundEnabled());
             setStatus(statusLabel, "Reset to current saved values.", true);
         });
@@ -103,13 +79,7 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(
-                connectionSection,
-                audioSection,
-                displaySection,
-                gameplaySection,
-                accountSection,
-                buttons);
+        VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection, buttons);
         content.setStyle("-fx-background-color: #1a1a2e;");
 
         ScrollPane scroll = new ScrollPane(content);

@@ -2,6 +2,7 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -85,7 +86,10 @@ public class AdminPanel {
                 banCol()
         );
 
-        VBox root = new VBox(header, statusBar, table);
+        // ── Connection settings ───────────────────────────────────────────────
+        VBox connSection = buildConnectionSection();
+
+        VBox root = new VBox(header, statusBar, connSection, table);
         VBox.setVgrow(table, Priority.ALWAYS);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
@@ -93,6 +97,80 @@ public class AdminPanel {
         ticker.setCycleCount(Timeline.INDEFINITE);
 
         return root;
+    }
+
+    // ── Connection section ────────────────────────────────────────────────────
+
+    private VBox buildConnectionSection() {
+        Label hostLbl = new Label("Server Host");
+        hostLbl.setMinWidth(100);
+        hostLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+
+        TextField hostField = new TextField(AppSettings.getServerHost());
+        hostField.setPrefWidth(200);
+        hostField.setStyle("""
+                -fx-background-color: #16213e;
+                -fx-text-fill: #e0e0e0;
+                -fx-border-color: #3a3a6a;
+                -fx-border-radius: 4;
+                -fx-background-radius: 4;
+                -fx-padding: 5;
+                """);
+
+        Label portLbl = new Label("Server Port");
+        portLbl.setMinWidth(100);
+        portLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+
+        TextField portField = new TextField(String.valueOf(AppSettings.getServerPort()));
+        portField.setPrefWidth(80);
+        portField.setStyle(hostField.getStyle());
+
+        Label connStatus = new Label();
+        connStatus.setStyle("-fx-font-size: 11;");
+
+        Button saveBtn = new Button("Save");
+        saveBtn.setStyle("""
+                -fx-background-color: #e94560;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 5 14 5 14;
+                """);
+        saveBtn.setOnAction(e -> {
+            int port;
+            try { port = Integer.parseInt(portField.getText().trim()); }
+            catch (NumberFormatException ex) {
+                connStatus.setText("Invalid port.");
+                connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                return;
+            }
+            AppSettings.setServerHost(hostField.getText().trim());
+            AppSettings.setServerPort(port);
+            boolean ok = AppSettings.save();
+            connStatus.setText(ok ? "Saved. Restart to apply." : "Could not write settings file.");
+            connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: " + (ok ? "#50c050" : "#e94560") + ";");
+        });
+
+        HBox hostRow = new HBox(10, hostLbl, hostField);
+        hostRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox portRow = new HBox(10, portLbl, portField);
+        portRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox btnRow = new HBox(10, saveBtn, connStatus);
+        btnRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label sectionTitle = new Label("Connection");
+        sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+        sectionTitle.setTextFill(Color.web("#e94560"));
+
+        Separator sep = new Separator();
+        sep.setStyle("-fx-background-color: #2a2a4a;");
+
+        VBox section = new VBox(6, sectionTitle, sep, hostRow, portRow, btnRow);
+        section.setPadding(new Insets(10, 14, 10, 14));
+        section.setStyle("-fx-background-color: #0f0f1e;");
+        return section;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
