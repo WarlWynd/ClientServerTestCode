@@ -6,6 +6,7 @@ build/
 .vscode/
 .idea/
 *.iml
+.vs/
 
 # Secrets
 server/src/main/resources/server.properties
