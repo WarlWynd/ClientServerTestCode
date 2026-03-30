@@ -26,6 +26,7 @@ public class AuthHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AuthHandler.class);
 
+    private final String            serverVersion;
     private final UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
 
@@ -34,14 +35,31 @@ public class AuthHandler {
     /** In-memory set of session tokens that belong to developer users. */
     private final Set<String> devSessions   = ConcurrentHashMap.newKeySet();
 
+    public AuthHandler(String serverVersion) {
+        this.serverVersion = serverVersion;
+    }
+
     // -- Packet handlers --
 
     public void handleLogin(DatagramSocket socket, Packet in,
                             InetAddress addr, int port) throws Exception {
-        String username = in.payload.get("username").asText();
-        String password = in.payload.get("password").asText();
+        String username      = in.payload.get("username").asText();
+        String password      = in.payload.get("password").asText();
+        String clientVersion = in.payload.has("clientVersion")
+                ? in.payload.get("clientVersion").asText() : "";
 
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (!serverVersion.equals(clientVersion)) {
+            out.put("success", false);
+            out.put("message", "Client version " + clientVersion
+                    + " does not match server version " + serverVersion
+                    + ". Please update your client.");
+            log.warn("LOGIN  version mismatch client='{}' server='{}' from {}:{}",
+                    clientVersion, serverVersion, addr.getHostAddress(), port);
+            send(socket, PacketType.LOGIN_RESPONSE, null, out, addr, port);
+            return;
+        }
 
         if (userRepo.isBanned(username)) {
             out.put("success", false);

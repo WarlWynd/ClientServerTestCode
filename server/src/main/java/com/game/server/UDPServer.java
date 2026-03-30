@@ -36,9 +36,9 @@ public class UDPServer {
     private static final long PLAYER_TIMEOUT_MS = 30_000;
 
     private final int port;
-    private final AuthHandler        authHandler  = new AuthHandler();
+    private final AuthHandler        authHandler;
     private final GameHandler        gameHandler  = new GameHandler();
-    private final AdminPacketHandler adminHandler = new AdminPacketHandler(authHandler, gameHandler);
+    private final AdminPacketHandler adminHandler;
     private final SessionRepository  sessionRepo  = new SessionRepository();
 
     private DatagramSocket            socket;
@@ -46,8 +46,10 @@ public class UDPServer {
     private ExecutorService           workers;
     private ScheduledExecutorService  scheduler;
 
-    public UDPServer(int port) {
-        this.port = port;
+    public UDPServer(int port, String serverVersion) {
+        this.port        = port;
+        this.authHandler = new AuthHandler(serverVersion);
+        this.adminHandler = new AdminPacketHandler(authHandler, gameHandler);
     }
 
     // -- Lifecycle --

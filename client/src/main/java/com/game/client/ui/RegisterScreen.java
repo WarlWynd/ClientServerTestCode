@@ -26,6 +26,7 @@ public class RegisterScreen {
 
     private final Stage     stage;
     private final UDPClient client;
+    private final String    version;
 
     private TextField     usernameField;
     private PasswordField passwordField;
@@ -33,9 +34,10 @@ public class RegisterScreen {
     private Label         statusLabel;
     private Button        registerButton;
 
-    public RegisterScreen(Stage stage, UDPClient client) {
-        this.stage  = stage;
-        this.client = client;
+    public RegisterScreen(Stage stage, UDPClient client, String version) {
+        this.stage   = stage;
+        this.client  = client;
+        this.version = version;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -70,7 +72,7 @@ public class RegisterScreen {
         statusLabel.setMaxWidth(280);
 
         Hyperlink backLink = new Hyperlink("← Back to Login");
-        backLink.setOnAction(e -> new LoginScreen(stage, client).show());
+        backLink.setOnAction(e -> new LoginScreen(stage, client, version).show());
 
         VBox form = new VBox(12,
                 title,
@@ -131,7 +133,7 @@ public class RegisterScreen {
                     // Short delay so the user can read the success message
                     new Thread(() -> {
                         try { Thread.sleep(1200); } catch (InterruptedException ignored) {}
-                        Platform.runLater(() -> new LoginScreen(stage, client).show());
+                        Platform.runLater(() -> new LoginScreen(stage, client, version).show());
                     }).start();
                 } else {
                     status(message, false);

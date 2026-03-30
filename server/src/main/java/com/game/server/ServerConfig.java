@@ -25,6 +25,7 @@ public class ServerConfig {
         }
     }
 
+    public String getVersion()        { return prop("app.version", "0.0.0"); }
     public int    getPort()          { return Integer.parseInt(prop("server.port",      "9876")); }
     public int    getHttpPort()      { return Integer.parseInt(prop("server.http.port", "9877")); }
     public String getAssetsDir()     { return prop("server.assets.dir", "assets"); }

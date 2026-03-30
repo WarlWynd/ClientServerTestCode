@@ -58,6 +58,7 @@ public class GameScreen {
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
     private final UDPClient client;
+    private final String    version;
 
     private float   localX = WORLD_W / 2f;
     private float   localY = WORLD_H / 2f;
@@ -78,9 +79,10 @@ public class GameScreen {
     private AnimationTimer gameLoop;
     private AdminPanel adminPanel; // non-null only when SessionStore.isAdmin()
 
-    public GameScreen(Stage stage, UDPClient client) {
-        this.stage  = stage;
-        this.client = client;
+    public GameScreen(Stage stage, UDPClient client, String version) {
+        this.stage   = stage;
+        this.client  = client;
+        this.version = version;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -340,7 +342,7 @@ public class GameScreen {
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();
-        new LoginScreen(stage, client).show();
+        new LoginScreen(stage, client, version).show();
     }
 
     // ── Sound ─────────────────────────────────────────────────────────────────

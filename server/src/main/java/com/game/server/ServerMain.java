@@ -37,7 +37,8 @@ public class ServerMain {
         new UserRepository().createAdminIfNotExists(
                 config.getAdminUsername(), config.getAdminPassword());
 
-        UDPServer server = new UDPServer(config.getPort());
+        log.info("Server version: {}", config.getVersion());
+        UDPServer server = new UDPServer(config.getPort(), config.getVersion());
 
         AssetHttpServer assetServer = new AssetHttpServer(
                 config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler());

@@ -39,7 +39,7 @@ public class ClientMain extends Application {
             Platform.exit();
             return;
         }
-        new LoginScreen(primaryStage, udpClient).show();
+        new LoginScreen(primaryStage, udpClient, config.getVersion()).show();
     }
 
     @Override
