@@ -21,10 +21,26 @@ dependencies {
 application {
     mainClass = 'com.game.client.ClientMain'
     applicationDefaultJvmArgs = [
-        '--enable-preview',
         '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
     ]
 }
+
+// ── Gluon Mobile (Android/iOS) ────────────────────────────────────────────────
+// To build for Android/iOS, add the following to a separate mobile build file
+// or apply conditionally once a Gradle 9-compatible plugin version is available:
+//
+//   id 'com.gluonhq.gluonfx-gradle-plugin' version '<compatible-version>'
+//
+//   gluonfx {
+//       target = System.getProperty("gluonfx.target", "host") // host|android|ios
+//       attachConfig {
+//           version = "4.0.18"
+//           services 'display', 'lifecycle', 'statusbar', 'storage'
+//       }
+//   }
+//
+// Also requires GraalVM JDK 21+ at org.gradle.java.home in gradle.properties
+// and Android SDK at ANDROID_SDK for Android targets.
 
 jar {
     archiveBaseName = 'game-client'

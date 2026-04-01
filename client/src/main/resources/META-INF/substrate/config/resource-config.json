@@ -1,0 +1,8 @@
+{
+  "resources": {
+    "includes": [
+      { "pattern": "client\\.properties" },
+      { "pattern": "logback\\.xml" }
+    ]
+  }
+}

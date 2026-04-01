@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -77,7 +78,8 @@ public class GameScreen {
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
-    private AdminPanel adminPanel; // non-null only when SessionStore.isAdmin()
+    private AdminPanel adminPanel;     // non-null only when SessionStore.isAdmin()
+    private VirtualJoystick joystick;  // non-null only on mobile
 
     public GameScreen(Stage stage, UDPClient client, String version) {
         this.stage   = stage;
@@ -117,11 +119,24 @@ public class GameScreen {
         hud.setPadding(new Insets(6, 12, 6, 12));
         hud.setStyle("-fx-background-color: #0f0f1e;");
 
-        // ── Canvas ───────────────────────────────────────────────────────────
-        canvas = new Canvas(WORLD_W, WORLD_H);
+        // ── Canvas (responsive — binds to container size) ─────────────────────
+        canvas = new Canvas();
+        StackPane gameArea = new StackPane(canvas);
+        VBox.setVgrow(gameArea, Priority.ALWAYS);
+        canvas.widthProperty().bind(gameArea.widthProperty());
+        canvas.heightProperty().bind(gameArea.heightProperty());
+
+        if (MobilePlatform.isMobile()) {
+            joystick = new VirtualJoystick(160, 160);
+            joystick.setOpacity(AppSettings.getHudOpacity());
+            StackPane.setAlignment(joystick, Pos.BOTTOM_LEFT);
+            StackPane.setMargin(joystick, new Insets(0, 0, 16, 16));
+            gameArea.getChildren().add(joystick);
+        }
 
         // ── Help bar ─────────────────────────────────────────────────────────
-        Label help = new Label("Move: WASD or Arrow Keys");
+        String helpText = MobilePlatform.isMobile() ? "Use joystick to move" : "Move: WASD or Arrow Keys";
+        Label help = new Label(helpText);
         help.setStyle("-fx-text-fill: #606080; -fx-font-size: 11;");
         HBox helpBar = new HBox(help);
         helpBar.setAlignment(Pos.CENTER);
@@ -129,7 +144,7 @@ public class GameScreen {
         helpBar.setStyle("-fx-background-color: #0f0f1e;");
 
         // ── Root layout ──────────────────────────────────────────────────────
-        Tab gameTab = new Tab("Game", new VBox(canvas, helpBar));
+        Tab gameTab = new Tab("Game", new VBox(gameArea, helpBar));
         gameTab.setClosable(false);
 
         Tab settingsTab = new Tab("Settings", new SettingsPanel().buildView());
@@ -160,18 +175,23 @@ public class GameScreen {
 
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        Scene scene = new Scene(root, WORLD_W, WORLD_H + 96);
-        final Set<KeyCode> movementKeys = Set.of(
-                KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D,
-                KeyCode.UP, KeyCode.DOWN, KeyCode.LEFT, KeyCode.RIGHT);
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            heldKeys.add(e.getCode());
-            if (movementKeys.contains(e.getCode())) e.consume();
-        });
-        scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> {
-            heldKeys.remove(e.getCode());
-            if (movementKeys.contains(e.getCode())) e.consume();
-        });
+        Scene scene = MobilePlatform.isMobile()
+                ? new Scene(root)
+                : new Scene(root, WORLD_W, WORLD_H + 96);
+
+        if (MobilePlatform.isDesktop()) {
+            final Set<KeyCode> movementKeys = Set.of(
+                    KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D,
+                    KeyCode.UP, KeyCode.DOWN, KeyCode.LEFT, KeyCode.RIGHT);
+            scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+                heldKeys.add(e.getCode());
+                if (movementKeys.contains(e.getCode())) e.consume();
+            });
+            scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> {
+                heldKeys.remove(e.getCode());
+                if (movementKeys.contains(e.getCode())) e.consume();
+            });
+        }
 
         stage.setTitle("Multiplayer Game");
         stage.setScene(scene);
@@ -199,23 +219,35 @@ public class GameScreen {
     // ── Input processing ─────────────────────────────────────────────────────
 
     private void processInput() {
-        boolean spaceNow = heldKeys.contains(KeyCode.SPACE);
-        if (spaceNow && !wasSpaceHeld) playSpaceSound();
-        wasSpaceHeld = spaceNow;
-
         boolean moved = false;
 
-        if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-            localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
-        }
-        if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
-            localY = Math.min(WORLD_H - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
-        }
-        if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
-            localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
-        }
-        if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
-            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
+        if (joystick != null) {
+            // Touch input
+            double dx = joystick.getDx();
+            double dy = joystick.getDy();
+            if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                localX = Math.max(PLAYER_RADIUS, Math.min(WORLD_W - PLAYER_RADIUS, localX + (float)(dx * PLAYER_SPEED)));
+                localY = Math.max(PLAYER_RADIUS, Math.min(WORLD_H - PLAYER_RADIUS, localY + (float)(dy * PLAYER_SPEED)));
+                moved = true;
+            }
+        } else {
+            // Keyboard input
+            boolean spaceNow = heldKeys.contains(KeyCode.SPACE);
+            if (spaceNow && !wasSpaceHeld) playSpaceSound();
+            wasSpaceHeld = spaceNow;
+
+            if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
+                localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
+            }
+            if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
+                localY = Math.min(WORLD_H - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
+            }
+            if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
+                localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
+            }
+            if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
+                localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
+            }
         }
 
         long now = System.currentTimeMillis();
@@ -253,22 +285,35 @@ public class GameScreen {
     }
 
     private void render() {
+        double cw = canvas.getWidth();
+        double ch = canvas.getHeight();
+        if (cw <= 0 || ch <= 0) return;
+
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
-        // Background
+        // Scale world to canvas, preserving aspect ratio (letterbox)
+        double scale  = Math.min(cw / WORLD_W, ch / WORLD_H);
+        double offsetX = (cw - WORLD_W * scale) / 2.0;
+        double offsetY = (ch - WORLD_H * scale) / 2.0;
+
+        // Background (full canvas)
         gc.setFill(Color.web("#1a1a2e"));
-        gc.fillRect(0, 0, WORLD_W, WORLD_H);
+        gc.fillRect(0, 0, cw, ch);
+
+        gc.save();
+        gc.translate(offsetX, offsetY);
+        gc.scale(scale, scale);
 
         // World border
         gc.setStroke(Color.web("#3a3a6a"));
-        gc.setLineWidth(2);
+        gc.setLineWidth(2 / scale);
         gc.strokeRect(1, 1, WORLD_W - 2, WORLD_H - 2);
 
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
             String   name  = entry.getKey();
             JsonNode state = entry.getValue();
-            if (name.equals(SessionStore.getUsername())) continue; // draw local separately
+            if (name.equals(SessionStore.getUsername())) continue;
 
             float rx = (float) state.get("x").asDouble();
             float ry = (float) state.get("y").asDouble();
@@ -279,6 +324,8 @@ public class GameScreen {
         // Local player (on top)
         drawPlayer(gc, localX, localY, SessionStore.getUsername(), localScore,
                 Color.web("#e0e0ff"), true);
+
+        gc.restore();
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,
@@ -336,7 +383,7 @@ public class GameScreen {
                     pingLabel.setStyle("-fx-text-fill: #e94560;");
                 });
             }
-            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE -> {
+            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE, ADMIN_SET_ADMIN_RESPONSE -> {
                 if (adminPanel != null) adminPanel.onPacket(packet);
             }
             default -> { /* ignore */ }
@@ -357,8 +404,10 @@ public class GameScreen {
     // ── Sound ─────────────────────────────────────────────────────────────────
 
     private void playSpaceSound() {
-        if (!AppSettings.isSoundEnabled()) return;
-        Thread.ofVirtual().start(() -> {
+        if (MobilePlatform.isMobile()) return; // javax.sound.sampled unavailable on Android
+        double vol = AppSettings.getSoundMode().volume;
+        if (vol == 0.0) return;
+        Thread.ofPlatform().daemon(true).start(() -> {
             try {
                 AudioFormat fmt = new AudioFormat(44100, 16, 1, true, false);
                 try (SourceDataLine line = AudioSystem.getSourceDataLine(fmt)) {
@@ -369,7 +418,7 @@ public class GameScreen {
                     for (int i = 0; i < frames; i++) {
                         double t   = i / 44100.0;
                         double env = 1.0 - (double) i / frames; // linear fade-out
-                        short  s   = (short)(Math.sin(2 * Math.PI * 520 * t) * env * Short.MAX_VALUE * 0.5);
+                        short  s   = (short)(Math.sin(2 * Math.PI * 520 * t) * env * Short.MAX_VALUE * 0.5 * vol);
                         buf[i * 2]     = (byte)(s & 0xFF);
                         buf[i * 2 + 1] = (byte)(s >> 8);
                     }

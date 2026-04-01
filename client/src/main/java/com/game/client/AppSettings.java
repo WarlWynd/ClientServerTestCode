@@ -22,9 +22,11 @@ public final class AppSettings {
             System.getProperty("user.home"), ".game", "settings.properties");
 
     // ── Fields ────────────────────────────────────────────────────────────────
-    private static volatile String  serverHost    = "localhost";
-    private static volatile int     serverPort    = 9876;
-    private static volatile boolean soundEnabled  = true;
+    private static volatile String    serverHost      = "localhost";
+    private static volatile int       serverPort      = 9876;
+    private static volatile SoundMode soundMode       = SoundMode.HIGH;
+    private static volatile boolean   keepScreenAwake = true;
+    private static volatile double    hudOpacity      = 1.0;
 
     static { load(); }
 
@@ -47,9 +49,12 @@ public final class AppSettings {
             } catch (Exception ignored) {}
         }
 
-        serverHost   = merged.getProperty("server.host",  serverHost);
-        serverPort   = intOf(merged, "server.port",   serverPort);
-        soundEnabled = boolOf(merged, "sound.enabled", soundEnabled);
+        serverHost      = merged.getProperty("server.host", serverHost);
+        serverPort      = intOf(merged, "server.port", serverPort);
+        soundMode       = SoundMode.fromString(merged.getProperty("sound.mode",
+                          merged.getProperty("sound.enabled", soundMode.name())));
+        keepScreenAwake = boolOf(merged, "display.keepScreenAwake", keepScreenAwake);
+        hudOpacity      = doubleOf(merged, "display.hudOpacity", hudOpacity);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -60,9 +65,11 @@ public final class AppSettings {
      */
     public static boolean save() {
         Properties p = new Properties();
-        p.setProperty("server.host",   serverHost);
-        p.setProperty("server.port",   String.valueOf(serverPort));
-        p.setProperty("sound.enabled", String.valueOf(soundEnabled));
+        p.setProperty("server.host",               serverHost);
+        p.setProperty("server.port",               String.valueOf(serverPort));
+        p.setProperty("sound.mode",                soundMode.name());
+        p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
+        p.setProperty("display.hudOpacity",        String.valueOf(hudOpacity));
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -76,13 +83,17 @@ public final class AppSettings {
 
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
-    public static String  getServerHost()              { return serverHost; }
-    public static int     getServerPort()              { return serverPort; }
-    public static boolean isSoundEnabled()             { return soundEnabled; }
+    public static String    getServerHost()              { return serverHost; }
+    public static int       getServerPort()              { return serverPort; }
+    public static SoundMode getSoundMode()               { return soundMode; }
+    public static boolean   isKeepScreenAwake()          { return keepScreenAwake; }
+    public static double    getHudOpacity()              { return hudOpacity; }
 
-    public static void setServerHost(String v)         { serverHost   = v; }
-    public static void setServerPort(int v)            { serverPort   = v; }
-    public static void setSoundEnabled(boolean v)      { soundEnabled = v; }
+    public static void setServerHost(String v)           { serverHost      = v; }
+    public static void setServerPort(int v)              { serverPort      = v; }
+    public static void setSoundMode(SoundMode v)         { soundMode       = v; }
+    public static void setKeepScreenAwake(boolean v)     { keepScreenAwake = v; }
+    public static void setHudOpacity(double v)           { hudOpacity      = v; }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -94,5 +105,10 @@ public final class AppSettings {
     private static boolean boolOf(Properties p, String key, boolean def) {
         String v = p.getProperty(key);
         return v == null ? def : Boolean.parseBoolean(v);
+    }
+
+    private static double doubleOf(Properties p, String key, double def) {
+        try { return Double.parseDouble(p.getProperty(key, String.valueOf(def))); }
+        catch (NumberFormatException e) { return def; }
     }
 }

@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -95,7 +96,7 @@ public class LoginScreen {
         styleField(passwordField);
         styleButton(loginButton);
 
-        Scene scene = new Scene(root, 480, 400);
+        Scene scene = MobilePlatform.isMobile() ? new Scene(root) : new Scene(root, 480, 400);
         stage.setTitle("Game — Login");
         stage.setScene(scene);
         stage.show();

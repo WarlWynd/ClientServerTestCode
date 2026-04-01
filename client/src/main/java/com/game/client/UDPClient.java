@@ -58,8 +58,9 @@ public class UDPClient {
                 : new DatagramSocket(localPort);
         running    = true;
 
-        receiverThread = Thread.ofVirtual()
+        receiverThread = Thread.ofPlatform()
                 .name("udp-receiver")
+                .daemon(true)
                 .start(this::receiveLoop);
 
         log.info("UDP client started → {}:{}", serverHost, serverPort);

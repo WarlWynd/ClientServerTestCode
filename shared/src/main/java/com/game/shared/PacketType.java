@@ -32,5 +32,7 @@ public enum PacketType {
     ADMIN_KICK_REQUEST,        // admin -> server: kick a player by username
     ADMIN_KICK_RESPONSE,       // server -> admin: success/failure of kick
     ADMIN_BAN_REQUEST,         // admin -> server: ban/unban a user by username
-    ADMIN_BAN_RESPONSE         // server -> admin: success/failure of ban
+    ADMIN_BAN_RESPONSE,        // server -> admin: success/failure of ban
+    ADMIN_SET_ADMIN_REQUEST,   // admin -> server: grant/revoke admin for a user
+    ADMIN_SET_ADMIN_RESPONSE   // server -> admin: success/failure of admin change
 }

@@ -90,6 +90,39 @@ public class UserRepository {
     }
 
     /**
+     * Returns {@code true} if the given username exists and has is_admin = true.
+     */
+    public boolean isAdmin(String username) {
+        String sql = "SELECT is_admin FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("is_admin");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("isAdmin() failed", e);
+        }
+    }
+
+    /**
+     * Sets or clears the is_admin flag for a user.
+     *
+     * @return {@code true} if a row was updated, {@code false} if the username was not found.
+     */
+    public boolean setAdmin(String username, boolean admin) {
+        String sql = "UPDATE users SET is_admin = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, admin);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("setAdmin() failed", e);
+        }
+    }
+
+    /**
      * Sets or clears the banned flag for a user.
      *
      * @return {@code true} if a row was updated, {@code false} if the username was not found.

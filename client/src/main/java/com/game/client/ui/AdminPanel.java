@@ -77,11 +77,12 @@ public class AdminPanel {
         table.setPlaceholder(new Label("No players connected"));
 
         table.getColumns().addAll(
-                strCol("Username",  "username",      180),
-                strCol("Connected", "connectedTime", 130),
-                strCol("Score",     "score",          70),
-                strCol("X",         "x",              60),
-                strCol("Y",         "y",              60),
+                strCol("Username",  "username",      160),
+                strCol("Connected", "connectedTime", 110),
+                strCol("Score",     "score",          60),
+                strCol("X",         "x",              50),
+                strCol("Y",         "y",              50),
+                adminCol(),
                 kickCol(),
                 banCol()
         );
@@ -199,7 +200,8 @@ public class AdminPanel {
                                 p.get("joinedAt").asLong(),
                                 p.get("x").asDouble(),
                                 p.get("y").asDouble(),
-                                p.get("score").asInt()));
+                                p.get("score").asInt(),
+                                p.has("isAdmin") && p.get("isAdmin").asBoolean()));
                     }
                 }
                 headerLabel.setText(String.format("Admin Panel — %s  |  %d player%s online",
@@ -217,6 +219,14 @@ public class AdminPanel {
                 String  msg = ok
                         ? "Banned: "      + packet.payload.get("username").asText()
                         : "Ban failed: "  + packet.payload.get("message").asText();
+                showStatus(msg, ok ? "#80c080" : "#e94560");
+            });
+            case ADMIN_SET_ADMIN_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg = ok
+                        ? (packet.payload.get("isAdmin").asBoolean() ? "Granted admin: " : "Revoked admin: ")
+                                + packet.payload.get("username").asText()
+                        : "Admin change failed: " + packet.payload.get("message").asText();
                 showStatus(msg, ok ? "#80c080" : "#e94560");
             });
         }
@@ -241,6 +251,36 @@ public class AdminPanel {
         return col;
     }
 
+    private TableColumn<PlayerRow, Void> adminCol() {
+        TableColumn<PlayerRow, Void> col = new TableColumn<>("Admin");
+        col.setPrefWidth(80);
+        col.setCellFactory(c -> new TableCell<>() {
+            private final Button btn = new Button();
+            {
+                btn.setStyle("""
+                        -fx-font-size: 11;
+                        -fx-background-radius: 4;
+                        -fx-padding: 3 8 3 8;
+                        """);
+            }
+            @Override protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) { setGraphic(null); return; }
+                PlayerRow row = getTableView().getItems().get(getIndex());
+                if (row.username.get().equals(SessionStore.getUsername())) {
+                    setGraphic(null); return;
+                }
+                btn.setText(row.isAdmin ? "Revoke" : "Grant");
+                String bg = row.isAdmin ? "#505080" : "#3a7a3a";
+                btn.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: white; "
+                        + "-fx-font-size: 11; -fx-background-radius: 4; -fx-padding: 3 8 3 8;");
+                btn.setOnAction(e -> doSetAdmin(row.username.get(), !row.isAdmin));
+                setGraphic(btn);
+            }
+        });
+        return col;
+    }
+
     private TableColumn<PlayerRow, Void> kickCol() {
         TableColumn<PlayerRow, Void> col = new TableColumn<>("Action");
         col.setPrefWidth(80);
@@ -261,7 +301,9 @@ public class AdminPanel {
             }
             @Override protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
-                setGraphic(empty ? null : btn);
+                if (empty) { setGraphic(null); return; }
+                PlayerRow row = getTableView().getItems().get(getIndex());
+                setGraphic(row.username.get().equals(SessionStore.getUsername()) ? null : btn);
             }
         });
         return col;
@@ -287,7 +329,9 @@ public class AdminPanel {
             }
             @Override protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
-                setGraphic(empty ? null : btn);
+                if (empty) { setGraphic(null); return; }
+                PlayerRow row = getTableView().getItems().get(getIndex());
+                setGraphic(row.username.get().equals(SessionStore.getUsername()) ? null : btn);
             }
         });
         return col;
@@ -304,6 +348,13 @@ public class AdminPanel {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
         client.send(new Packet(PacketType.ADMIN_KICK_REQUEST, SessionStore.getToken(), payload));
+    }
+
+    private void doSetAdmin(String username, boolean isAdmin) {
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("username", username);
+        payload.put("isAdmin",  isAdmin);
+        client.send(new Packet(PacketType.ADMIN_SET_ADMIN_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void doBan(String username) {
@@ -324,15 +375,17 @@ public class AdminPanel {
     // ── Inner model ───────────────────────────────────────────────────────────
 
     static class PlayerRow {
-        final StringProperty username      = new SimpleStringProperty();
-        final StringProperty connectedTime = new SimpleStringProperty();
-        final StringProperty score         = new SimpleStringProperty();
-        final StringProperty x             = new SimpleStringProperty();
-        final StringProperty y             = new SimpleStringProperty();
-        final long           joinedAt;
+        final StringProperty  username      = new SimpleStringProperty();
+        final StringProperty  connectedTime = new SimpleStringProperty();
+        final StringProperty  score         = new SimpleStringProperty();
+        final StringProperty  x             = new SimpleStringProperty();
+        final StringProperty  y             = new SimpleStringProperty();
+        volatile boolean      isAdmin;
+        final long            joinedAt;
 
-        PlayerRow(String username, long joinedAt, double x, double y, int score) {
+        PlayerRow(String username, long joinedAt, double x, double y, int score, boolean isAdmin) {
             this.joinedAt = joinedAt;
+            this.isAdmin  = isAdmin;
             this.username.set(username);
             this.score.set(String.valueOf(score));
             this.x.set(String.format("%.0f", x));

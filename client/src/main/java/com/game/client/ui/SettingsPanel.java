@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.game.client.AppSettings;
+import com.game.client.SoundMode;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -23,18 +24,57 @@ public class SettingsPanel {
     public Node buildView() {
 
         // ── Audio ─────────────────────────────────────────────────────────────
-        CheckBox soundCheck = new CheckBox("Enable sound effects");
-        soundCheck.setSelected(AppSettings.isSoundEnabled());
-        soundCheck.setStyle("-fx-text-fill: #c0c0d8;");
-        soundCheck.selectedProperty().addListener((obs, old, val) ->
-                AppSettings.setSoundEnabled(val));
+        ToggleGroup soundGroup = new ToggleGroup();
+        HBox radioRow = new HBox(16);
+        radioRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox audioSection = section("Audio",
-                row(soundCheck));
+        for (SoundMode mode : SoundMode.values()) {
+            RadioButton rb = new RadioButton(mode.label);
+            rb.setToggleGroup(soundGroup);
+            rb.setUserData(mode);
+            rb.setSelected(AppSettings.getSoundMode() == mode);
+            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            radioRow.getChildren().add(rb);
+        }
+
+        soundGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val != null) AppSettings.setSoundMode((SoundMode) val.getUserData());
+        });
+
+        VBox audioSection = section("Audio", row(radioRow));
 
         // ── Display ───────────────────────────────────────────────────────────
+        CheckBox keepAwakeCheck = new CheckBox("Keep screen awake");
+        keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
+        keepAwakeCheck.setStyle("-fx-text-fill: #c0c0d8;");
+        keepAwakeCheck.selectedProperty().addListener((obs, old, val) ->
+                AppSettings.setKeepScreenAwake(val));
+
+        Label hudLabel = new Label("HUD Opacity:");
+        hudLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+
+        ToggleGroup hudGroup = new ToggleGroup();
+        HBox hudRow = new HBox(12);
+        hudRow.setAlignment(Pos.CENTER_LEFT);
+
+        double[] opacityLevels  = { 0.25, 0.50, 0.75, 1.0 };
+        String[] opacityLabels  = { "25%", "50%", "75%", "100%" };
+        for (int i = 0; i < opacityLevels.length; i++) {
+            RadioButton rb = new RadioButton(opacityLabels[i]);
+            rb.setToggleGroup(hudGroup);
+            rb.setUserData(opacityLevels[i]);
+            rb.setSelected(Math.abs(AppSettings.getHudOpacity() - opacityLevels[i]) < 0.01);
+            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            hudRow.getChildren().add(rb);
+        }
+        hudGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val != null) AppSettings.setHudOpacity((double) val.getUserData());
+        });
+
         VBox displaySection = section("Display",
-                comingSoon());
+                row(keepAwakeCheck),
+                row(hudLabel),
+                row(hudRow));
 
         // ── Gameplay ──────────────────────────────────────────────────────────
         VBox gameplaySection = section("Gameplay",
@@ -70,7 +110,11 @@ public class SettingsPanel {
         });
 
         resetBtn.setOnAction(e -> {
-            soundCheck.setSelected(AppSettings.isSoundEnabled());
+            soundGroup.getToggles().forEach(t ->
+                    t.setSelected(t.getUserData() == AppSettings.getSoundMode()));
+            keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
+            hudGroup.getToggles().forEach(t ->
+                    t.setSelected(Math.abs((double) t.getUserData() - AppSettings.getHudOpacity()) < 0.01));
             setStatus(statusLabel, "Reset to current saved values.", true);
         });
 

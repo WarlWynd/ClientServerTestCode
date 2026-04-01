@@ -58,6 +58,7 @@ public class AdminPacketHandler {
             node.put("x",        p.x);
             node.put("y",        p.y);
             node.put("score",    p.score);
+            node.put("isAdmin",  userRepo.isAdmin(p.username));
         }
 
         send(socket, PacketType.ADMIN_USER_LIST_RESPONSE, in.sessionToken, out, addr, port);
@@ -135,6 +136,44 @@ public class AdminPacketHandler {
         }
 
         send(socket, PacketType.ADMIN_BAN_RESPONSE, in.sessionToken, out, addr, port);
+    }
+
+    // -- ADMIN_SET_ADMIN_REQUEST --
+
+    public void handleSetAdminRequest(DatagramSocket socket, Packet in,
+                                      InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (!authHandler.isAdminSession(in.sessionToken)) {
+            out.put("success", false);
+            out.put("message", "Unauthorised");
+            send(socket, PacketType.ADMIN_SET_ADMIN_RESPONSE, in.sessionToken, out, addr, port);
+            log.warn("ADMIN_SET_ADMIN rejected — not an admin token from {}:{}", addr.getHostAddress(), port);
+            return;
+        }
+
+        String  username = in.payload.has("username") ? in.payload.get("username").asText() : "";
+        boolean isAdmin  = in.payload.has("isAdmin") && in.payload.get("isAdmin").asBoolean();
+
+        if (username.isBlank()) {
+            out.put("success", false);
+            out.put("message", "No username specified");
+            send(socket, PacketType.ADMIN_SET_ADMIN_RESPONSE, in.sessionToken, out, addr, port);
+            return;
+        }
+
+        boolean updated = userRepo.setAdmin(username, isAdmin);
+        if (updated) {
+            out.put("success",  true);
+            out.put("username", username);
+            out.put("isAdmin",  isAdmin);
+            log.info("ADMIN_SET_ADMIN  user='{}' isAdmin={} by admin at {}:{}", username, isAdmin, addr.getHostAddress(), port);
+        } else {
+            out.put("success", false);
+            out.put("message", "User '" + username + "' not found");
+        }
+
+        send(socket, PacketType.ADMIN_SET_ADMIN_RESPONSE, in.sessionToken, out, addr, port);
     }
 
     // -- Helper --

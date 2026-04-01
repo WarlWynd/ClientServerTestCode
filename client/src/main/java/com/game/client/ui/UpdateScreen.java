@@ -68,7 +68,7 @@ public class UpdateScreen {
         stage.setScene(new Scene(root, 480, 400));
         stage.show();
 
-        Thread.ofVirtual().start(this::runCheck);
+        Thread.ofPlatform().daemon(true).start(this::runCheck);
     }
 
     private void runCheck() {

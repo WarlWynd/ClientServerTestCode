@@ -2,6 +2,7 @@ package com.game.client;
 
 import com.game.client.ui.LoginScreen;
 import com.game.client.ui.UpdateScreen;
+import com.game.client.MobilePlatform;
 import com.game.client.ui.VersionCheckScreen;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -25,10 +26,13 @@ public class ClientMain extends Application {
     public void start(Stage primaryStage) throws Exception {
         ClientConfig config = new ClientConfig();
 
-        primaryStage.setResizable(false);
         primaryStage.setOnCloseRequest(e -> shutdown());
 
-        new UpdateScreen(primaryStage, config.getVersion(), () -> launchGame(primaryStage, config)).show();
+        if (MobilePlatform.isMobile()) {
+            launchGame(primaryStage, config);
+        } else {
+            new UpdateScreen(primaryStage, config.getVersion(), () -> launchGame(primaryStage, config)).show();
+        }
     }
 
     private void launchGame(Stage primaryStage, ClientConfig config) {
