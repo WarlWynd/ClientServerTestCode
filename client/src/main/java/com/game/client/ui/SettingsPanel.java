@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.game.client.AppSettings;
+import com.game.client.SessionStore;
 import com.game.client.SoundMode;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -104,7 +105,36 @@ public class SettingsPanel {
                 -fx-padding: 7 14 7 14;
                 """);
 
+        // ── Admin: Connection ─────────────────────────────────────────────────
+        VBox connectionSection = null;
+        TextField hostField = null;
+        TextField portField = null;
+
+        if (SessionStore.isAdmin()) {
+            hostField = styledField(AppSettings.getServerHost());
+            portField = styledField(String.valueOf(AppSettings.getServerPort()));
+
+            Label restartNote = new Label("Connection changes take effect on next launch.");
+            restartNote.setStyle("-fx-text-fill: #606080; -fx-font-size: 11; -fx-font-style: italic;");
+
+            connectionSection = section("Connection (Admin)",
+                    row("Server Host:", hostField),
+                    row("Server Port:", portField),
+                    row(restartNote));
+        }
+
+        final TextField finalHostField = hostField;
+        final TextField finalPortField = portField;
+
         saveBtn.setOnAction(e -> {
+            if (SessionStore.isAdmin() && finalHostField != null) {
+                String host = finalHostField.getText().trim();
+                if (!host.isEmpty()) AppSettings.setServerHost(host);
+                try {
+                    int p = Integer.parseInt(finalPortField.getText().trim());
+                    if (p > 0 && p < 65536) AppSettings.setServerPort(p);
+                } catch (NumberFormatException ignored) {}
+            }
             boolean ok = AppSettings.save();
             setStatus(statusLabel, ok ? "Settings saved." : "Could not write settings file.", ok);
         });
@@ -115,6 +145,8 @@ public class SettingsPanel {
             keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
             hudGroup.getToggles().forEach(t ->
                     t.setSelected(Math.abs((double) t.getUserData() - AppSettings.getHudOpacity()) < 0.01));
+            if (finalHostField != null) finalHostField.setText(AppSettings.getServerHost());
+            if (finalPortField != null) finalPortField.setText(String.valueOf(AppSettings.getServerPort()));
             setStatus(statusLabel, "Reset to current saved values.", true);
         });
 
@@ -123,7 +155,9 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection, buttons);
+        VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
+        if (connectionSection != null) content.getChildren().add(connectionSection);
+        content.getChildren().add(buttons);
         content.setStyle("-fx-background-color: #1a1a2e;");
 
         ScrollPane scroll = new ScrollPane(content);

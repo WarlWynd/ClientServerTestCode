@@ -5,6 +5,7 @@ import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import com.game.client.AppSettings;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -20,6 +21,8 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.function.Consumer;
+
 /**
  * Verifies that this client version is accepted by the server.
  *
@@ -31,14 +34,14 @@ public class VersionCheckScreen {
 
     private static final Logger log = LoggerFactory.getLogger(VersionCheckScreen.class);
 
-    private final Stage    stage;
-    private final UDPClient client;
-    private final String   clientVersion;
-    private final Runnable onCompatible;
+    private final Stage           stage;
+    private final UDPClient       client;
+    private final String          clientVersion;
+    private final Consumer<String> onCompatible; // receives assetUrl
 
     private Label statusLabel;
 
-    public VersionCheckScreen(Stage stage, UDPClient client, String clientVersion, Runnable onCompatible) {
+    public VersionCheckScreen(Stage stage, UDPClient client, String clientVersion, Consumer<String> onCompatible) {
         this.stage         = stage;
         this.client        = client;
         this.clientVersion = clientVersion;
@@ -89,8 +92,12 @@ public class VersionCheckScreen {
         Platform.runLater(() -> {
             boolean compatible = packet.payload.get("compatible").asBoolean();
             if (compatible) {
-                log.info("Version check passed ({})", clientVersion);
-                onCompatible.run();
+                int assetPort = packet.payload.has("assetPort")
+                        ? packet.payload.get("assetPort").asInt(9877)
+                        : 9877;
+                String assetUrl = "http://" + AppSettings.getServerHost() + ":" + assetPort;
+                log.info("Version check passed ({}) — assetUrl={}", clientVersion, assetUrl);
+                onCompatible.accept(assetUrl);
             } else {
                 String msg = packet.payload.has("message")
                         ? packet.payload.get("message").asText()

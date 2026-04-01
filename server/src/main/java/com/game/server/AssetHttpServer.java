@@ -49,7 +49,8 @@ public class AssetHttpServer {
         }
 
         server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/assets", this::handle);
+        server.createContext("/assets",          this::handle);
+        server.createContext("/client-manifest", this::handleClientManifest);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
         log.info("Asset HTTP server listening on port {}", port);
@@ -143,6 +144,42 @@ public class AssetHttpServer {
             for (byte b : hash) sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) { return ""; }
+    }
+
+    private void handleClientManifest(HttpExchange ex) throws IOException {
+        try {
+            StringBuilder json = new StringBuilder("{\"files\":[");
+            boolean first = true;
+            for (String type : ALLOWED_TYPES) {
+                Path dir = assetsRoot.resolve(type);
+                if (!Files.isDirectory(dir)) continue;
+                List<Path> files = new ArrayList<>();
+                try (var stream = Files.list(dir)) {
+                    stream.filter(Files::isRegularFile).sorted().forEach(files::add);
+                }
+                for (Path f : files) {
+                    if (!first) json.append(",");
+                    first = false;
+                    byte[] data = Files.readAllBytes(f);
+                    json.append("{")
+                        .append("\"type\":\"").append(type).append("\",")
+                        .append("\"name\":\"").append(f.getFileName()).append("\",")
+                        .append("\"size\":").append(data.length).append(",")
+                        .append("\"sha256\":\"").append(sha256(data)).append("\"")
+                        .append("}");
+                }
+            }
+            json.append("]}");
+
+            byte[] body = json.toString().getBytes();
+            ex.getResponseHeaders().set("Content-Type", "application/json");
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.getResponseBody().close();
+        } catch (Exception e) {
+            log.error("Client manifest error: {}", e.getMessage(), e);
+            respond(ex, 500, "Internal Server Error");
+        }
     }
 
     private void handleDownload(HttpExchange ex, String type, String filename) throws IOException {

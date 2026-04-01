@@ -36,6 +36,7 @@ public class UDPServer {
     private static final long PLAYER_TIMEOUT_MS = 30_000;
 
     private final int    port;
+    private final int    httpPort;
     private final String minClientVersion;
     private final AuthHandler        authHandler;
     private final GameHandler        gameHandler  = new GameHandler();
@@ -49,6 +50,7 @@ public class UDPServer {
 
     public UDPServer(int port, String serverVersion, String minClientVersion, int httpPort) {
         this.port             = port;
+        this.httpPort         = httpPort;
         this.minClientVersion = minClientVersion;
         this.authHandler      = new AuthHandler(serverVersion, httpPort);
         this.adminHandler     = new AdminPacketHandler(authHandler, gameHandler);
@@ -181,6 +183,7 @@ public class UDPServer {
         payload.put("compatible",    compatible);
         payload.put("minVersion",    minClientVersion);
         payload.put("clientVersion", clientVersion);
+        payload.put("assetPort",     httpPort);
         if (!compatible) {
             payload.put("message", "Client v" + clientVersion
                     + " is too old. Please update to v" + minClientVersion + " or newer.");

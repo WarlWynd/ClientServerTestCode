@@ -3,7 +3,6 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
-import com.game.client.AssetSyncClient;
 import com.game.client.AudioManager;
 import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
@@ -211,14 +210,6 @@ public class GameScreen {
 
         canvas.setFocusTraversable(true);
         canvas.requestFocus();
-
-        // ── Asset sync (background) ──────────────────────────────────────────
-        String assetUrl = SessionStore.getAssetUrl();
-        String token    = SessionStore.getToken();
-        if (assetUrl != null) {
-            Thread.ofPlatform().daemon(true).name("asset-sync").start(
-                    () -> AssetSyncClient.sync(assetUrl, token));
-        }
 
         // ── Join game ────────────────────────────────────────────────────────
         sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());

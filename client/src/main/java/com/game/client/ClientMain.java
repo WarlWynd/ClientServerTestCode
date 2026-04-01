@@ -1,5 +1,6 @@
 package com.game.client;
 
+import com.game.client.ui.ClientSyncScreen;
 import com.game.client.ui.LoginScreen;
 import com.game.client.ui.UpdateScreen;
 import com.game.client.MobilePlatform;
@@ -45,7 +46,8 @@ public class ClientMain extends Application {
             return;
         }
         new VersionCheckScreen(primaryStage, udpClient, config.getVersion(),
-                () -> new LoginScreen(primaryStage, udpClient, config.getVersion()).show()).show();
+                assetUrl -> new ClientSyncScreen(primaryStage, assetUrl,
+                        () -> new LoginScreen(primaryStage, udpClient, config.getVersion()).show()).show()).show();
     }
 
     @Override

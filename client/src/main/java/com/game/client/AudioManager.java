@@ -53,7 +53,7 @@ public final class AudioManager {
 
     private static byte[] loadBytes(String name) {
         // 1. Local cache — downloaded from server
-        Path cached = AssetSyncClient.CACHE_DIR.resolve(name);
+        Path cached = ClientSyncClient.BASE_DIR.resolve("sounds").resolve(name);
         if (Files.exists(cached)) {
             try { return Files.readAllBytes(cached); } catch (Exception ignored) {}
         }

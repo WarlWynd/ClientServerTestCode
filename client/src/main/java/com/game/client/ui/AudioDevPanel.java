@@ -2,7 +2,7 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.game.client.AssetSyncClient;
+import com.game.client.ClientSyncClient;
 import com.game.client.AudioManager;
 import com.game.client.SessionStore;
 import javafx.application.Platform;
@@ -33,7 +33,7 @@ import java.util.*;
  * upload arbitrary files via a file chooser, delete files, or preview
  * anything in the local cache.
  *
- * Clients receive updated files on next login via AssetSyncClient.
+ * Clients receive updated files on next restart via ClientSyncClient.
  */
 public class AudioDevPanel {
 
@@ -356,11 +356,11 @@ public class AudioDevPanel {
 
     private void previewFile(String filename) {
         stopCurrent();
-        Path cached = AssetSyncClient.CACHE_DIR.resolve(filename);
+        Path cached = ClientSyncClient.BASE_DIR.resolve("sounds").resolve(filename);
 
         if (filename.endsWith(".wav")) {
             Path src = Files.exists(cached) ? cached : null;
-            if (src == null) { setStatus("Not in local cache — log out and back in to sync."); return; }
+            if (src == null) { setStatus("Not in local cache — restart the client to sync."); return; }
             Thread.ofPlatform().daemon(true).start(() -> {
                 try {
                     AudioInputStream ais = AudioSystem.getAudioInputStream(src.toFile());
@@ -374,7 +374,7 @@ public class AudioDevPanel {
                 } catch (Exception ex) { setStatus("Playback error: " + ex.getMessage()); }
             });
         } else {
-            if (!Files.exists(cached)) { setStatus("Not in local cache — log out and back in to sync."); return; }
+            if (!Files.exists(cached)) { setStatus("Not in local cache — restart the client to sync."); return; }
             try {
                 Media media = new Media(cached.toUri().toString());
                 currentPlayer = new MediaPlayer(media);
@@ -397,8 +397,8 @@ public class AudioDevPanel {
 
     private void openCacheFolder() {
         try {
-            Files.createDirectories(AssetSyncClient.CACHE_DIR);
-            Desktop.getDesktop().open(AssetSyncClient.CACHE_DIR.toFile());
+            Files.createDirectories(ClientSyncClient.BASE_DIR.resolve("sounds"));
+            Desktop.getDesktop().open(ClientSyncClient.BASE_DIR.resolve("sounds").toFile());
         } catch (Exception ex) {
             setStatus("Cannot open folder: " + ex.getMessage());
         }
