@@ -55,6 +55,7 @@ public class AdminPacketHandler {
             ObjectNode  node = playersArr.addObject();
             node.put("username", p.username);
             node.put("joinedAt", p.joinedAt);
+            node.put("ip",       p.ip);
             node.put("x",        p.x);
             node.put("y",        p.y);
             node.put("score",    p.score);
@@ -174,6 +175,57 @@ public class AdminPacketHandler {
         }
 
         send(socket, PacketType.ADMIN_SET_ADMIN_RESPONSE, in.sessionToken, out, addr, port);
+    }
+
+    // -- ADMIN_RESTART_REQUEST --
+
+    public void handleRestartRequest(DatagramSocket socket, Packet in,
+                                     InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (!authHandler.isAdminSession(in.sessionToken)) {
+            out.put("success", false);
+            out.put("message", "Unauthorised");
+            send(socket, PacketType.ADMIN_RESTART_RESPONSE, in.sessionToken, out, addr, port);
+            log.warn("ADMIN_RESTART rejected — not an admin token from {}:{}", addr.getHostAddress(), port);
+            return;
+        }
+
+        out.put("success", true);
+        out.put("message", "Server restarting…");
+        send(socket, PacketType.ADMIN_RESTART_RESPONSE, in.sessionToken, out, addr, port);
+        log.warn("ADMIN_RESTART requested by admin at {}:{} — exiting with code 42", addr.getHostAddress(), port);
+
+        // Brief delay so the response packet can be delivered before the process exits
+        Thread.ofPlatform().daemon(false).name("restart-trigger").start(() -> {
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            System.exit(42);
+        });
+    }
+
+    // -- ADMIN_DEPLOY_REQUEST --
+
+    public void handleDeployRequest(DatagramSocket socket, Packet in,
+                                    InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        if (!authHandler.isAdminSession(in.sessionToken)) {
+            out.put("success", false);
+            out.put("message", "Unauthorised");
+            send(socket, PacketType.ADMIN_DEPLOY_RESPONSE, in.sessionToken, out, addr, port);
+            log.warn("ADMIN_DEPLOY rejected — not an admin token from {}:{}", addr.getHostAddress(), port);
+            return;
+        }
+
+        out.put("success", true);
+        out.put("message", "Deploy started — server will restart when complete.");
+        send(socket, PacketType.ADMIN_DEPLOY_RESPONSE, in.sessionToken, out, addr, port);
+        log.warn("ADMIN_DEPLOY requested by admin at {}:{} — exiting with code 43", addr.getHostAddress(), port);
+
+        Thread.ofPlatform().daemon(false).name("deploy-trigger").start(() -> {
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            System.exit(43);
+        });
     }
 
     // -- Helper --

@@ -44,7 +44,7 @@ public class GameHandler {
 
     public void handleJoin(DatagramSocket socket, Packet in, Session session,
                            InetAddress addr, int port) throws Exception {
-        players.put(session.token(), new PlayerState(session.userId(), session.username()));
+        players.put(session.token(), new PlayerState(session.userId(), session.username(), addr.getHostAddress()));
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
         broadcastGameState(socket);

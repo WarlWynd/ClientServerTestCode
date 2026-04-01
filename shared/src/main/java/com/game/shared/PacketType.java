@@ -34,5 +34,9 @@ public enum PacketType {
     ADMIN_BAN_REQUEST,         // admin -> server: ban/unban a user by username
     ADMIN_BAN_RESPONSE,        // server -> admin: success/failure of ban
     ADMIN_SET_ADMIN_REQUEST,   // admin -> server: grant/revoke admin for a user
-    ADMIN_SET_ADMIN_RESPONSE   // server -> admin: success/failure of admin change
+    ADMIN_SET_ADMIN_RESPONSE,  // server -> admin: success/failure of admin change
+    ADMIN_RESTART_REQUEST,     // admin -> server: restart the server process
+    ADMIN_RESTART_RESPONSE,    // server -> admin: acknowledged, restarting
+    ADMIN_DEPLOY_REQUEST,      // admin -> server: git pull, rebuild, restart
+    ADMIN_DEPLOY_RESPONSE      // server -> admin: deploy started / error
 }

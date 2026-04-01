@@ -47,10 +47,10 @@ public class UDPServer {
     private ExecutorService           workers;
     private ScheduledExecutorService  scheduler;
 
-    public UDPServer(int port, String serverVersion, String minClientVersion) {
+    public UDPServer(int port, String serverVersion, String minClientVersion, int httpPort) {
         this.port             = port;
         this.minClientVersion = minClientVersion;
-        this.authHandler      = new AuthHandler(serverVersion);
+        this.authHandler      = new AuthHandler(serverVersion, httpPort);
         this.adminHandler     = new AdminPacketHandler(authHandler, gameHandler);
     }
 
@@ -112,6 +112,8 @@ public class UDPServer {
                 case ADMIN_KICK_REQUEST      -> adminHandler.handleKickRequest(socket, packet, addr, port);
                 case ADMIN_BAN_REQUEST       -> adminHandler.handleBanRequest(socket, packet, addr, port);
                 case ADMIN_SET_ADMIN_REQUEST -> adminHandler.handleSetAdminRequest(socket, packet, addr, port);
+                case ADMIN_RESTART_REQUEST   -> adminHandler.handleRestartRequest(socket, packet, addr, port);
+                case ADMIN_DEPLOY_REQUEST    -> adminHandler.handleDeployRequest(socket, packet, addr, port);
                 default                      -> dispatchAuthenticated(packet, addr, port);
             }
         } catch (Exception e) {

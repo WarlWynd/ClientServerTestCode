@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -106,20 +107,22 @@ public class AssetHttpServer {
             firstType = false;
             json.append("\"").append(type).append("\":[");
             Path dir = assetsRoot.resolve(type);
-            List<String> files = new ArrayList<>();
+            List<Path> files = new ArrayList<>();
             if (Files.isDirectory(dir)) {
                 try (var stream = Files.list(dir)) {
-                    stream.filter(Files::isRegularFile)
-                          .map(p -> p.getFileName().toString())
-                          .sorted()
-                          .forEach(files::add);
+                    stream.filter(Files::isRegularFile).sorted().forEach(files::add);
                 }
             }
             boolean firstFile = true;
-            for (String f : files) {
+            for (Path f : files) {
                 if (!firstFile) json.append(",");
                 firstFile = false;
-                json.append("\"").append(f).append("\"");
+                byte[] data = Files.readAllBytes(f);
+                json.append("{")
+                    .append("\"name\":\"").append(f.getFileName()).append("\",")
+                    .append("\"size\":").append(data.length).append(",")
+                    .append("\"sha256\":\"").append(sha256(data)).append("\"")
+                    .append("}");
             }
             json.append("]");
         }
@@ -130,6 +133,16 @@ public class AssetHttpServer {
         ex.sendResponseHeaders(200, body.length);
         ex.getResponseBody().write(body);
         ex.getResponseBody().close();
+    }
+
+    private static String sha256(byte[] data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(data);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { return ""; }
     }
 
     private void handleDownload(HttpExchange ex, String type, String filename) throws IOException {

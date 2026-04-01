@@ -58,7 +58,30 @@ public class AdminPanel {
         statusLabel.setFont(Font.font("System", 12));
         statusLabel.setTextFill(Color.web("#80c080"));
 
-        HBox header = new HBox(headerLabel);
+        Button deployBtn = new Button("Deploy & Restart");
+        deployBtn.setStyle("""
+                -fx-background-color: #1a4a1a;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 4 12 4 12;
+                """);
+        deployBtn.setOnAction(e -> confirmDeploy());
+
+        Button restartBtn = new Button("Restart");
+        restartBtn.setStyle("""
+                -fx-background-color: #7a3000;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 4 12 4 12;
+                """);
+        restartBtn.setOnAction(e -> confirmRestart());
+
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+        HBox header = new HBox(headerLabel, headerSpacer, deployBtn, restartBtn);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 6, 14));
         header.setStyle("-fx-background-color: #0f0f1e;");
@@ -77,11 +100,12 @@ public class AdminPanel {
         table.setPlaceholder(new Label("No players connected"));
 
         table.getColumns().addAll(
-                strCol("Username",  "username",      160),
-                strCol("Connected", "connectedTime", 110),
-                strCol("Score",     "score",          60),
-                strCol("X",         "x",              50),
-                strCol("Y",         "y",              50),
+                strCol("Username",  "username",      140),
+                strCol("IP",        "ip",            120),
+                strCol("Connected", "connectedTime", 100),
+                strCol("Score",     "score",          55),
+                strCol("X",         "x",              45),
+                strCol("Y",         "y",              45),
                 adminCol(),
                 kickCol(),
                 banCol()
@@ -197,6 +221,7 @@ public class AdminPanel {
                     for (JsonNode p : players) {
                         rows.add(new PlayerRow(
                                 p.get("username").asText(),
+                                p.has("ip") ? p.get("ip").asText() : "—",
                                 p.get("joinedAt").asLong(),
                                 p.get("x").asDouble(),
                                 p.get("y").asDouble(),
@@ -229,6 +254,20 @@ public class AdminPanel {
                         : "Admin change failed: " + packet.payload.get("message").asText();
                 showStatus(msg, ok ? "#80c080" : "#e94560");
             });
+            case ADMIN_RESTART_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg = ok
+                        ? "Server restarting — reconnect in a moment."
+                        : "Restart failed: " + packet.payload.get("message").asText();
+                showStatus(msg, ok ? "#f0a030" : "#e94560");
+            });
+            case ADMIN_DEPLOY_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg = ok
+                        ? "Deploying — pulling code, rebuilding, restarting. Reconnect in ~1 min."
+                        : "Deploy failed: " + packet.payload.get("message").asText();
+                showStatus(msg, ok ? "#50c050" : "#e94560");
+            });
         }
     }
 
@@ -241,6 +280,7 @@ public class AdminPanel {
             PlayerRow row = data.getValue();
             return switch (field) {
                 case "username"      -> row.username;
+                case "ip"            -> row.ip;
                 case "connectedTime" -> row.connectedTime;
                 case "score"         -> row.score;
                 case "x"             -> row.x;
@@ -364,6 +404,43 @@ public class AdminPanel {
         client.send(new Packet(PacketType.ADMIN_BAN_REQUEST, SessionStore.getToken(), payload));
     }
 
+    private void confirmDeploy() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Deploy & Restart");
+        alert.setHeaderText("Deploy latest code and restart?");
+        alert.setContentText("""
+                The server will:
+                  1. Commit and push any local changes
+                  2. Pull latest code from remote
+                  3. Rebuild the server JAR
+                  4. Restart automatically
+
+                All players will be disconnected.
+                Reconnect in approximately 1 minute.""");
+        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        alert.showAndWait().ifPresent(btn -> {
+            if (btn == javafx.scene.control.ButtonType.OK)
+                client.send(new Packet(PacketType.ADMIN_DEPLOY_REQUEST,
+                        SessionStore.getToken(), PacketSerializer.emptyPayload()));
+        });
+    }
+
+    private void confirmRestart() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Restart Server");
+        alert.setHeaderText("Restart the game server?");
+        alert.setContentText("All connected players will be disconnected.\nThe server will restart automatically if launched via restart.sh.");
+        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        alert.showAndWait().ifPresent(btn -> {
+            if (btn == javafx.scene.control.ButtonType.OK) doRestart();
+        });
+    }
+
+    private void doRestart() {
+        client.send(new Packet(PacketType.ADMIN_RESTART_REQUEST,
+                SessionStore.getToken(), PacketSerializer.emptyPayload()));
+    }
+
     private void showStatus(String msg, String color) {
         statusLabel.setTextFill(Color.web(color));
         statusLabel.setText(msg);
@@ -376,6 +453,7 @@ public class AdminPanel {
 
     static class PlayerRow {
         final StringProperty  username      = new SimpleStringProperty();
+        final StringProperty  ip            = new SimpleStringProperty();
         final StringProperty  connectedTime = new SimpleStringProperty();
         final StringProperty  score         = new SimpleStringProperty();
         final StringProperty  x             = new SimpleStringProperty();
@@ -383,10 +461,11 @@ public class AdminPanel {
         volatile boolean      isAdmin;
         final long            joinedAt;
 
-        PlayerRow(String username, long joinedAt, double x, double y, int score, boolean isAdmin) {
+        PlayerRow(String username, String ip, long joinedAt, double x, double y, int score, boolean isAdmin) {
             this.joinedAt = joinedAt;
             this.isAdmin  = isAdmin;
             this.username.set(username);
+            this.ip.set(ip);
             this.score.set(String.valueOf(score));
             this.x.set(String.format("%.0f", x));
             this.y.set(String.format("%.0f", y));

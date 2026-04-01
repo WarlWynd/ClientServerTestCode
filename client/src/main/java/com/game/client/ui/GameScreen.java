@@ -3,6 +3,8 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.AssetSyncClient;
+import com.game.client.AudioManager;
 import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
@@ -70,6 +72,10 @@ public class GameScreen {
 
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
     private boolean wasSpaceHeld = false;
+    private boolean wasMoving    = false;
+
+    /** Usernames seen in the last GAME_STATE — used to detect joins/leaves. */
+    private final Set<String> knownPlayers = ConcurrentHashMap.newKeySet();
     private long lastSendTime = 0;
     private long lastHeartbeatTime = 0;
     private static final long HEARTBEAT_INTERVAL_MS = 10_000;
@@ -162,6 +168,12 @@ public class GameScreen {
 
         tabs.getTabs().add(settingsTab);
 
+        if (SessionStore.isAdmin() || SessionStore.isDeveloper()) {
+            Tab audioDevTab = new Tab("Audio Dev", new AudioDevPanel().buildView());
+            audioDevTab.setClosable(false);
+            tabs.getTabs().add(audioDevTab);
+        }
+
         // Re-focus canvas and clear held keys when returning to the game tab
         tabs.getSelectionModel().selectedItemProperty().addListener((obs, old, cur) -> {
             if (cur == gameTab) {
@@ -199,6 +211,14 @@ public class GameScreen {
 
         canvas.setFocusTraversable(true);
         canvas.requestFocus();
+
+        // ── Asset sync (background) ──────────────────────────────────────────
+        String assetUrl = SessionStore.getAssetUrl();
+        String token    = SessionStore.getToken();
+        if (assetUrl != null) {
+            Thread.ofPlatform().daemon(true).name("asset-sync").start(
+                    () -> AssetSyncClient.sync(assetUrl, token));
+        }
 
         // ── Join game ────────────────────────────────────────────────────────
         sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());
@@ -249,6 +269,9 @@ public class GameScreen {
                 localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
             }
         }
+
+        if (moved && !wasMoving) AudioManager.play("move.wav");
+        wasMoving = moved;
 
         long now = System.currentTimeMillis();
         if (moved && (now - lastSendTime) > SEND_INTERVAL_MS) {
@@ -364,6 +387,27 @@ public class GameScreen {
                     for (JsonNode p : players) {
                         snapshot.put(p.get("username").asText(), p);
                     }
+
+                    // Detect joins and leaves (ignore local player)
+                    String me = SessionStore.getUsername();
+                    for (String u : snapshot.keySet()) {
+                        if (!u.equals(me) && !knownPlayers.contains(u))
+                            AudioManager.play("player_join.wav");
+                    }
+                    for (String u : knownPlayers) {
+                        if (!snapshot.containsKey(u))
+                            AudioManager.play("player_leave.wav");
+                    }
+                    knownPlayers.clear();
+                    knownPlayers.addAll(snapshot.keySet());
+
+                    // Score-up detection for local player
+                    if (snapshot.containsKey(me)) {
+                        int serverScore = snapshot.get(me).get("score").asInt();
+                        if (serverScore > localScore) AudioManager.play("score.wav");
+                        localScore = serverScore;
+                    }
+
                     remotePlayers.clear();
                     remotePlayers.putAll(snapshot);
                 }
@@ -383,7 +427,8 @@ public class GameScreen {
                     pingLabel.setStyle("-fx-text-fill: #e94560;");
                 });
             }
-            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE, ADMIN_SET_ADMIN_RESPONSE -> {
+            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE,
+                 ADMIN_SET_ADMIN_RESPONSE, ADMIN_RESTART_RESPONSE, ADMIN_DEPLOY_RESPONSE -> {
                 if (adminPanel != null) adminPanel.onPacket(packet);
             }
             default -> { /* ignore */ }

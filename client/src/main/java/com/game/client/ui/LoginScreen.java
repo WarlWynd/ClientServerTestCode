@@ -1,6 +1,8 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
+import com.game.client.AudioManager;
 import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
@@ -130,11 +132,14 @@ public class LoginScreen {
                 case LOGIN_RESPONSE -> {
                     boolean success = packet.payload.get("success").asBoolean();
                     if (success) {
-                        String token    = packet.payload.get("sessionToken").asText();
-                        String username = packet.payload.get("username").asText();
-                        boolean isAdmin = packet.payload.has("isAdmin")
-                                && packet.payload.get("isAdmin").asBoolean();
-                        SessionStore.set(token, username, isAdmin);
+                        String token     = packet.payload.get("sessionToken").asText();
+                        String username  = packet.payload.get("username").asText();
+                        boolean isAdmin  = packet.payload.has("isAdmin")  && packet.payload.get("isAdmin").asBoolean();
+                        boolean isDev    = packet.payload.has("isDeveloper") && packet.payload.get("isDeveloper").asBoolean();
+                        int assetPort    = packet.payload.has("assetPort") ? packet.payload.get("assetPort").asInt() : 9877;
+                        String assetUrl  = "http://" + AppSettings.getServerHost() + ":" + assetPort;
+                        SessionStore.set(token, username, isAdmin, isDev, assetUrl);
+                        AudioManager.play("login.wav");
                         new GameScreen(stage, client, version).show();
                     } else {
                         String msg = packet.payload.get("message").asText("Login failed.");

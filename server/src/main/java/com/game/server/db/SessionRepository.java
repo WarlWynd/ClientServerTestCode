@@ -24,17 +24,18 @@ public class SessionRepository {
     /**
      * Persists a new session for the given user and returns it.
      */
-    public Session create(long userId, String username) {
+    public Session create(long userId, String username, String ipAddress) {
         String        token     = UUID.randomUUID().toString();
         LocalDateTime expiresAt = LocalDateTime.now().plusHours(SESSION_TTL_HOURS);
 
-        String sql = "INSERT INTO sessions (token, user_id, username, expires_at) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO sessions (token, user_id, username, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, token);
             ps.setLong(2, userId);
             ps.setString(3, username);
-            ps.setTimestamp(4, Timestamp.valueOf(expiresAt));
+            ps.setString(4, ipAddress);
+            ps.setTimestamp(5, Timestamp.valueOf(expiresAt));
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException("create() failed", e);

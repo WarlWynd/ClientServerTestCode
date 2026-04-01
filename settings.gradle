@@ -6,4 +6,4 @@ pluginManagement {
 }
 
 rootProject.name = 'multiplayer-game'
-include 'shared', 'server', 'client', 'admin', 'devconsole', 'bots', 'simulation'
+include 'shared', 'server', 'client', 'admin', 'devconsole', 'bots'

@@ -27,6 +27,7 @@ public class AuthHandler {
     private static final Logger log = LoggerFactory.getLogger(AuthHandler.class);
 
     private final String            serverVersion;
+    private final int               httpPort;
     private final UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
 
@@ -35,8 +36,9 @@ public class AuthHandler {
     /** In-memory set of session tokens that belong to developer users. */
     private final Set<String> devSessions   = ConcurrentHashMap.newKeySet();
 
-    public AuthHandler(String serverVersion) {
+    public AuthHandler(String serverVersion, int httpPort) {
         this.serverVersion = serverVersion;
+        this.httpPort      = httpPort;
     }
 
     // -- Packet handlers --
@@ -72,12 +74,13 @@ public class AuthHandler {
         Optional<User> user = userRepo.authenticate(username, password);
 
         if (user.isPresent()) {
-            Session session = sessionRepo.create(user.get().id(), user.get().username());
+            Session session = sessionRepo.create(user.get().id(), user.get().username(), addr.getHostAddress());
             out.put("success",      true);
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
             out.put("isAdmin",      user.get().isAdmin());
             out.put("isDeveloper",  user.get().isDeveloper());
+            out.put("assetPort",    httpPort);
             if (user.get().isAdmin()) {
                 adminSessions.add(session.token());
                 log.info("ADMIN LOGIN  user='{}' from {}:{}", username, addr.getHostAddress(), port);

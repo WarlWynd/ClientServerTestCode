@@ -54,6 +54,7 @@ public final class DatabaseManager {
                 token      VARCHAR(36)  NOT NULL PRIMARY KEY,
                 user_id    BIGINT       NOT NULL,
                 username   VARCHAR(50)  NOT NULL,
+                ip_address VARCHAR(45)  NULL,
                 created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP    NOT NULL,
                 CONSTRAINT fk_session_user
@@ -61,6 +62,9 @@ public final class DatabaseManager {
                     ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
+
+    private static final String DDL_SESSIONS_ADD_IP_COL =
+            "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) NULL;";
 
     // ── Initialisation ───────────────────────────────────────────────────────
 
@@ -107,6 +111,7 @@ public final class DatabaseManager {
             stmt.execute(DDL_USERS_ADD_BANNED_COL);
             stmt.execute(DDL_USERS_ADD_DEVELOPER_COL);
             stmt.execute(DDL_SESSIONS);
+            stmt.execute(DDL_SESSIONS_ADD_IP_COL);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }

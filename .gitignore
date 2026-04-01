@@ -10,3 +10,7 @@ build/
 
 # Secrets
 server/src/main/resources/server.properties
+
+# Stale artefacts
+client/client/
+main.ps1

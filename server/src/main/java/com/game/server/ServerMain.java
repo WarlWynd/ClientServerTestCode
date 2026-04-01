@@ -38,7 +38,7 @@ public class ServerMain {
                 config.getAdminUsername(), config.getAdminPassword());
 
         log.info("Server version: {}", config.getVersion());
-        UDPServer server = new UDPServer(config.getPort(), config.getVersion(), config.getMinClientVersion());
+        UDPServer server = new UDPServer(config.getPort(), config.getVersion(), config.getMinClientVersion(), config.getHttpPort());
 
         AssetHttpServer assetServer = new AssetHttpServer(
                 config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler());
