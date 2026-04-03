@@ -46,7 +46,7 @@ public class ClientMain extends Application {
             return;
         }
         new VersionCheckScreen(primaryStage, udpClient, config.getVersion(),
-                assetUrl -> new ClientSyncScreen(primaryStage, assetUrl,
+                assetUrl -> new ClientSyncScreen(primaryStage, assetUrl, config.getVersion(),
                         () -> new LoginScreen(primaryStage, udpClient, config.getVersion()).show()).show()).show();
     }
 

@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.*;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Fetches the server's /client-manifest and downloads any files whose
@@ -36,7 +37,7 @@ public final class ClientSyncClient {
         } catch (Exception e) { return ""; }
     }
 
-    public record SyncResult(int checked, int downloaded, int failed, String error) {
+    public record SyncResult(int checked, int downloaded, int failed, String error, String serverVersion) {
         public boolean hasError()    { return error != null; }
         public boolean allCurrent()  { return downloaded == 0 && failed == 0 && error == null; }
     }
@@ -44,10 +45,14 @@ public final class ClientSyncClient {
     /**
      * Fetches /client-manifest and syncs all listed files into ~/.game/{type}/.
      *
-     * @param assetBaseUrl    base URL of the asset HTTP server, e.g. "http://192.168.1.153:9877"
-     * @param progressCallback called with (filesProcessed, totalFiles) after each file — may be null
+     * @param assetBaseUrl      base URL of the asset HTTP server, e.g. "http://192.168.1.153:9877"
+     * @param progressCallback  called with (filesProcessed, totalFiles) after each file — may be null
+     * @param onVersionReceived called with the server's softwareVersion as soon as the manifest is
+     *                          parsed, before any downloads begin — may be null
      */
-    public static SyncResult sync(String assetBaseUrl, BiConsumer<Integer, Integer> progressCallback) {
+    public static SyncResult sync(String assetBaseUrl,
+                                  BiConsumer<Integer, Integer> progressCallback,
+                                  Consumer<String> onVersionReceived) {
         try {
             HttpClient http = HttpClient.newBuilder()
                     .version(HttpClient.Version.HTTP_1_1)
@@ -59,16 +64,22 @@ public final class ClientSyncClient {
 
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 404) {
-                return new SyncResult(0, 0, 0, null); // no manifest = nothing to sync
+                return new SyncResult(0, 0, 0, null, null); // no manifest = nothing to sync
             }
             if (resp.statusCode() != 200) {
-                return new SyncResult(0, 0, 0, "Server returned HTTP " + resp.statusCode());
+                return new SyncResult(0, 0, 0, "Server returned HTTP " + resp.statusCode(), null);
             }
 
-            JsonNode root  = MAPPER.readTree(resp.body());
-            JsonNode files = root.get("files");
+            JsonNode root           = MAPPER.readTree(resp.body());
+            String   serverVersion  = root.has("softwareVersion") ? root.get("softwareVersion").asText() : null;
+            JsonNode files          = root.get("files");
+
+            if (onVersionReceived != null && serverVersion != null) {
+                onVersionReceived.accept(serverVersion);
+            }
+
             if (files == null || !files.isArray()) {
-                return new SyncResult(0, 0, 0, "Invalid manifest format");
+                return new SyncResult(0, 0, 0, "Invalid manifest format", serverVersion);
             }
 
             int total      = files.size();
@@ -116,13 +127,13 @@ public final class ClientSyncClient {
                 if (progressCallback != null) progressCallback.accept(idx, total);
             }
 
-            return new SyncResult(total, downloaded, failed, null);
+            return new SyncResult(total, downloaded, failed, null, serverVersion);
 
         } catch (java.net.ConnectException e) {
-            return new SyncResult(0, 0, 0, "Cannot reach asset server");
+            return new SyncResult(0, 0, 0, "Cannot reach asset server", null);
         } catch (Exception e) {
             log.warn("Client sync failed: {}", e.toString(), e);
-            return new SyncResult(0, 0, 0, e.toString());
+            return new SyncResult(0, 0, 0, e.toString(), null);
         }
     }
 }

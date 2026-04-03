@@ -99,7 +99,7 @@ public class LoginScreen {
         styleButton(loginButton);
 
         Scene scene = MobilePlatform.isMobile() ? new Scene(root) : new Scene(root, 480, 400);
-        stage.setTitle("Game — Login");
+        stage.setTitle("Game — Login v" + version + " - ");
         stage.setScene(scene);
         stage.show();
     }

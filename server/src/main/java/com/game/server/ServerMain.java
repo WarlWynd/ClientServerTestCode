@@ -1,6 +1,7 @@
 package com.game.server;
 
 import com.game.server.db.DatabaseManager;
+import com.game.server.db.SoftwareVersionRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.ui.AdminApp;
 import javafx.application.Application;
@@ -70,7 +71,8 @@ public class ServerMain {
                 });
 
         // Pass the GameHandler to the admin UI before launching
-        AdminApp.init(server.getGameHandler(), config.getPort());
+        AdminApp.init(server.getGameHandler(), config.getPort(),
+                new SoftwareVersionRepository(DatabaseManager.getInstance()));
         Application.launch(AdminApp.class, args);
 
         // JavaFX exited — stop the server

@@ -66,6 +66,17 @@ public final class DatabaseManager {
     private static final String DDL_SESSIONS_ADD_IP_COL =
             "ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) NULL;";
 
+    private static final String DDL_SOFTWARE_VERSIONS = """
+            CREATE TABLE IF NOT EXISTS software_versions (
+                id             BIGINT       AUTO_INCREMENT PRIMARY KEY,
+                server_version VARCHAR(20)  NOT NULL,
+                client_version VARCHAR(20)  NOT NULL,
+                changes        TEXT         NOT NULL,
+                released_at    DATE         NOT NULL,
+                created_at     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
     // ── Initialisation ───────────────────────────────────────────────────────
 
     private DatabaseManager(String host, int port, String dbName,
@@ -112,6 +123,7 @@ public final class DatabaseManager {
             stmt.execute(DDL_USERS_ADD_DEVELOPER_COL);
             stmt.execute(DDL_SESSIONS);
             stmt.execute(DDL_SESSIONS_ADD_IP_COL);
+            stmt.execute(DDL_SOFTWARE_VERSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }

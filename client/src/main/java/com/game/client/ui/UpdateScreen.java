@@ -64,7 +64,7 @@ public class UpdateScreen {
         StackPane root = new StackPane(box);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setTitle("Multiplayer Game");
+        stage.setTitle("Multiplayer Game v" + currentVersion + " - ");
         stage.setScene(new Scene(root, 480, 400));
         stage.show();
 

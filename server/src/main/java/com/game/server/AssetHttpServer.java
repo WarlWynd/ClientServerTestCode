@@ -148,7 +148,16 @@ public class AssetHttpServer {
 
     private void handleClientManifest(HttpExchange ex) throws IOException {
         try {
-            StringBuilder json = new StringBuilder("{\"files\":[");
+            // Read optional software version file
+            Path versionFile = assetsRoot.resolve("client-version.txt");
+            String softwareVersion = Files.exists(versionFile)
+                    ? Files.readString(versionFile).trim() : null;
+
+            StringBuilder json = new StringBuilder("{");
+            if (softwareVersion != null && !softwareVersion.isEmpty()) {
+                json.append("\"softwareVersion\":\"").append(softwareVersion).append("\",");
+            }
+            json.append("\"files\":[");
             boolean first = true;
             for (String type : ALLOWED_TYPES) {
                 Path dir = assetsRoot.resolve(type);

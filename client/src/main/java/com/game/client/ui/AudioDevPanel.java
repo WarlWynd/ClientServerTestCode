@@ -209,10 +209,13 @@ public class AudioDevPanel {
             Button previewBtn = new Button("▶ Preview");
             styleRowBtn(previewBtn, "#0f3460");
             previewBtn.setOnAction(e -> previewFile(exp.filename()));
+            Button replaceBtn = new Button("Replace…");
+            styleRowBtn(replaceBtn, "#2a2a00");
+            replaceBtn.setOnAction(e -> chooseAndUpload(exp.filename(), row.getScene().getWindow()));
             Button deleteBtn = new Button("Delete");
             styleRowBtn(deleteBtn, "#4a1010");
             deleteBtn.setOnAction(e -> deleteFromServer(exp.filename()));
-            row.getChildren().addAll(previewBtn, deleteBtn);
+            row.getChildren().addAll(previewBtn, replaceBtn, deleteBtn);
         } else {
             if (exp.canGenerate()) {
                 Button genBtn = new Button("Generate & Upload");
@@ -359,11 +362,12 @@ public class AudioDevPanel {
         Path cached = ClientSyncClient.BASE_DIR.resolve("sounds").resolve(filename);
 
         if (filename.endsWith(".wav")) {
-            Path src = Files.exists(cached) ? cached : null;
-            if (src == null) { setStatus("Not in local cache — restart the client to sync."); return; }
+            setStatus("Loading: " + filename + "…");
             Thread.ofPlatform().daemon(true).start(() -> {
                 try {
-                    AudioInputStream ais = AudioSystem.getAudioInputStream(src.toFile());
+                    byte[] data = resolveAudioBytes(filename, cached);
+                    if (data == null) { setStatus("Could not load " + filename + " — not cached and server unavailable."); return; }
+                    AudioInputStream ais = AudioSystem.getAudioInputStream(new ByteArrayInputStream(data));
                     Clip clip = AudioSystem.getClip();
                     clip.open(ais);
                     clip.start();
@@ -374,15 +378,67 @@ public class AudioDevPanel {
                 } catch (Exception ex) { setStatus("Playback error: " + ex.getMessage()); }
             });
         } else {
-            if (!Files.exists(cached)) { setStatus("Not in local cache — restart the client to sync."); return; }
-            try {
-                Media media = new Media(cached.toUri().toString());
-                currentPlayer = new MediaPlayer(media);
-                currentPlayer.setOnEndOfMedia(() -> { setStatus("Ready"); stopCurrent(); });
-                currentPlayer.play();
-                setStatus("Playing: " + filename);
-            } catch (Exception ex) { setStatus("Playback error: " + ex.getMessage()); }
+            setStatus("Loading: " + filename + "…");
+            Thread.ofPlatform().daemon(true).start(() -> {
+                try {
+                    Path src = cached;
+                    if (!Files.exists(src)) {
+                        byte[] data = fetchFromServer(filename);
+                        if (data == null) { setStatus("Could not load " + filename + " — not cached and server unavailable."); return; }
+                        try {
+                            Files.createDirectories(cached.getParent());
+                            Files.write(cached, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                            src = cached;
+                        } catch (Exception ignored) {
+                            // Fall back to temp file if cache write fails
+                            src = Files.createTempFile("preview-", "-" + filename);
+                            Files.write(src, data);
+                            src.toFile().deleteOnExit();
+                        }
+                    }
+                    final Path finalSrc = src;
+                    Platform.runLater(() -> {
+                        try {
+                            Media media = new Media(finalSrc.toUri().toString());
+                            currentPlayer = new MediaPlayer(media);
+                            currentPlayer.setOnEndOfMedia(() -> { setStatus("Ready"); stopCurrent(); });
+                            currentPlayer.play();
+                            setStatus("Playing: " + filename);
+                        } catch (Exception ex) { setStatus("Playback error: " + ex.getMessage()); }
+                    });
+                } catch (Exception ex) { setStatus("Playback error: " + ex.getMessage()); }
+            });
         }
+    }
+
+    /** Returns audio bytes — from local cache if present, otherwise fetched from server and cached locally. */
+    private byte[] resolveAudioBytes(String filename, Path cached) {
+        if (Files.exists(cached)) {
+            try { return Files.readAllBytes(cached); } catch (Exception ignored) {}
+        }
+        byte[] data = fetchFromServer(filename);
+        if (data != null) {
+            try {
+                Files.createDirectories(cached.getParent());
+                Files.write(cached, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            } catch (Exception ignored) {}
+        }
+        return data;
+    }
+
+    /** Downloads a sounds file directly from the asset server. Returns null on failure. */
+    private byte[] fetchFromServer(String filename) {
+        String assetUrl = SessionStore.getAssetUrl();
+        if (assetUrl == null) return null;
+        try {
+            HttpClient http = HttpClient.newBuilder()
+                    .version(java.net.http.HttpClient.Version.HTTP_1_1).build();
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(assetUrl + "/assets/sounds/" + filename))
+                    .GET().build();
+            HttpResponse<byte[]> resp = http.send(req, HttpResponse.BodyHandlers.ofByteArray());
+            return resp.statusCode() == 200 ? resp.body() : null;
+        } catch (Exception e) { return null; }
     }
 
     private void stopCurrent() {

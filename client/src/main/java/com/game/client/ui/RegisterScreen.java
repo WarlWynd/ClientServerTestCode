@@ -93,7 +93,7 @@ public class RegisterScreen {
         styleButton(registerButton);
 
         Scene scene = new Scene(root, 480, 420);
-        stage.setTitle("Game — Register");
+        stage.setTitle("Game — Register v" + version + " - ");
         stage.setScene(scene);
     }
 

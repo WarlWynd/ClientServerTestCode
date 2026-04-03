@@ -14,6 +14,11 @@ import org.slf4j.LoggerFactory;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +33,7 @@ public class AuthHandler {
 
     private final String            serverVersion;
     private final int               httpPort;
+    private final String            externalIp;
     private final UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
 
@@ -39,6 +45,34 @@ public class AuthHandler {
     public AuthHandler(String serverVersion, int httpPort) {
         this.serverVersion = serverVersion;
         this.httpPort      = httpPort;
+        this.externalIp    = fetchExternalIp();
+    }
+
+    private static String fetchExternalIp() {
+        try {
+            HttpClient http = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.ipify.org"))
+                    .timeout(Duration.ofSeconds(5))
+                    .GET().build();
+            String ip = http.send(req, HttpResponse.BodyHandlers.ofString()).body().trim();
+            log.info("External IP: {}", ip);
+            return ip;
+        } catch (Exception e) {
+            log.warn("Could not resolve external IP: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Returns the external IP for LAN/loopback addresses, otherwise the actual source IP. */
+    private String effectiveIp(InetAddress addr) {
+        if (externalIp != null
+                && (addr.isSiteLocalAddress() || addr.isLoopbackAddress() || addr.isLinkLocalAddress())) {
+            return externalIp;
+        }
+        return addr.getHostAddress();
     }
 
     // -- Packet handlers --
@@ -74,7 +108,7 @@ public class AuthHandler {
         Optional<User> user = userRepo.authenticate(username, password);
 
         if (user.isPresent()) {
-            Session session = sessionRepo.create(user.get().id(), user.get().username(), addr.getHostAddress());
+            Session session = sessionRepo.create(user.get().id(), user.get().username(), effectiveIp(addr));
             out.put("success",      true);
             out.put("sessionToken", session.token());
             out.put("username",     session.username());

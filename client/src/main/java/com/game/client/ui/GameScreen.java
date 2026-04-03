@@ -204,7 +204,7 @@ public class GameScreen {
             });
         }
 
-        stage.setTitle("Multiplayer Game");
+        stage.setTitle("Multiplayer Game v" + version + " - ");
         stage.setScene(scene);
         stage.show();
 

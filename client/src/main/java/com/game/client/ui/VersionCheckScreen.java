@@ -70,7 +70,7 @@ public class VersionCheckScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         Scene scene = new Scene(root, 480, 300);
-        stage.setTitle("Game — Connecting");
+        stage.setTitle("Game — Connecting v" + clientVersion + " - ");
         stage.setScene(scene);
         stage.show();
 
