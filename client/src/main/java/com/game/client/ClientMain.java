@@ -1,9 +1,5 @@
 package com.game.client;
 
-import com.game.client.ui.ClientSyncScreen;
-import com.game.client.ui.LoginScreen;
-import com.game.client.ui.UpdateScreen;
-import com.game.client.MobilePlatform;
 import com.game.client.ui.VersionCheckScreen;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -26,18 +22,8 @@ public class ClientMain extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         ClientConfig config = new ClientConfig();
-
-        primaryStage.setOnCloseRequest(e -> shutdown());
-
-        if (MobilePlatform.isMobile()) {
-            launchGame(primaryStage, config);
-        } else {
-            new UpdateScreen(primaryStage, config.getVersion(), () -> launchGame(primaryStage, config)).show();
-        }
-    }
-
-    private void launchGame(Stage primaryStage, ClientConfig config) {
         udpClient = new UDPClient(config);
+
         try {
             udpClient.start();
         } catch (Exception e) {
@@ -45,9 +31,11 @@ public class ClientMain extends Application {
             Platform.exit();
             return;
         }
-        new VersionCheckScreen(primaryStage, udpClient, config.getVersion(),
-                assetUrl -> new ClientSyncScreen(primaryStage, assetUrl, config.getVersion(),
-                        () -> new LoginScreen(primaryStage, udpClient, config.getVersion()).show()).show()).show();
+
+        primaryStage.setResizable(false);
+        primaryStage.setOnCloseRequest(e -> shutdown());
+
+        new VersionCheckScreen(primaryStage, udpClient).show();
     }
 
     @Override

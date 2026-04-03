@@ -2,50 +2,47 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.UDPClient;
+import com.game.shared.GameVersion;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
-import com.game.client.AppSettings;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.function.Consumer;
 
 /**
- * Verifies that this client version is accepted by the server.
+ * First screen shown at startup.
  *
- * Sends VERSION_CHECK_REQUEST immediately on show(), then waits for
- * VERSION_CHECK_RESPONSE.  On success, calls {@code onCompatible};
- * on failure, displays an error and blocks further navigation.
+ * Sends a VERSION_CHECK packet to the server and waits for VERSION_RESPONSE.
+ *   - Compatible  → automatically navigates to LoginScreen
+ *   - Incompatible → shows an error with the version details, blocks login
+ *   - No response  → shows a timeout error with a Retry button
  */
 public class VersionCheckScreen {
 
-    private static final Logger log = LoggerFactory.getLogger(VersionCheckScreen.class);
+    private static final int TIMEOUT_MS = 5000;
 
-    private final Stage           stage;
-    private final UDPClient       client;
-    private final String          clientVersion;
-    private final Consumer<String> onCompatible; // receives assetUrl
+    private final Stage     stage;
+    private final UDPClient client;
 
-    private Label statusLabel;
+    private Label            statusLabel;
+    private ProgressIndicator spinner;
+    private Button           retryButton;
+    private Thread           timeoutThread;
 
-    public VersionCheckScreen(Stage stage, UDPClient client, String clientVersion, Consumer<String> onCompatible) {
-        this.stage         = stage;
-        this.client        = client;
-        this.clientVersion = clientVersion;
-        this.onCompatible  = onCompatible;
+    public VersionCheckScreen(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -57,82 +54,100 @@ public class VersionCheckScreen {
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
         title.setStyle("-fx-fill: #e0e0e0;");
 
-        statusLabel = new Label("Checking server compatibility…");
+        Label versionLabel = new Label("Client v" + GameVersion.VERSION);
+        versionLabel.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 12;");
+
+        spinner = new ProgressIndicator();
+        spinner.setPrefSize(48, 48);
+
+        statusLabel = new Label("Connecting to server…");
         statusLabel.setStyle("-fx-text-fill: #a0a0c0;");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(300);
 
-        VBox box = new VBox(16, title, statusLabel);
-        box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(40));
-
-        StackPane root = new StackPane(box);
-        root.setStyle("-fx-background-color: #1a1a2e;");
-
-        Scene scene = new Scene(root, 480, 300);
-        stage.setTitle("Game — Connecting v" + clientVersion + " - ");
-        stage.setScene(scene);
-        stage.show();
-
-        sendVersionCheck();
-    }
-
-    // ── Network ──────────────────────────────────────────────────────────────
-
-    private void sendVersionCheck() {
-        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("version", clientVersion);
-        client.send(new Packet(PacketType.VERSION_CHECK_REQUEST, null, payload));
-        log.info("Sent VERSION_CHECK_REQUEST version={}", clientVersion);
-    }
-
-    private void onPacket(Packet packet) {
-        if (packet.type != PacketType.VERSION_CHECK_RESPONSE) return;
-
-        Platform.runLater(() -> {
-            boolean compatible = packet.payload.get("compatible").asBoolean();
-            if (compatible) {
-                int assetPort = packet.payload.has("assetPort")
-                        ? packet.payload.get("assetPort").asInt(9877)
-                        : 9877;
-                String assetUrl = "http://" + AppSettings.getServerHost() + ":" + assetPort;
-                log.info("Version check passed ({}) — assetUrl={}", clientVersion, assetUrl);
-                onCompatible.accept(assetUrl);
-            } else {
-                String msg = packet.payload.has("message")
-                        ? packet.payload.get("message").asText()
-                        : "Your client version is not supported by this server.";
-                log.warn("Version check failed: {}", msg);
-                showError(msg);
-            }
-        });
-    }
-
-    // ── Error state ──────────────────────────────────────────────────────────
-
-    private void showError(String message) {
-        statusLabel.setText(message);
-        statusLabel.setStyle("-fx-text-fill: #cc3333;");
-
-        Button exitButton = new Button("Exit");
-        exitButton.setStyle("""
+        retryButton = new Button("Retry");
+        retryButton.setVisible(false);
+        retryButton.setStyle("""
                 -fx-background-color: #e94560;
                 -fx-text-fill: white;
                 -fx-font-weight: bold;
                 -fx-background-radius: 4;
                 -fx-padding: 8 24 8 24;
                 """);
-        exitButton.setOnAction(e -> javafx.application.Platform.exit());
+        retryButton.setOnAction(e -> {
+            retryButton.setVisible(false);
+            spinner.setVisible(true);
+            statusLabel.setText("Connecting to server…");
+            statusLabel.setStyle("-fx-text-fill: #a0a0c0;");
+            sendVersionCheck();
+        });
 
-        VBox box = new VBox(16,
-                new Text("Multiplayer Game") {{ setFont(Font.font("System", FontWeight.BOLD, 28)); setStyle("-fx-fill: #e0e0e0;"); }},
-                statusLabel,
-                exitButton);
+        VBox box = new VBox(16, title, versionLabel, spinner, statusLabel, retryButton);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(40));
 
         StackPane root = new StackPane(box);
         root.setStyle("-fx-background-color: #1a1a2e;");
-        stage.setScene(new Scene(root, 480, 300));
+
+        Scene scene = new Scene(root, 480, 320);
+        stage.setTitle("Game — Connecting…");
+        stage.setScene(scene);
+        stage.show();
+
+        sendVersionCheck();
+    }
+
+    // ── Version check ─────────────────────────────────────────────────────────
+
+    private void sendVersionCheck() {
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("version", GameVersion.VERSION);
+        client.send(new Packet(PacketType.VERSION_CHECK, null, payload));
+        startTimeout();
+    }
+
+    private void startTimeout() {
+        if (timeoutThread != null) timeoutThread.interrupt();
+        timeoutThread = Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(TIMEOUT_MS);
+                Platform.runLater(this::showTimeout);
+            } catch (InterruptedException ignored) {}
+        });
+    }
+
+    private void showTimeout() {
+        spinner.setVisible(false);
+        statusLabel.setText("Could not reach server at the configured address.\nCheck that the server is running and try again.");
+        statusLabel.setStyle("-fx-text-fill: #e94560;");
+        retryButton.setVisible(true);
+    }
+
+    // ── Packet handler ────────────────────────────────────────────────────────
+
+    private void onPacket(Packet packet) {
+        if (packet.type != PacketType.VERSION_RESPONSE) return;
+
+        if (timeoutThread != null) timeoutThread.interrupt();
+
+        boolean compatible   = packet.payload.get("compatible").asBoolean();
+        String  serverVersion = packet.payload.get("serverVersion").asText();
+
+        Platform.runLater(() -> {
+            if (compatible) {
+                // All good — go straight to login
+                new LoginScreen(stage, client).show();
+            } else {
+                // Version mismatch — block and show details
+                spinner.setVisible(false);
+                statusLabel.setText(
+                        "Version mismatch!\n\n" +
+                        "Your client: v" + GameVersion.VERSION + "\n" +
+                        "Server requires: v" + serverVersion + "\n\n" +
+                        "Please download the latest client.");
+                statusLabel.setStyle("-fx-text-fill: #e94560;");
+                stage.setTitle("Game — Version Mismatch");
+            }
+        });
     }
 }

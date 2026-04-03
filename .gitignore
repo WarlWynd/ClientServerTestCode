@@ -1,16 +1,12 @@
-# Build output
-build/
 .gradle/
-
-# IDE
-.vscode/
+build/
+*/build/
+*.class
+*.jar
+!**/libs/*.jar
+logs/
+*.log
 .idea/
 *.iml
-.vs/
+.DS_Store
 
-# Secrets
-server/src/main/resources/server.properties
-
-# Stale artefacts
-client/client/
-main.ps1

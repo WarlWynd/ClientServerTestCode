@@ -1,31 +1,9 @@
-plugins {
-    id 'java-library'
-    id 'application'
-    id 'org.openjfx.javafxplugin' version '0.1.0'
-}
-
-javafx {
-    version = "23"
-    modules = ['javafx.controls']
-}
-
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     implementation project(':shared')
-    implementation 'com.mysql:mysql-connector-j:8.4.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
-    implementation 'ch.qos.logback:logback-classic:1.5.8'
+    implementation 'com.mysql:mysql-connector-j:9.0.0'
     implementation 'org.mindrot:jbcrypt:0.4'
-}
-
-application {
-    mainClass = 'com.game.server.ServerMain'
-    applicationDefaultJvmArgs = [
-        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
-    ]
+    implementation 'ch.qos.logback:logback-classic:1.5.8'
 }
 
 jar {
@@ -33,6 +11,7 @@ jar {
     manifest {
         attributes 'Main-Class': 'com.game.server.ServerMain'
     }
+    // Fat JAR: include all runtime dependencies
     from {
         configurations.runtimeClasspath.collect {
             it.isDirectory() ? it : zipTree(it)
@@ -40,3 +19,9 @@ jar {
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
+
+application {
+    mainClass = 'com.game.server.ServerMain'
+}
+
+apply plugin: 'application'

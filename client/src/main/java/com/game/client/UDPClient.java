@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 public class UDPClient {
 
     private static final Logger log = LoggerFactory.getLogger(UDPClient.class);
-    private static final int    RECV_BUFFER_SIZE = 65507; // max UDP payload; needed for admin list responses
+    private static final int    RECV_BUFFER_SIZE = 4096;
 
     private final String serverHost;
     private final int    serverPort;
@@ -58,9 +58,8 @@ public class UDPClient {
                 : new DatagramSocket(localPort);
         running    = true;
 
-        receiverThread = Thread.ofPlatform()
+        receiverThread = Thread.ofVirtual()
                 .name("udp-receiver")
-                .daemon(true)
                 .start(this::receiveLoop);
 
         log.info("UDP client started → {}:{}", serverHost, serverPort);

@@ -1,9 +1,6 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.game.client.AppSettings;
-import com.game.client.AudioManager;
-import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -31,7 +28,6 @@ public class LoginScreen {
 
     private final Stage     stage;
     private final UDPClient client;
-    private final String    version;
 
     // Form fields
     private TextField     usernameField;
@@ -39,10 +35,9 @@ public class LoginScreen {
     private Label         statusLabel;
     private Button        loginButton;
 
-    public LoginScreen(Stage stage, UDPClient client, String version) {
-        this.stage   = stage;
-        this.client  = client;
-        this.version = version;
+    public LoginScreen(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -78,7 +73,7 @@ public class LoginScreen {
         statusLabel.setMaxWidth(280);
 
         Hyperlink registerLink = new Hyperlink("Don't have an account? Register");
-        registerLink.setOnAction(e -> new RegisterScreen(stage, client, version).show());
+        registerLink.setOnAction(e -> new RegisterScreen(stage, client).show());
 
         VBox form = new VBox(12,
                 title, subtitle,
@@ -98,8 +93,8 @@ public class LoginScreen {
         styleField(passwordField);
         styleButton(loginButton);
 
-        Scene scene = MobilePlatform.isMobile() ? new Scene(root) : new Scene(root, 480, 400);
-        stage.setTitle("Game — Login v" + version + " - ");
+        Scene scene = new Scene(root, 480, 400);
+        stage.setTitle("Game — Login");
         stage.setScene(scene);
         stage.show();
     }
@@ -119,9 +114,8 @@ public class LoginScreen {
         statusLabel.setText("Connecting…");
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("username",      username);
-        payload.put("password",      password);
-        payload.put("clientVersion", version);
+        payload.put("username", username);
+        payload.put("password", password);
 
         client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
     }
@@ -132,15 +126,12 @@ public class LoginScreen {
                 case LOGIN_RESPONSE -> {
                     boolean success = packet.payload.get("success").asBoolean();
                     if (success) {
-                        String token     = packet.payload.get("sessionToken").asText();
-                        String username  = packet.payload.get("username").asText();
-                        boolean isAdmin  = packet.payload.has("isAdmin")  && packet.payload.get("isAdmin").asBoolean();
-                        boolean isDev    = packet.payload.has("isDeveloper") && packet.payload.get("isDeveloper").asBoolean();
-                        int assetPort    = packet.payload.has("assetPort") ? packet.payload.get("assetPort").asInt() : 9877;
-                        String assetUrl  = "http://" + AppSettings.getServerHost() + ":" + assetPort;
-                        SessionStore.set(token, username, isAdmin, isDev, assetUrl);
-                        AudioManager.play("login.wav");
-                        new GameScreen(stage, client, version).show();
+                        String  token        = packet.payload.get("sessionToken").asText();
+                        String  username     = packet.payload.get("username").asText();
+                        boolean isAudioAdmin = packet.payload.has("isAudioAdmin") &&
+                                              packet.payload.get("isAudioAdmin").asBoolean();
+                        SessionStore.set(token, username, isAudioAdmin);
+                        new GameScreen(stage, client).show();
                     } else {
                         String msg = packet.payload.get("message").asText("Login failed.");
                         statusLabel.setText(msg);

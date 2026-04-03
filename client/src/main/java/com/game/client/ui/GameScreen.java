@@ -2,9 +2,6 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.game.client.AppSettings;
-import com.game.client.AudioManager;
-import com.game.client.MobilePlatform;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -19,16 +16,12 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.SourceDataLine;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -60,7 +53,6 @@ public class GameScreen {
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
     private final UDPClient client;
-    private final String    version;
 
     private float   localX = WORLD_W / 2f;
     private float   localY = WORLD_H / 2f;
@@ -70,26 +62,16 @@ public class GameScreen {
     private final Map<String, JsonNode> remotePlayers = new ConcurrentHashMap<>();
 
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
-    private boolean wasSpaceHeld = false;
-    private boolean wasMoving    = false;
-
-    /** Usernames seen in the last GAME_STATE — used to detect joins/leaves. */
-    private final Set<String> knownPlayers = ConcurrentHashMap.newKeySet();
     private long lastSendTime = 0;
-    private long lastHeartbeatTime = 0;
-    private static final long HEARTBEAT_INTERVAL_MS = 10_000;
 
     private Label pingLabel;
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
-    private AdminPanel adminPanel;     // non-null only when SessionStore.isAdmin()
-    private VirtualJoystick joystick;  // non-null only on mobile
 
-    public GameScreen(Stage stage, UDPClient client, String version) {
-        this.stage   = stage;
-        this.client  = client;
-        this.version = version;
+    public GameScreen(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -97,125 +79,121 @@ public class GameScreen {
     public void show() {
         client.setPacketListener(this::onPacket);
 
-        // ── HUD top bar ──────────────────────────────────────────────────────
-        Label nameLabel = new Label("Playing as: " + SessionStore.getUsername());
-        nameLabel.setStyle("-fx-text-fill: #e0e0e0; -fx-font-weight: bold;");
+        // ── Left sidebar ─────────────────────────────────────────────────────
+        Label gameTitle = new Label("MULTIPLAYER");
+        gameTitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 16; -fx-font-weight: bold;");
 
-        playerCountLabel = new Label("Players: 1");
-        playerCountLabel.setStyle("-fx-text-fill: #a0a0c0;");
+        Label gameSubtitle = new Label("GAME");
+        gameSubtitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 16; -fx-font-weight: bold;");
 
-        pingLabel = new Label("");
-        pingLabel.setStyle("-fx-text-fill: #80c080;");
+        Separator sep1 = new Separator();
+        sep1.setStyle("-fx-background-color: #3a3a6a;");
+
+        Label playingAsLbl = new Label("PLAYER");
+        playingAsLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        Label nameLabel = new Label(SessionStore.getUsername());
+        nameLabel.setStyle("-fx-text-fill: #e0e0e0; -fx-font-weight: bold; -fx-font-size: 14;");
+        nameLabel.setWrapText(true);
+
+        Separator sep2 = new Separator();
+        sep2.setStyle("-fx-background-color: #3a3a6a;");
+
+        Label onlineLbl = new Label("ONLINE");
+        onlineLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        playerCountLabel = new Label("1 Player");
+        playerCountLabel.setStyle("-fx-text-fill: #53c0f0; -fx-font-weight: bold; -fx-font-size: 13;");
+
+        Separator sep3 = new Separator();
+        sep3.setStyle("-fx-background-color: #3a3a6a;");
+
+        Label pingLbl = new Label("PING");
+        pingLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        pingLabel = new Label("-- ms");
+        pingLabel.setStyle("-fx-text-fill: #80c080; -fx-font-weight: bold; -fx-font-size: 13;");
+
+        Separator sep4 = new Separator();
+        sep4.setStyle("-fx-background-color: #3a3a6a;");
+
+        Label controlsLbl = new Label("CONTROLS");
+        controlsLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        Label controls = new Label("W A S D\nor Arrow Keys\nto move");
+        controls.setStyle("-fx-text-fill: #808080; -fx-font-size: 11;");
+        controls.setWrapText(true);
 
         Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        VBox.setVgrow(spacer, Priority.ALWAYS);
 
-        Button logoutBtn = new Button("Logout");
+        Button logoutBtn = new Button("⏻  Logout");
+        logoutBtn.setMaxWidth(Double.MAX_VALUE);
         logoutBtn.setStyle("""
                 -fx-background-color: #e94560;
                 -fx-text-fill: white;
                 -fx-font-size: 12;
+                -fx-font-weight: bold;
                 -fx-background-radius: 4;
+                -fx-padding: 8 0 8 0;
                 """);
         logoutBtn.setOnAction(e -> doLogout());
 
-        HBox hud = new HBox(14, nameLabel, playerCountLabel, pingLabel, spacer, logoutBtn);
-        hud.setAlignment(Pos.CENTER_LEFT);
-        hud.setPadding(new Insets(6, 12, 6, 12));
-        hud.setStyle("-fx-background-color: #0f0f1e;");
+        VBox sidebar = new VBox(10,
+                gameTitle, gameSubtitle,
+                sep1,
+                playingAsLbl, nameLabel,
+                sep2,
+                onlineLbl, playerCountLabel,
+                sep3,
+                pingLbl, pingLabel,
+                sep4,
+                controlsLbl, controls,
+                spacer,
+                logoutBtn);
+        sidebar.setPadding(new Insets(16, 12, 16, 12));
+        sidebar.setPrefWidth(160);
+        sidebar.setMinWidth(160);
+        sidebar.setMaxWidth(160);
+        sidebar.setStyle("-fx-background-color: #0f0f1e;");
 
-        // ── Canvas (responsive — binds to container size) ─────────────────────
-        canvas = new Canvas();
-        StackPane gameArea = new StackPane(canvas);
-        VBox.setVgrow(gameArea, Priority.ALWAYS);
-        canvas.widthProperty().bind(gameArea.widthProperty());
-        canvas.heightProperty().bind(gameArea.heightProperty());
+        // ── Canvas ───────────────────────────────────────────────────────────
+        canvas = new Canvas(WORLD_W, WORLD_H);
+        StackPane canvasPane = new StackPane(canvas);
+        canvasPane.setStyle("-fx-background-color: #1a1a2e;");
 
-        if (MobilePlatform.isMobile()) {
-            joystick = new VirtualJoystick(160, 160);
-            joystick.setOpacity(AppSettings.getHudOpacity());
-            StackPane.setAlignment(joystick, Pos.BOTTOM_LEFT);
-            StackPane.setMargin(joystick, new Insets(0, 0, 16, 16));
-            gameArea.getChildren().add(joystick);
-        }
+        // ── Game tab content (sidebar + canvas side by side) ─────────────────
+        HBox gameContent = new HBox(sidebar, canvasPane);
+        HBox.setHgrow(canvasPane, Priority.ALWAYS);
+        gameContent.setStyle("-fx-background-color: #1a1a2e;");
 
-        // ── Help bar ─────────────────────────────────────────────────────────
-        String helpText = MobilePlatform.isMobile() ? "Use joystick to move" : "Move: WASD or Arrow Keys";
-        Label help = new Label(helpText);
-        help.setStyle("-fx-text-fill: #606080; -fx-font-size: 11;");
-        HBox helpBar = new HBox(help);
-        helpBar.setAlignment(Pos.CENTER);
-        helpBar.setPadding(new Insets(4));
-        helpBar.setStyle("-fx-background-color: #0f0f1e;");
-
-        // ── Root layout ──────────────────────────────────────────────────────
-        Tab gameTab = new Tab("Game", new VBox(gameArea, helpBar));
+        Tab gameTab = new Tab("🎮 Game", gameContent);
         gameTab.setClosable(false);
 
-        Tab settingsTab = new Tab("Settings", new SettingsPanel().buildView());
-        settingsTab.setClosable(false);
-
-        TabPane tabs = new TabPane(gameTab);
-        tabs.setStyle("-fx-background-color: #1a1a2e;");
-
-        if (SessionStore.isAdmin()) {
-            adminPanel = new AdminPanel(client);
-            Tab adminTab = new Tab("Admin", adminPanel.buildView());
-            adminTab.setClosable(false);
-            tabs.getTabs().add(adminTab);
+        // ── Audio Dev tab (audio admins only) ────────────────────────────────
+        TabPane tabPane;
+        if (SessionStore.isAudioAdmin()) {
+            AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
+            Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
+            audioTab.setClosable(false);
+            tabPane = new TabPane(gameTab, audioTab);
+        } else {
+            tabPane = new TabPane(gameTab);
         }
 
-        tabs.getTabs().add(settingsTab);
+        // ── Tab pane ─────────────────────────────────────────────────────────
+        tabPane.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 120;");
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
 
-        if (SessionStore.isAdmin() || SessionStore.isDeveloper()) {
-            Tab audioDevTab = new Tab("Audio Dev", new AudioDevPanel().buildView());
-            audioDevTab.setClosable(false);
-            tabs.getTabs().add(audioDevTab);
-        }
-
-        // Re-focus canvas and clear held keys when returning to the game tab
-        tabs.getSelectionModel().selectedItemProperty().addListener((obs, old, cur) -> {
-            if (cur == gameTab) {
-                heldKeys.clear();
-                canvas.requestFocus();
-            }
-        });
-
-        VBox.setVgrow(tabs, Priority.ALWAYS);
-        VBox root = new VBox(hud, tabs);
-
+        VBox root = new VBox(tabPane);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        Scene scene = MobilePlatform.isMobile()
-                ? new Scene(root)
-                : new Scene(root, WORLD_W, WORLD_H + 96);
+        Scene scene = new Scene(root, WORLD_W + 160, WORLD_H + 30);
+        scene.setOnKeyPressed(e  -> heldKeys.add(e.getCode()));
+        scene.setOnKeyReleased(e -> heldKeys.remove(e.getCode()));
 
-        if (MobilePlatform.isDesktop()) {
-            final Set<KeyCode> movementKeys = Set.of(
-                    KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D,
-                    KeyCode.UP, KeyCode.DOWN, KeyCode.LEFT, KeyCode.RIGHT);
-            scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-                heldKeys.add(e.getCode());
-                if (movementKeys.contains(e.getCode())) e.consume();
-            });
-            scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> {
-                heldKeys.remove(e.getCode());
-                if (movementKeys.contains(e.getCode())) e.consume();
-            });
-        }
-
-        stage.setTitle("Multiplayer Game v" + version + " - ");
+        stage.setTitle("Multiplayer Game");
         stage.setScene(scene);
         stage.show();
 
-        canvas.setFocusTraversable(true);
-        canvas.requestFocus();
-
         // ── Join game ────────────────────────────────────────────────────────
         sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());
-
-        // ── Start admin polling (if applicable) ──────────────────────────────
-        if (adminPanel != null) adminPanel.start();
 
         // ── Game loop ────────────────────────────────────────────────────────
         gameLoop = new AnimationTimer() {
@@ -232,37 +210,18 @@ public class GameScreen {
     private void processInput() {
         boolean moved = false;
 
-        if (joystick != null) {
-            // Touch input
-            double dx = joystick.getDx();
-            double dy = joystick.getDy();
-            if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
-                localX = Math.max(PLAYER_RADIUS, Math.min(WORLD_W - PLAYER_RADIUS, localX + (float)(dx * PLAYER_SPEED)));
-                localY = Math.max(PLAYER_RADIUS, Math.min(WORLD_H - PLAYER_RADIUS, localY + (float)(dy * PLAYER_SPEED)));
-                moved = true;
-            }
-        } else {
-            // Keyboard input
-            boolean spaceNow = heldKeys.contains(KeyCode.SPACE);
-            if (spaceNow && !wasSpaceHeld) playSpaceSound();
-            wasSpaceHeld = spaceNow;
-
-            if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-                localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
-            }
-            if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
-                localY = Math.min(WORLD_H - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
-            }
-            if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
-                localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
-            }
-            if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
-                localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
-            }
+        if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
+            localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
         }
-
-        if (moved && !wasMoving) AudioManager.play("move.wav");
-        wasMoving = moved;
+        if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
+            localY = Math.min(FLOOR_Y - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
+        }
+        if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
+            localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
+        }
+        if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
+            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
+        }
 
         long now = System.currentTimeMillis();
         if (moved && (now - lastSendTime) > SEND_INTERVAL_MS) {
@@ -272,14 +231,6 @@ public class GameScreen {
             payload.put("score", localScore);
             sendPacket(PacketType.PLAYER_UPDATE, payload);
             lastSendTime = now;
-            lastHeartbeatTime = now;
-        } else if (!moved && (now - lastHeartbeatTime) > HEARTBEAT_INTERVAL_MS) {
-            ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-            payload.put("x",     localX);
-            payload.put("y",     localY);
-            payload.put("score", localScore);
-            sendPacket(PacketType.PLAYER_UPDATE, payload);
-            lastHeartbeatTime = now;
         }
     }
 
@@ -298,30 +249,53 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    private void render() {
-        double cw = canvas.getWidth();
-        double ch = canvas.getHeight();
-        if (cw <= 0 || ch <= 0) return;
+    // Floor constants
+    private static final int   FLOOR_Y        = WORLD_H - 40;  // floor surface Y position
+    private static final int   FLOOR_H        = 40;            // floor thickness
+    private static final int   PLANK_W        = 80;            // width of each floor plank
+    private static final int   PLANK_GAP      = 2;             // gap between planks
 
+    private void render() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
-        // Scale world to canvas, preserving aspect ratio (letterbox)
-        double scale  = Math.min(cw / WORLD_W, ch / WORLD_H);
-        double offsetX = (cw - WORLD_W * scale) / 2.0;
-        double offsetY = (ch - WORLD_H * scale) / 2.0;
-
-        // Background (full canvas)
+        // Background
         gc.setFill(Color.web("#1a1a2e"));
-        gc.fillRect(0, 0, cw, ch);
-
-        gc.save();
-        gc.translate(offsetX, offsetY);
-        gc.scale(scale, scale);
+        gc.fillRect(0, 0, WORLD_W, WORLD_H);
 
         // World border
         gc.setStroke(Color.web("#3a3a6a"));
-        gc.setLineWidth(2 / scale);
+        gc.setLineWidth(2);
         gc.strokeRect(1, 1, WORLD_W - 2, WORLD_H - 2);
+
+        // ── Floor ────────────────────────────────────────────────────────────
+
+        // Floor base fill
+        gc.setFill(Color.web("#2c1810"));
+        gc.fillRect(0, FLOOR_Y, WORLD_W, FLOOR_H);
+
+        // Floor planks
+        for (int x = 0; x < WORLD_W; x += PLANK_W + PLANK_GAP) {
+            // Alternating plank shades for depth
+            boolean alt = ((x / (PLANK_W + PLANK_GAP)) % 2 == 0);
+            gc.setFill(alt ? Color.web("#3d2112") : Color.web("#4a2a16"));
+            gc.fillRect(x, FLOOR_Y + 4, PLANK_W, FLOOR_H - 4);
+
+            // Plank highlight (top edge)
+            gc.setFill(Color.web("#6b3d1e"));
+            gc.fillRect(x, FLOOR_Y + 4, PLANK_W, 3);
+
+            // Plank shadow (right edge)
+            gc.setFill(Color.web("#1e0d06"));
+            gc.fillRect(x + PLANK_W, FLOOR_Y + 4, PLANK_GAP, FLOOR_H - 4);
+        }
+
+        // Floor top edge highlight line
+        gc.setFill(Color.web("#7a4a22"));
+        gc.fillRect(0, FLOOR_Y, WORLD_W, 4);
+
+        // Floor top glow
+        gc.setFill(Color.color(0.48, 0.29, 0.13, 0.25));
+        gc.fillRect(0, FLOOR_Y - 8, WORLD_W, 8);
 
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
@@ -338,8 +312,6 @@ public class GameScreen {
         // Local player (on top)
         drawPlayer(gc, localX, localY, SessionStore.getUsername(), localScore,
                 Color.web("#e0e0ff"), true);
-
-        gc.restore();
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,
@@ -378,27 +350,6 @@ public class GameScreen {
                     for (JsonNode p : players) {
                         snapshot.put(p.get("username").asText(), p);
                     }
-
-                    // Detect joins and leaves (ignore local player)
-                    String me = SessionStore.getUsername();
-                    for (String u : snapshot.keySet()) {
-                        if (!u.equals(me) && !knownPlayers.contains(u))
-                            AudioManager.play("player_join.wav");
-                    }
-                    for (String u : knownPlayers) {
-                        if (!snapshot.containsKey(u))
-                            AudioManager.play("player_leave.wav");
-                    }
-                    knownPlayers.clear();
-                    knownPlayers.addAll(snapshot.keySet());
-
-                    // Score-up detection for local player
-                    if (snapshot.containsKey(me)) {
-                        int serverScore = snapshot.get(me).get("score").asInt();
-                        if (serverScore > localScore) AudioManager.play("score.wav");
-                        localScore = serverScore;
-                    }
-
                     remotePlayers.clear();
                     remotePlayers.putAll(snapshot);
                 }
@@ -418,10 +369,6 @@ public class GameScreen {
                     pingLabel.setStyle("-fx-text-fill: #e94560;");
                 });
             }
-            case ADMIN_USER_LIST_RESPONSE, ADMIN_KICK_RESPONSE, ADMIN_BAN_RESPONSE,
-                 ADMIN_SET_ADMIN_RESPONSE, ADMIN_RESTART_RESPONSE, ADMIN_DEPLOY_RESPONSE -> {
-                if (adminPanel != null) adminPanel.onPacket(packet);
-            }
             default -> { /* ignore */ }
         }
     }
@@ -430,39 +377,10 @@ public class GameScreen {
 
     private void doLogout() {
         gameLoop.stop();
-        if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();
-        new LoginScreen(stage, client, version).show();
-    }
-
-    // ── Sound ─────────────────────────────────────────────────────────────────
-
-    private void playSpaceSound() {
-        if (MobilePlatform.isMobile()) return; // javax.sound.sampled unavailable on Android
-        double vol = AppSettings.getSoundMode().volume;
-        if (vol == 0.0) return;
-        Thread.ofPlatform().daemon(true).start(() -> {
-            try {
-                AudioFormat fmt = new AudioFormat(44100, 16, 1, true, false);
-                try (SourceDataLine line = AudioSystem.getSourceDataLine(fmt)) {
-                    line.open(fmt, 4096);
-                    line.start();
-                    int frames = (int)(44100 * 0.12); // ~120 ms
-                    byte[] buf = new byte[frames * 2];
-                    for (int i = 0; i < frames; i++) {
-                        double t   = i / 44100.0;
-                        double env = 1.0 - (double) i / frames; // linear fade-out
-                        short  s   = (short)(Math.sin(2 * Math.PI * 520 * t) * env * Short.MAX_VALUE * 0.5 * vol);
-                        buf[i * 2]     = (byte)(s & 0xFF);
-                        buf[i * 2 + 1] = (byte)(s >> 8);
-                    }
-                    line.write(buf, 0, buf.length);
-                    line.drain();
-                }
-            } catch (Exception ignored) {}
-        });
+        new LoginScreen(stage, client).show();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

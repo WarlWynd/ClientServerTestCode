@@ -8,10 +8,6 @@ javafx {
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media']
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     implementation project(':shared')
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
@@ -21,30 +17,13 @@ dependencies {
 application {
     mainClass = 'com.game.client.ClientMain'
     applicationDefaultJvmArgs = [
+        '--enable-preview',
         '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
     ]
 }
 
-// ── Gluon Mobile (Android/iOS) ────────────────────────────────────────────────
-// To build for Android/iOS, add the following to a separate mobile build file
-// or apply conditionally once a Gradle 9-compatible plugin version is available:
-//
-//   id 'com.gluonhq.gluonfx-gradle-plugin' version '<compatible-version>'
-//
-//   gluonfx {
-//       target = System.getProperty("gluonfx.target", "host") // host|android|ios
-//       attachConfig {
-//           version = "4.0.18"
-//           services 'display', 'lifecycle', 'statusbar', 'storage'
-//       }
-//   }
-//
-// Also requires GraalVM JDK 21+ at org.gradle.java.home in gradle.properties
-// and Android SDK at ANDROID_SDK for Android targets.
-
 jar {
     archiveBaseName = 'game-client'
-    dependsOn configurations.runtimeClasspath
     manifest {
         attributes 'Main-Class': 'com.game.client.ClientMain'
     }
@@ -54,29 +33,4 @@ jar {
         }
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-task jpackageImage(type: Exec, dependsOn: jar) {
-    def jpackageExe = "${System.getenv('JAVA_HOME')}/bin/jpackage"
-    def outputDir = "${buildDir}/jpackage"
-
-    doFirst {
-        file(outputDir).deleteDir()
-    }
-
-    commandLine jpackageExe,
-        '--type', 'app-image',
-        '--input', "${buildDir}/libs",
-        '--main-jar', 'game-client.jar',
-        '--name', 'MultiplayerGame',
-        '--app-version', '1.0.0',
-        '--dest', outputDir,
-        '--java-options', '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
-}
-
-task packageZip(type: Zip, dependsOn: jpackageImage) {
-    archiveFileName = 'MultiplayerGame-windows.zip'
-    destinationDirectory = file("${buildDir}/dist")
-    from "${buildDir}/jpackage/MultiplayerGame"
-    into 'MultiplayerGame'
 }

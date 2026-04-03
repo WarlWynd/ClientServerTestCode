@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.game.server.db.SessionRepository;
 import com.game.server.model.Session;
+import com.game.shared.GameVersion;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
@@ -20,9 +21,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Core UDP server.
  *
- * Receive loop runs on the calling thread. Each incoming datagram is
- * dispatched to a virtual-thread worker so packet handling never blocks
- * the receive loop.
+ * Receive loop runs on the calling thread.  Each incoming datagram is
+ * dispatched to a virtual-thread worker (Java 21+ preview, available in 23)
+ * so packet handling never blocks the receive loop.
  *
  * Scheduled tasks:
  *   - every 5 min : purge expired DB sessions
@@ -32,31 +33,24 @@ public class UDPServer {
 
     private static final Logger log = LoggerFactory.getLogger(UDPServer.class);
 
-    private static final int  RECV_BUFFER_SIZE  = 4096;
-    private static final long PLAYER_TIMEOUT_MS = 30_000;
+    private static final int  RECV_BUFFER_SIZE   = 4096;    // bytes
+    private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
 
-    private final int    port;
-    private final int    httpPort;
-    private final String minClientVersion;
-    private final AuthHandler        authHandler;
-    private final GameHandler        gameHandler  = new GameHandler();
-    private final AdminPacketHandler adminHandler;
-    private final SessionRepository  sessionRepo  = new SessionRepository();
+    private final int port;
+    private final AuthHandler authHandler = new AuthHandler();
+    private final GameHandler gameHandler = new GameHandler();
+    private final SessionRepository sessionRepo = new SessionRepository();
 
-    private DatagramSocket            socket;
-    private volatile boolean          running = false;
-    private ExecutorService           workers;
-    private ScheduledExecutorService  scheduler;
+    private DatagramSocket         socket;
+    private volatile boolean       running = false;
+    private ExecutorService        workers;
+    private ScheduledExecutorService scheduler;
 
-    public UDPServer(int port, String serverVersion, String minClientVersion, int httpPort) {
-        this.port             = port;
-        this.httpPort         = httpPort;
-        this.minClientVersion = minClientVersion;
-        this.authHandler      = new AuthHandler(serverVersion, httpPort);
-        this.adminHandler     = new AdminPacketHandler(authHandler, gameHandler);
+    public UDPServer(int port) {
+        this.port = port;
     }
 
-    // -- Lifecycle --
+    // ── Lifecycle ────────────────────────────────────────────────────────────
 
     public void start() throws Exception {
         socket    = new DatagramSocket(port);
@@ -73,11 +67,12 @@ public class UDPServer {
         byte[] recvBuf = new byte[RECV_BUFFER_SIZE];
         while (running) {
             DatagramPacket dp = new DatagramPacket(recvBuf, recvBuf.length);
-            socket.receive(dp);
+            socket.receive(dp);                         // blocks until a datagram arrives
 
-            byte[]      data       = dp.getData().clone();
-            int         length     = dp.getLength();
-            InetAddress addr       = dp.getAddress();
+            // copy before handing off to worker thread
+            byte[]      data      = dp.getData().clone();
+            int         length    = dp.getLength();
+            InetAddress addr      = dp.getAddress();
             int         clientPort = dp.getPort();
 
             workers.submit(() -> dispatch(data, length, addr, clientPort));
@@ -92,7 +87,7 @@ public class UDPServer {
         log.info("Server stopped.");
     }
 
-    // -- Dispatch --
+    // ── Dispatch ─────────────────────────────────────────────────────────────
 
     private void dispatch(byte[] data, int length, InetAddress addr, int port) {
         try {
@@ -101,22 +96,16 @@ public class UDPServer {
             Packet packet = PacketSerializer.deserialize(trimmed);
 
             switch (packet.type) {
-                case VERSION_CHECK_REQUEST -> handleVersionCheck(socket, packet, addr, port);
-                case LOGIN_REQUEST         -> authHandler.handleLogin(socket, packet, addr, port);
-                case REGISTER_REQUEST      -> authHandler.handleRegister(socket, packet, addr, port);
+                case VERSION_CHECK     -> handleVersionCheck(socket, packet, addr, port);
+                case LOGIN_REQUEST    -> authHandler.handleLogin(socket, packet, addr, port);
+                case REGISTER_REQUEST -> authHandler.handleRegister(socket, packet, addr, port);
                 case LOGOUT_REQUEST   -> {
                     authHandler.handleLogout(socket, packet, addr, port);
                     if (packet.sessionToken != null)
                         gameHandler.removePlayer(packet.sessionToken, socket);
                 }
-                case PING                    -> gameHandler.handlePing(socket, packet, addr, port);
-                case ADMIN_USER_LIST_REQUEST -> adminHandler.handleUserListRequest(socket, packet, addr, port);
-                case ADMIN_KICK_REQUEST      -> adminHandler.handleKickRequest(socket, packet, addr, port);
-                case ADMIN_BAN_REQUEST       -> adminHandler.handleBanRequest(socket, packet, addr, port);
-                case ADMIN_SET_ADMIN_REQUEST -> adminHandler.handleSetAdminRequest(socket, packet, addr, port);
-                case ADMIN_RESTART_REQUEST   -> adminHandler.handleRestartRequest(socket, packet, addr, port);
-                case ADMIN_DEPLOY_REQUEST    -> adminHandler.handleDeployRequest(socket, packet, addr, port);
-                default                      -> dispatchAuthenticated(packet, addr, port);
+                case PING             -> gameHandler.handlePing(socket, packet, addr, port);
+                default               -> dispatchAuthenticated(packet, addr, port);
             }
         } catch (Exception e) {
             log.error("Dispatch error from {}:{} — {}", addr.getHostAddress(), port, e.getMessage(), e);
@@ -141,11 +130,11 @@ public class UDPServer {
             case GAME_JOIN     -> gameHandler.handleJoin(socket, packet, session, addr, port);
             case GAME_LEAVE    -> gameHandler.handleLeave(socket, packet, session);
             case PLAYER_UPDATE -> gameHandler.handlePlayerUpdate(socket, packet, session);
-            default -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
+            default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }
 
-    // -- Scheduled tasks --
+    // ── Scheduled tasks ──────────────────────────────────────────────────────
 
     private void periodicCleanup() {
         try {
@@ -166,59 +155,31 @@ public class UDPServer {
         });
     }
 
-    public GameHandler  getGameHandler()  { return gameHandler; }
-    public AuthHandler  getAuthHandler()  { return authHandler; }
-
-    // -- Version check --
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private void handleVersionCheck(DatagramSocket socket, Packet packet,
-                                    InetAddress addr, int port) throws Exception {
+                                     InetAddress addr, int port) throws Exception {
         String clientVersion = packet.payload.has("version")
-                ? packet.payload.get("version").asText()
-                : "0.0.0";
+                ? packet.payload.get("version").asText() : "unknown";
 
-        boolean compatible = !isOlderThan(clientVersion, minClientVersion);
+        boolean compatible = GameVersion.VERSION.equals(clientVersion);
 
         var payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("compatible",    compatible);
-        payload.put("minVersion",    minClientVersion);
-        payload.put("clientVersion", clientVersion);
-        payload.put("assetPort",     httpPort);
+        payload.put("compatible",     compatible);
+        payload.put("serverVersion",  GameVersion.VERSION);
+        payload.put("clientVersion",  clientVersion);
         if (!compatible) {
-            payload.put("message", "Client v" + clientVersion
-                    + " is too old. Please update to v" + minClientVersion + " or newer.");
+            payload.put("message", "Version mismatch! Client: " + clientVersion
+                    + " — Server requires: " + GameVersion.VERSION);
         }
 
-        log.info("VERSION_CHECK  client={}  compatible={}  from {}:{}",
-                clientVersion, compatible, addr.getHostAddress(), port);
-
-        Packet p    = new Packet(PacketType.VERSION_CHECK_RESPONSE, null, payload);
-        byte[] data = PacketSerializer.serialize(p);
+        Packet response = new Packet(PacketType.VERSION_RESPONSE, null, payload);
+        byte[] data     = PacketSerializer.serialize(response);
         socket.send(new DatagramPacket(data, data.length, addr, port));
-    }
 
-    /** Returns true if {@code a} is strictly older (lower semver) than {@code b}. */
-    private static boolean isOlderThan(String a, String b) {
-        int[] va = parseSemver(a);
-        int[] vb = parseSemver(b);
-        for (int i = 0; i < Math.max(va.length, vb.length); i++) {
-            int x = i < va.length ? va[i] : 0;
-            int y = i < vb.length ? vb[i] : 0;
-            if (x != y) return x < y;
-        }
-        return false; // equal → not older
+        log.info("VERSION_CHECK from {}:{} — client={} compatible={}",
+                addr.getHostAddress(), port, clientVersion, compatible);
     }
-
-    private static int[] parseSemver(String v) {
-        String[] parts = v.split("\\.");
-        int[] nums = new int[parts.length];
-        for (int i = 0; i < parts.length; i++) {
-            try { nums[i] = Integer.parseInt(parts[i]); } catch (NumberFormatException ignored) {}
-        }
-        return nums;
-    }
-
-    // -- Helpers --
 
     private void sendError(DatagramSocket socket, String message,
                            InetAddress addr, int port) throws Exception {

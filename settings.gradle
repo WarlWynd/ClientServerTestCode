@@ -1,9 +1,2 @@
-pluginManagement {
-    repositories {
-        gradlePluginPortal()
-        maven { url 'https://nexus.gluonhq.com/nexus/content/repositories/releases/' }
-    }
-}
-
 rootProject.name = 'multiplayer-game'
-include 'shared', 'server', 'client', 'admin', 'devconsole', 'bots'
+include 'shared', 'server', 'client'
