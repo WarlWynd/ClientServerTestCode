@@ -50,6 +50,8 @@ public class UDPServer {
         this.port = port;
     }
 
+    public AuthHandler getAuthHandler() { return authHandler; }
+
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
     public void start() throws Exception {
