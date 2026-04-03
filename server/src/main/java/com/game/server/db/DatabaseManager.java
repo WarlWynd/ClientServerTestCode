@@ -3,10 +3,7 @@ package com.game.server.db;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 
 /**
  * Singleton that owns the MySQL connection details and bootstraps the schema.
@@ -44,10 +41,8 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
-    // Safe to run on every startup -- no-op if column already exists (MySQL 8.0+)
     private static final String DDL_MIGRATE_AUDIO_ADMIN =
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS " +
-            "is_audio_admin TINYINT(1) NOT NULL DEFAULT 0;";
+            "ALTER TABLE users ADD COLUMN is_audio_admin TINYINT(1) NOT NULL DEFAULT 0;";
 
     private DatabaseManager(String host, int port, String dbName,
                             String user, String password) {
@@ -79,9 +74,18 @@ public final class DatabaseManager {
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_SESSIONS);
-            stmt.execute(DDL_MIGRATE_AUDIO_ADMIN);
+            if (!columnExists(conn, "users", "is_audio_admin")) {
+                stmt.execute(DDL_MIGRATE_AUDIO_ADMIN);
+            }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
+        }
+    }
+
+    private boolean columnExists(Connection conn, String table, String column) throws SQLException {
+        DatabaseMetaData meta = conn.getMetaData();
+        try (ResultSet rs = meta.getColumns(null, null, table, column)) {
+            return rs.next();
         }
     }
 }

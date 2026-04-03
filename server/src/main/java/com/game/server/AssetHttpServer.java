@@ -99,7 +99,6 @@ public class AssetHttpServer {
     // -- Handlers --
 
     private void handleList(HttpExchange ex) throws IOException {
-        if (!authorised(ex)) { respond(ex, 401, "Unauthorised"); return; }
 
         StringBuilder json = new StringBuilder("{");
         boolean firstType = true;
@@ -229,7 +228,7 @@ public class AssetHttpServer {
         String auth = ex.getRequestHeaders().getFirst("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) return false;
         String token = auth.substring(7).trim();
-        return authHandler.isDevSession(token) || authHandler.isAdminSession(token);
+        return authHandler.validateSession(token).isPresent();
     }
 
     private void respond(HttpExchange ex, int status, String body) throws IOException {
