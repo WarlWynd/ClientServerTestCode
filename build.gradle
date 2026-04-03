@@ -1,13 +1,9 @@
-plugins {
-    id 'java' apply false
-}
-
 subprojects {
     apply plugin: 'java'
 
     java {
         toolchain {
-            languageVersion = JavaLanguageVersion.of(23)
+            languageVersion = JavaLanguageVersion.of(21)
         }
     }
 
@@ -17,7 +13,7 @@ subprojects {
 
     tasks.withType(JavaCompile).configureEach {
         options.compilerArgs += ['--enable-preview']
-        options.release = 23
+        options.release = 21
     }
 
     tasks.withType(JavaExec).configureEach {

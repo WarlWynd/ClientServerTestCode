@@ -25,6 +25,20 @@ public enum PacketType {
     // ── Game ────────────────────────────────────────────────────
     GAME_JOIN,
     GAME_LEAVE,
-    PLAYER_UPDATE,   // client → server: position/state delta
-    GAME_STATE       // server → client: full authoritative world snapshot
+    PLAYER_UPDATE,
+    GAME_STATE,
+
+    // ── Admin ────────────────────────────────────────────────────
+    ADMIN_USER_LIST_REQUEST,
+    ADMIN_USER_LIST_RESPONSE,
+    ADMIN_KICK_REQUEST,
+    ADMIN_KICK_RESPONSE,
+    ADMIN_BAN_REQUEST,
+    ADMIN_BAN_RESPONSE,
+    ADMIN_SET_ADMIN_REQUEST,
+    ADMIN_SET_ADMIN_RESPONSE,
+    ADMIN_RESTART_REQUEST,
+    ADMIN_RESTART_RESPONSE,
+    ADMIN_DEPLOY_REQUEST,
+    ADMIN_DEPLOY_RESPONSE
 }

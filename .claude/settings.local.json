@@ -41,7 +41,9 @@
       "Bash(./gradlew.bat :server:compileJava)",
       "Bash(./gradlew.bat :shared:compileJava :server:compileJava :client:compileJava)",
       "Bash(cmd /c client.bat 2>&1)",
-      "Bash(./gradlew.bat :client:run)"
+      "Bash(./gradlew.bat :client:run)",
+      "Bash(./gradlew :server:jar)",
+      "Bash(./gradlew :server:compileJava)"
     ]
   }
 }

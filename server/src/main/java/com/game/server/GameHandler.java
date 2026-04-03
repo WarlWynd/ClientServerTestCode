@@ -14,6 +14,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,7 +43,7 @@ public class GameHandler {
 
     public void handleJoin(DatagramSocket socket, Packet in, Session session,
                            InetAddress addr, int port) throws Exception {
-        players.put(session.token(), new PlayerState(session.userId(), session.username()));
+        players.put(session.token(), new PlayerState(session.userId(), session.username(), addr.getHostAddress()));
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
         broadcastGameState(socket);
@@ -123,6 +124,17 @@ public class GameHandler {
         root.put("playerCount", players.size());
         root.put("timestamp",   System.currentTimeMillis());
         return root;
+    }
+
+    /** Removes a player by username. Returns the username if found, empty otherwise. */
+    public Optional<String> kickByUsername(String username, DatagramSocket socket) {
+        String token = players.entrySet().stream()
+                .filter(e -> e.getValue().username.equals(username))
+                .map(Map.Entry::getKey)
+                .findFirst().orElse(null);
+        if (token == null) return Optional.empty();
+        removePlayer(token, socket);
+        return Optional.of(username);
     }
 
     // ── Accessors ────────────────────────────────────────────────────────────

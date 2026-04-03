@@ -1,5 +1,6 @@
 package com.game.client;
 
+import com.game.client.AppSettings;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import org.slf4j.Logger;
@@ -44,8 +45,8 @@ public class UDPClient {
     private Thread            receiverThread;
 
     public UDPClient(ClientConfig config) {
-        this.serverHost = config.getServerHost();
-        this.serverPort = config.getServerPort();
+        this.serverHost = AppSettings.getServerHost();
+        this.serverPort = AppSettings.getServerPort();
         this.localPort  = config.getClientPort();
     }
 

@@ -24,7 +24,7 @@ public class AuthHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AuthHandler.class);
 
-    private final UserRepository    userRepo    = new UserRepository();
+    final         UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
 
     // ── Packet handlers ──────────────────────────────────────────────────────
@@ -98,6 +98,16 @@ public class AuthHandler {
     public Optional<Session> validateSession(String token) {
         if (token == null || token.isBlank()) return Optional.empty();
         return sessionRepo.validate(token);
+    }
+
+    public boolean isAdminSession(String token) {
+        return validateSession(token)
+                .map(s -> userRepo.isAdmin(s.username()))
+                .orElse(false);
+    }
+
+    public boolean isDevSession(String token) {
+        return isAdminSession(token);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

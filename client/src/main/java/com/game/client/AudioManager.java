@@ -153,4 +153,9 @@ public class AudioManager {
         stopMusic();
         sfxCache.clear();
     }
+
+    /** Remove a cached SFX entry so it is reloaded from disk on next play. */
+    public static void invalidate(String name) {
+        if (instance != null) instance.sfxCache.remove(name);
+    }
 }

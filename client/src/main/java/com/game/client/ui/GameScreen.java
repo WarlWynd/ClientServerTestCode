@@ -188,7 +188,7 @@ public class GameScreen {
         scene.setOnKeyPressed(e  -> heldKeys.add(e.getCode()));
         scene.setOnKeyReleased(e -> heldKeys.remove(e.getCode()));
 
-        stage.setTitle("Multiplayer Game");
+        stage.setTitle("Multiplayer Game v" + com.game.shared.GameVersion.VERSION + " - ");
         stage.setScene(scene);
         stage.show();
 

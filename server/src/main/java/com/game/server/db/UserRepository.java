@@ -80,6 +80,35 @@ public class UserRepository {
         }
     }
 
+    public boolean isAdmin(String username) {
+        String sql = "SELECT is_audio_admin FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("is_audio_admin");
+            }
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public boolean setAdmin(String username, boolean isAdmin) {
+        return setAudioAdmin(username, isAdmin);
+    }
+
+    public boolean setBanned(String username, boolean ban) {
+        String sql = "UPDATE users SET is_banned = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, ban);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
     private void touchLastLogin(long userId, Connection conn) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE users SET last_login = NOW() WHERE id = ?")) {

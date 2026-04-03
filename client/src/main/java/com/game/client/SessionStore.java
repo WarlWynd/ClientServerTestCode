@@ -1,5 +1,7 @@
 package com.game.client;
 
+import com.game.client.AppSettings;
+
 /**
  * Singleton that holds the current authenticated session for the duration
  * of the process. Cleared on logout.
@@ -27,5 +29,7 @@ public final class SessionStore {
     public static String  getToken()      { return token; }
     public static String  getUsername()   { return username; }
     public static boolean isAudioAdmin()  { return audioAdmin; }
+    public static boolean isAdmin()       { return audioAdmin; }
     public static boolean isLoggedIn()    { return token != null && !token.isBlank(); }
+    public static String  getAssetUrl()   { return "http://" + AppSettings.getServerHost() + ":9877"; }
 }
