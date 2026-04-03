@@ -166,15 +166,19 @@ public class GameScreen {
         Tab gameTab = new Tab("🎮 Game", gameContent);
         gameTab.setClosable(false);
 
+        // ── Settings tab (all users) ──────────────────────────────────────────
+        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel().buildView());
+        settingsTab.setClosable(false);
+
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
         TabPane tabPane;
         if (SessionStore.isAudioAdmin()) {
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, audioTab);
+            tabPane = new TabPane(gameTab, settingsTab, audioTab);
         } else {
-            tabPane = new TabPane(gameTab);
+            tabPane = new TabPane(gameTab, settingsTab);
         }
 
         // ── Tab pane ─────────────────────────────────────────────────────────

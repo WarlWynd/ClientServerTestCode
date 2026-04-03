@@ -35,7 +35,7 @@ public class ClientMain extends Application {
         primaryStage.setResizable(false);
         primaryStage.setOnCloseRequest(e -> shutdown());
 
-        new VersionCheckScreen(primaryStage, udpClient).show();
+        new VersionCheckScreen(primaryStage, udpClient, config).show();
     }
 
     @Override

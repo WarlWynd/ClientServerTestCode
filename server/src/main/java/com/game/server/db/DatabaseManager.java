@@ -24,7 +24,8 @@ public final class DatabaseManager {
                 password_hash   VARCHAR(255) NOT NULL,
                 created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 last_login      TIMESTAMP    NULL,
-                is_audio_admin  TINYINT(1)   NOT NULL DEFAULT 0
+                is_audio_admin  TINYINT(1)   NOT NULL DEFAULT 0,
+                is_admin        TINYINT(1)   NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
@@ -41,8 +42,33 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
+    private static final String DDL_GAME_VERSIONS = """
+            CREATE TABLE IF NOT EXISTS game_versions (
+                id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
+                VersionMajor    INT           NOT NULL,
+                VersionMinor    INT           NOT NULL,
+                blurb           TEXT          NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
+    private static final String DDL_SERVER_CHANGES = """
+            CREATE TABLE IF NOT EXISTS MultiplayerServerChanges (
+                id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
+                SrvrMacroVrsn   INT           NOT NULL,
+                SrvrMicroVrsn   INT           NOT NULL,
+                changed_at      TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                blurb           TEXT          NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
+    // Safe to run on every startup -- no-op if column already exists (MySQL 8.0+)
     private static final String DDL_MIGRATE_AUDIO_ADMIN =
-            "ALTER TABLE users ADD COLUMN is_audio_admin TINYINT(1) NOT NULL DEFAULT 0;";
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS " +
+            "is_audio_admin TINYINT(1) NOT NULL DEFAULT 0;";
+
+    private static final String DDL_MIGRATE_ADMIN =
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS " +
+            "is_admin TINYINT(1) NOT NULL DEFAULT 0;";
 
     private DatabaseManager(String host, int port, String dbName,
                             String user, String password) {
@@ -74,18 +100,12 @@ public final class DatabaseManager {
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_SESSIONS);
-            if (!columnExists(conn, "users", "is_audio_admin")) {
-                stmt.execute(DDL_MIGRATE_AUDIO_ADMIN);
-            }
+            stmt.execute(DDL_MIGRATE_AUDIO_ADMIN);
+            stmt.execute(DDL_MIGRATE_ADMIN);
+            stmt.execute(DDL_SERVER_CHANGES);
+            stmt.execute(DDL_GAME_VERSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
-        }
-    }
-
-    private boolean columnExists(Connection conn, String table, String column) throws SQLException {
-        DatabaseMetaData meta = conn.getMetaData();
-        try (ResultSet rs = meta.getColumns(null, null, table, column)) {
-            return rs.next();
         }
     }
 }
