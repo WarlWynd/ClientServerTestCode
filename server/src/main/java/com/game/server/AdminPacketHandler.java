@@ -141,14 +141,10 @@ public class AdminPacketHandler {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
         sendResponse(socket, out, PacketType.ADMIN_RESTART_RESPONSE, addr, port);
-        log.info("ADMIN_RESTART requested by '{}'", session.username());
+        log.info("ADMIN_RESTART requested by '{}' — exiting with code 42", session.username());
         Thread.ofVirtual().start(() -> {
-            try {
-                Thread.sleep(500);
-                Runtime.getRuntime().exec(new String[]{"bash", "-c", "restart.sh"});
-            } catch (Exception e) {
-                log.error("Restart failed: {}", e.getMessage());
-            }
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            System.exit(42);
         });
     }
 
@@ -157,14 +153,10 @@ public class AdminPacketHandler {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
         sendResponse(socket, out, PacketType.ADMIN_DEPLOY_RESPONSE, addr, port);
-        log.info("ADMIN_DEPLOY requested by '{}'", session.username());
+        log.info("ADMIN_DEPLOY requested by '{}' — exiting with code 43", session.username());
         Thread.ofVirtual().start(() -> {
-            try {
-                Thread.sleep(500);
-                Runtime.getRuntime().exec(new String[]{"bash", "-c", "deploy.sh"});
-            } catch (Exception e) {
-                log.error("Deploy failed: {}", e.getMessage());
-            }
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            System.exit(43);
         });
     }
 
