@@ -47,7 +47,7 @@ public class LoginScreen {
         client.setPacketListener(this::onPacket);
 
         // Title
-        Text title = new Text("Multiplayer Game");
+        Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
 
         Text subtitle = new Text("Sign in to play");

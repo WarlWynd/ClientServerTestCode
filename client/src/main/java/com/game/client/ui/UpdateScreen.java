@@ -1,5 +1,6 @@
 package com.game.client.ui;
 
+import com.game.client.AppSettings;
 import com.game.client.UpdateChecker;
 import com.game.client.UpdateChecker.UpdateInfo;
 import javafx.application.Platform;
@@ -44,7 +45,7 @@ public class UpdateScreen {
     }
 
     public void show() {
-        Text title = new Text("Multiplayer Game");
+        Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
         title.setStyle("-fx-fill: #e0e0e0;");
 
@@ -64,7 +65,7 @@ public class UpdateScreen {
         StackPane root = new StackPane(box);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setTitle("Multiplayer Game v" + currentVersion + " - ");
+        stage.setTitle(AppSettings.getProgramName() + " v" + currentVersion + " - ");
         stage.setScene(new Scene(root, 480, 400));
         stage.show();
 

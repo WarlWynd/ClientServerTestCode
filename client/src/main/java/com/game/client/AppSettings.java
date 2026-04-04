@@ -24,6 +24,7 @@ public final class AppSettings {
             System.getProperty("user.home"), ".game", "settings.properties");
 
     // ── Fields ────────────────────────────────────────────────────────────────
+    private static volatile String    programName     = "Adventure Friends";
     private static volatile String    serverHost      = "localhost";
     private static volatile int       serverPort      = 9876;
     private static volatile SoundMode soundMode       = SoundMode.HIGH;
@@ -54,6 +55,7 @@ public final class AppSettings {
             } catch (Exception ignored) {}
         }
 
+        programName     = merged.getProperty("ProgramName", programName);
         serverHost      = merged.getProperty("server.host", serverHost);
         serverPort      = intOf(merged, "server.port", serverPort);
         soundMode       = SoundMode.fromString(merged.getProperty("sound.mode",
@@ -93,6 +95,7 @@ public final class AppSettings {
 
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
+    public static String    getProgramName()              { return programName; }
     public static String    getServerHost()              { return serverHost; }
     public static int       getServerPort()              { return serverPort; }
     public static SoundMode getSoundMode()               { return soundMode; }

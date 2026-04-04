@@ -2,6 +2,7 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -87,11 +88,9 @@ public class GameScreen {
         client.setPacketListener(this::onPacket);
 
         // ── Left sidebar ─────────────────────────────────────────────────────
-        Label gameTitle = new Label("MULTIPLAYER");
+        Label gameTitle = new Label(AppSettings.getProgramName().toUpperCase());
         gameTitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 16; -fx-font-weight: bold;");
-
-        Label gameSubtitle = new Label("GAME");
-        gameSubtitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 16; -fx-font-weight: bold;");
+        gameTitle.setWrapText(true);
 
         Separator sep1 = new Separator();
         sep1.setStyle("-fx-background-color: #3a3a6a;");
@@ -143,7 +142,7 @@ public class GameScreen {
         logoutBtn.setOnAction(e -> doLogout());
 
         VBox sidebar = new VBox(10,
-                gameTitle, gameSubtitle,
+                gameTitle,
                 sep1,
                 playingAsLbl, nameLabel,
                 sep2,
@@ -212,7 +211,7 @@ public class GameScreen {
             }
         });
 
-        stage.setTitle("Multiplayer Game v" + com.game.shared.GameVersion.VERSION + " - ");
+        stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " - ");
         stage.setScene(scene);
         stage.show();
 

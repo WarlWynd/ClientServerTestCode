@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.UDPClient;
 import com.game.shared.GameVersion;
 import com.game.shared.Packet;
@@ -50,7 +51,7 @@ public class VersionCheckScreen {
     public void show() {
         client.setPacketListener(this::onPacket);
 
-        Text title = new Text("Multiplayer Game");
+        Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
         title.setStyle("-fx-fill: #e0e0e0;");
 

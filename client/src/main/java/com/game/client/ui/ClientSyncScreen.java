@@ -1,5 +1,6 @@
 package com.game.client.ui;
 
+import com.game.client.AppSettings;
 import com.game.client.ClientSyncClient;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -53,7 +54,7 @@ public class ClientSyncScreen {
     public void show() {
         String localSoftwareVersion = readLocalSoftwareVersion();
 
-        Text title = new Text("Multiplayer Game");
+        Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
         title.setStyle("-fx-fill: #e0e0e0;");
 
