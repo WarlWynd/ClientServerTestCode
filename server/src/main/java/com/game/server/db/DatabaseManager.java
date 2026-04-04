@@ -61,14 +61,9 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
-    // Safe to run on every startup -- no-op if column already exists (MySQL 8.0+)
-    private static final String DDL_MIGRATE_AUDIO_ADMIN =
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS " +
-            "is_audio_admin TINYINT(1) NOT NULL DEFAULT 0;";
-
-    private static final String DDL_MIGRATE_ADMIN =
-            "ALTER TABLE users ADD COLUMN IF NOT EXISTS " +
-            "is_admin TINYINT(1) NOT NULL DEFAULT 0;";
+    private static final String CHECK_COLUMN =
+            "SELECT COUNT(*) FROM information_schema.COLUMNS " +
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?";
 
     private DatabaseManager(String host, int port, String dbName,
                             String user, String password) {
@@ -100,12 +95,27 @@ public final class DatabaseManager {
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_SESSIONS);
-            stmt.execute(DDL_MIGRATE_AUDIO_ADMIN);
-            stmt.execute(DDL_MIGRATE_ADMIN);
+            addColumnIfMissing(conn, "users", "is_audio_admin", "TINYINT(1) NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_admin",       "TINYINT(1) NOT NULL DEFAULT 0");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
+        }
+    }
+
+    private void addColumnIfMissing(Connection conn, String table, String column, String definition)
+            throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(CHECK_COLUMN)) {
+            ps.setString(1, table);
+            ps.setString(2, column);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getInt(1) == 0) {
+                    try (Statement stmt = conn.createStatement()) {
+                        stmt.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
+                    }
+                }
+            }
         }
     }
 }
