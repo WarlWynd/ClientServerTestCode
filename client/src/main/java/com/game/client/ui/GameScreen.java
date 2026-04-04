@@ -175,10 +175,6 @@ public class GameScreen {
         Tab gameTab = new Tab("🎮 Game", gameContent);
         gameTab.setClosable(false);
 
-        // ── Characters tab (all users) ───────────────────────────────────────
-        Tab charactersTab = new Tab("⚔ Character", new CharactersPanel(stage, client).buildView());
-        charactersTab.setClosable(false);
-
         // ── Settings tab (all users) ──────────────────────────────────────────
         Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart).buildView());
         settingsTab.setClosable(false);
@@ -192,9 +188,9 @@ public class GameScreen {
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, charactersTab, settingsTab, adminTab, audioTab);
+            tabPane = new TabPane(gameTab, settingsTab, adminTab, audioTab);
         } else {
-            tabPane = new TabPane(gameTab, charactersTab, settingsTab);
+            tabPane = new TabPane(gameTab, settingsTab);
         }
 
         // ── Tab pane ─────────────────────────────────────────────────────────
@@ -217,8 +213,6 @@ public class GameScreen {
                 e.consume();
             }
         });
-
-        tabPane.getSelectionModel().select(charactersTab);
 
         stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " - ");
         stage.setScene(scene);

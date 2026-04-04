@@ -150,15 +150,9 @@ public class LoginScreen {
                         AppSettings.setRememberUsername(pendingRemember);
                         AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
                         AppSettings.save();
-                        boolean hasCharacter = !packet.payload.has("hasCharacter") ||
-                                              packet.payload.get("hasCharacter").asBoolean();
                         if (packet.payload.has("characterName"))
                             SessionStore.setCharacterName(packet.payload.get("characterName").asText());
-                        if (hasCharacter) {
-                            new GameScreen(stage, client).show();
-                        } else {
-                            new CharacterCreationScreen(stage, client).show();
-                        }
+                        new CharacterScreen(stage, client).show();
                     } else {
                         String msg = packet.payload.get("message").asText("Login failed.");
                         statusLabel.setText(msg);
