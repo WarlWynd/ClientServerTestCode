@@ -97,6 +97,7 @@ public class CharacterCreationScreen {
                 boolean success = packet.payload.get("success").asBoolean();
                 String  message = packet.payload.get("message").asText();
                 if (success) {
+                    SessionStore.setCharacterName(packet.payload.get("characterName").asText());
                     status("Character created! Entering game…", true);
                     new Thread(() -> {
                         try { Thread.sleep(800); } catch (InterruptedException ignored) {}

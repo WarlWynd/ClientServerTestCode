@@ -150,8 +150,10 @@ public class LoginScreen {
                         AppSettings.setRememberUsername(pendingRemember);
                         AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
                         AppSettings.save();
-                        boolean hasCharacter = packet.payload.has("hasCharacter") &&
+                        boolean hasCharacter = !packet.payload.has("hasCharacter") ||
                                               packet.payload.get("hasCharacter").asBoolean();
+                        if (packet.payload.has("characterName"))
+                            SessionStore.setCharacterName(packet.payload.get("characterName").asText());
                         if (hasCharacter) {
                             new GameScreen(stage, client).show();
                         } else {

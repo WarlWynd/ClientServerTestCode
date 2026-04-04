@@ -46,7 +46,9 @@ public class AuthHandler {
             out.put("username",     session.username());
             out.put("isAdmin",      user.get().isAdmin());
             out.put("isAudioDev",   user.get().isAudioDev());
-            out.put("hasCharacter", charRepo.hasCharacter(user.get().id()));
+            String charName = charRepo.getCharacterName(user.get().id());
+            out.put("hasCharacter",   charName != null);
+            if (charName != null) out.put("characterName", charName);
             log.info("LOGIN  ok  user='{}' admin={} audioDev={} from {}:{}",
                     user.get().username(), user.get().isAdmin(), user.get().isAudioDev(), addr.getHostAddress(), port);
         } else {

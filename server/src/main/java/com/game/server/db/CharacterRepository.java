@@ -50,6 +50,21 @@ public class CharacterRepository {
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
+    /** Returns the character name for the given user, or null if none. */
+    public String getCharacterName(long userId) {
+        String sql = "SELECT character_name FROM characters WHERE user_id = ? LIMIT 1";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString("character_name") : null;
+            }
+        } catch (SQLException e) {
+            log.error("getCharacterName() failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     /** Returns true if the user already has at least one character. */
     public boolean hasCharacter(long userId) {
         String sql = "SELECT COUNT(*) FROM characters WHERE user_id = ?";

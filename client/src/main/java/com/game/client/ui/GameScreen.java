@@ -175,6 +175,10 @@ public class GameScreen {
         Tab gameTab = new Tab("🎮 Game", gameContent);
         gameTab.setClosable(false);
 
+        // ── Characters tab (all users) ───────────────────────────────────────
+        Tab charactersTab = new Tab("⚔ Character", new CharactersPanel().buildView());
+        charactersTab.setClosable(false);
+
         // ── Settings tab (all users) ──────────────────────────────────────────
         Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart).buildView());
         settingsTab.setClosable(false);
@@ -188,9 +192,9 @@ public class GameScreen {
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, settingsTab, adminTab, audioTab);
+            tabPane = new TabPane(gameTab, charactersTab, settingsTab, adminTab, audioTab);
         } else {
-            tabPane = new TabPane(gameTab, settingsTab);
+            tabPane = new TabPane(gameTab, charactersTab, settingsTab);
         }
 
         // ── Tab pane ─────────────────────────────────────────────────────────
