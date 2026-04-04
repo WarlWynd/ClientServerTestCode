@@ -49,7 +49,8 @@ public class GameScreen {
     private static final int   WORLD_H       = 600;
     private static final float PLAYER_SPEED  = 3.5f;
     private static final float PLAYER_RADIUS = 14f;
-    private static final long  SEND_INTERVAL_MS = 50; // max 20 updates/s to server
+    private static final long  SEND_INTERVAL_MS  = 50;     // max 20 updates/s to server
+    private static final long  KEEPALIVE_MS      = 15_000; // keepalive when idle (prevents server eviction)
 
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
@@ -244,7 +245,7 @@ public class GameScreen {
         }
 
         long now = System.currentTimeMillis();
-        if (moved && (now - lastSendTime) > SEND_INTERVAL_MS) {
+        if ((moved || (now - lastSendTime) > KEEPALIVE_MS) && (now - lastSendTime) > SEND_INTERVAL_MS) {
             ObjectNode payload = PacketSerializer.mapper().createObjectNode();
             payload.put("x",     localX);
             payload.put("y",     localY);

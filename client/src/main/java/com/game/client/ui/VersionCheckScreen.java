@@ -1,7 +1,6 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.game.client.ClientConfig;
 import com.game.client.UDPClient;
 import com.game.shared.GameVersion;
 import com.game.shared.Packet;
@@ -35,17 +34,15 @@ public class VersionCheckScreen {
 
     private final Stage     stage;
     private final UDPClient client;
-    private final String    assetUrl;
 
     private Label            statusLabel;
     private ProgressIndicator spinner;
     private Button           retryButton;
     private Thread           timeoutThread;
 
-    public VersionCheckScreen(Stage stage, UDPClient client, ClientConfig config) {
-        this.stage    = stage;
-        this.client   = client;
-        this.assetUrl = config.getAssetUrl();
+    public VersionCheckScreen(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -138,8 +135,7 @@ public class VersionCheckScreen {
 
         Platform.runLater(() -> {
             if (compatible) {
-                new ClientSyncScreen(stage, assetUrl, serverVersion,
-                        () -> new LoginScreen(stage, client).show()).show();
+                new LoginScreen(stage, client).show();
             } else {
                 // Version mismatch — block and show details
                 spinner.setVisible(false);

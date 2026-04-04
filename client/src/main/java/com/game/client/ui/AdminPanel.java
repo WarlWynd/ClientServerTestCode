@@ -8,6 +8,8 @@ import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import javafx.animation.KeyFrame;
 import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
@@ -35,6 +37,8 @@ import javafx.util.Duration;
  * Packet handling is delegated from GameScreen via {@link #onPacket(Packet)}.
  */
 public class AdminPanel {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminPanel.class);
 
     private final UDPClient client;
 
@@ -213,25 +217,36 @@ public class AdminPanel {
 
     public void onPacket(Packet packet) {
         switch (packet.type) {
-            case ADMIN_USER_LIST_RESPONSE -> Platform.runLater(() -> {
-                if (!packet.payload.get("success").asBoolean()) return;
-                JsonNode players = packet.payload.get("players");
-                rows.clear();
-                if (players != null && players.isArray()) {
-                    for (JsonNode p : players) {
-                        rows.add(new PlayerRow(
-                                p.get("username").asText(),
-                                p.has("ip") ? p.get("ip").asText() : "—",
-                                p.get("joinedAt").asLong(),
-                                p.get("x").asDouble(),
-                                p.get("y").asDouble(),
-                                p.get("score").asInt(),
-                                p.has("isAdmin") && p.get("isAdmin").asBoolean()));
-                    }
+            case ADMIN_USER_LIST_RESPONSE -> {
+                boolean success = packet.payload.get("success").asBoolean();
+                if (!success) {
+                    String msg = packet.payload.has("message")
+                            ? packet.payload.get("message").asText() : "Access denied";
+                    log.warn("ADMIN_USER_LIST_RESPONSE denied: {}", msg);
+                    Platform.runLater(() -> showStatus("Access denied: " + msg, "#e94560"));
+                    return;
                 }
-                headerLabel.setText(String.format("Admin Panel — %s  |  %d player%s online",
-                        SessionStore.getUsername(), rows.size(), rows.size() == 1 ? "" : "s"));
-            });
+                JsonNode players = packet.payload.get("players");
+                int count = players != null && players.isArray() ? players.size() : 0;
+                log.info("ADMIN_USER_LIST_RESPONSE ok — {} player(s)", count);
+                Platform.runLater(() -> {
+                    rows.clear();
+                    if (players != null && players.isArray()) {
+                        for (JsonNode p : players) {
+                            rows.add(new PlayerRow(
+                                    p.get("username").asText(),
+                                    p.has("ip") ? p.get("ip").asText() : "—",
+                                    p.get("joinedAt").asLong(),
+                                    p.get("x").asDouble(),
+                                    p.get("y").asDouble(),
+                                    p.get("score").asInt(),
+                                    p.has("isAdmin") && p.get("isAdmin").asBoolean()));
+                        }
+                    }
+                    headerLabel.setText(String.format("Admin Panel — %s  |  %d player%s online",
+                            SessionStore.getUsername(), rows.size(), rows.size() == 1 ? "" : "s"));
+                });
+            }
             case ADMIN_KICK_RESPONSE -> Platform.runLater(() -> {
                 boolean ok  = packet.payload.get("success").asBoolean();
                 String  msg = ok
@@ -380,6 +395,8 @@ public class AdminPanel {
     // ── Network ───────────────────────────────────────────────────────────────
 
     private void requestPlayerList() {
+        log.info("Sending ADMIN_USER_LIST_REQUEST (token={})",
+                SessionStore.getToken() != null ? SessionStore.getToken().substring(0, 8) + "…" : "null");
         client.send(new Packet(PacketType.ADMIN_USER_LIST_REQUEST,
                 SessionStore.getToken(), PacketSerializer.emptyPayload()));
     }

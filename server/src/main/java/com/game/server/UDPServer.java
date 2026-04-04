@@ -37,8 +37,9 @@ public class UDPServer {
     private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
 
     private final int port;
-    private final AuthHandler authHandler = new AuthHandler();
-    private final GameHandler gameHandler = new GameHandler();
+    private final AuthHandler    authHandler    = new AuthHandler();
+    private final GameHandler    gameHandler    = new GameHandler();
+    private final AdminPacketHandler adminHandler = new AdminPacketHandler(authHandler, gameHandler);
     private final SessionRepository sessionRepo = new SessionRepository();
 
     private DatagramSocket         socket;
@@ -132,6 +133,12 @@ public class UDPServer {
             case GAME_JOIN     -> gameHandler.handleJoin(socket, packet, session, addr, port);
             case GAME_LEAVE    -> gameHandler.handleLeave(socket, packet, session);
             case PLAYER_UPDATE -> gameHandler.handlePlayerUpdate(socket, packet, session);
+            case ADMIN_USER_LIST_REQUEST,
+                 ADMIN_KICK_REQUEST,
+                 ADMIN_BAN_REQUEST,
+                 ADMIN_SET_ADMIN_REQUEST,
+                 ADMIN_RESTART_REQUEST,
+                 ADMIN_DEPLOY_REQUEST   -> adminHandler.dispatch(socket, packet, session, addr, port);
             default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }
