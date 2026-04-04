@@ -43,9 +43,9 @@ public class AuthHandler {
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
             out.put("isAdmin",      user.get().isAdmin());
-            out.put("isAudioAdmin", user.get().isAudioAdmin());
-            log.info("LOGIN  ok  user='{}' admin={} audioAdmin={} from {}:{}",
-                    user.get().username(), user.get().isAdmin(), user.get().isAudioAdmin(), addr.getHostAddress(), port);
+            out.put("isAudioDev", user.get().isAudioDev());
+            log.info("LOGIN  ok  user='{}' admin={} audioDev={} from {}:{}",
+                    user.get().username(), user.get().isAdmin(), user.get().isAudioDev(), addr.getHostAddress(), port);
         } else {
             out.put("success", false);
             out.put("message", "Invalid username or password.");

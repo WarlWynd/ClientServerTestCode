@@ -65,13 +65,14 @@ public class AdminPacketHandler {
 
         for (PlayerState p : players.values()) {
             ObjectNode node = arr.addObject();
-            node.put("username", p.username);
-            node.put("ip",       p.ip);
-            node.put("joinedAt", p.joinedAt);
-            node.put("x",        p.x);
-            node.put("y",        p.y);
-            node.put("score",    p.score);
-            node.put("isAdmin",  userRepo.isAdmin(p.username));
+            node.put("username",     p.username);
+            node.put("email",        userRepo.getEmail(p.username));
+            node.put("ip",           p.ip);
+            node.put("joinedAt",     p.joinedAt);
+            node.put("x",            p.x);
+            node.put("y",            p.y);
+            node.put("score",        p.score);
+            node.put("isAdmin",      userRepo.isAdmin(p.username));
         }
 
         out.put("success", true);

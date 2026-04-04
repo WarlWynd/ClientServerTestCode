@@ -37,10 +37,10 @@ public class UserRepository {
 
     /**
      * Validates credentials by email address.
-     * @return the User (including isAudioAdmin flag) if credentials are correct.
+     * @return the User (including isAudioDev flag) if credentials are correct.
      */
     public Optional<User> authenticate(String email, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_admin, is_audio_admin " +
+        String sql = "SELECT id, username, password_hash, is_admin, is_audio_dev " +
                      "FROM users WHERE emailaddress = ?";
 
         try (Connection conn = db.getConnection();
@@ -55,7 +55,7 @@ public class UserRepository {
                                 rs.getLong("id"),
                                 rs.getString("username"),
                                 rs.getBoolean("is_admin"),
-                                rs.getBoolean("is_audio_admin")
+                                rs.getBoolean("is_audio_dev")
                         ));
                     }
                 }
@@ -70,15 +70,28 @@ public class UserRepository {
      * Grants or revokes the audio admin role for a given username.
      * @return true if the user was found and updated.
      */
-    public boolean setAudioAdmin(String username, boolean isAdmin) {
-        String sql = "UPDATE users SET is_audio_admin = ? WHERE username = ?";
+    public boolean setAudioDev(String username, boolean isAdmin) {
+        String sql = "UPDATE users SET is_audio_dev = ? WHERE username = ?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setBoolean(1, isAdmin);
             ps.setString(2, username);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new RuntimeException("setAudioAdmin() failed", e);
+            throw new RuntimeException("setAudioDev() failed", e);
+        }
+    }
+
+    public String getEmail(String username) {
+        String sql = "SELECT emailaddress FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getString("emailaddress") : "";
+            }
+        } catch (SQLException e) {
+            return "";
         }
     }
 
