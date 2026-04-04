@@ -39,7 +39,7 @@ public class UserRepository {
      * @return the User (including isAudioAdmin flag) if credentials are correct.
      */
     public Optional<User> authenticate(String username, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_audio_admin " +
+        String sql = "SELECT id, username, password_hash, is_admin, is_audio_admin " +
                      "FROM users WHERE username = ?";
 
         try (Connection conn = db.getConnection();
@@ -53,6 +53,7 @@ public class UserRepository {
                         return Optional.of(new User(
                                 rs.getLong("id"),
                                 rs.getString("username"),
+                                rs.getBoolean("is_admin"),
                                 rs.getBoolean("is_audio_admin")
                         ));
                     }
@@ -81,12 +82,12 @@ public class UserRepository {
     }
 
     public boolean isAdmin(String username) {
-        String sql = "SELECT is_audio_admin FROM users WHERE username = ?";
+        String sql = "SELECT is_admin FROM users WHERE username = ?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getBoolean("is_audio_admin");
+                return rs.next() && rs.getBoolean("is_admin");
             }
         } catch (SQLException e) {
             return false;
@@ -94,7 +95,15 @@ public class UserRepository {
     }
 
     public boolean setAdmin(String username, boolean isAdmin) {
-        return setAudioAdmin(username, isAdmin);
+        String sql = "UPDATE users SET is_admin = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, isAdmin);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("setAdmin() failed", e);
+        }
     }
 
     public boolean setBanned(String username, boolean ban) {

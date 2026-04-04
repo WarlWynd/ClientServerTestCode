@@ -16,6 +16,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -68,6 +69,7 @@ public class GameScreen {
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
+    private AdminPanel adminPanel;
 
     public GameScreen(Stage stage, UDPClient client) {
         this.stage  = stage;
@@ -172,11 +174,14 @@ public class GameScreen {
 
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
         TabPane tabPane;
-        if (SessionStore.isAudioAdmin()) {
+        if (SessionStore.isAdmin()) {
+            adminPanel = new AdminPanel(client);
+            Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
+            adminTab.setClosable(false);
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, settingsTab, audioTab);
+            tabPane = new TabPane(gameTab, settingsTab, adminTab, audioTab);
         } else {
             tabPane = new TabPane(gameTab, settingsTab);
         }
@@ -189,8 +194,18 @@ public class GameScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         Scene scene = new Scene(root, WORLD_W + 160, WORLD_H + 30);
-        scene.setOnKeyPressed(e  -> heldKeys.add(e.getCode()));
-        scene.setOnKeyReleased(e -> heldKeys.remove(e.getCode()));
+        // Use filters (capture phase) so keys are tracked before any node handler runs.
+        scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
+        scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> heldKeys.remove(e.getCode()));
+
+        // Prevent TabPane from consuming arrow keys for tab navigation while in-game.
+        tabPane.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            KeyCode c = e.getCode();
+            if ((c == KeyCode.LEFT || c == KeyCode.RIGHT || c == KeyCode.UP || c == KeyCode.DOWN)
+                    && tabPane.getSelectionModel().getSelectedItem() == gameTab) {
+                e.consume();
+            }
+        });
 
         stage.setTitle("Multiplayer Game v" + com.game.shared.GameVersion.VERSION + " - ");
         stage.setScene(scene);
@@ -207,6 +222,7 @@ public class GameScreen {
             }
         };
         gameLoop.start();
+        if (adminPanel != null) adminPanel.start();
     }
 
     // ── Input processing ─────────────────────────────────────────────────────
@@ -346,6 +362,7 @@ public class GameScreen {
     // ── Packet handling ──────────────────────────────────────────────────────
 
     private void onPacket(Packet packet) {
+        if (adminPanel != null) adminPanel.onPacket(packet);
         switch (packet.type) {
             case GAME_STATE -> {
                 JsonNode players = packet.payload.get("players");
@@ -381,6 +398,7 @@ public class GameScreen {
 
     private void doLogout() {
         gameLoop.stop();
+        if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();

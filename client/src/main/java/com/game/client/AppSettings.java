@@ -1,5 +1,7 @@
 package com.game.client;
 
+import com.game.shared.GameVersion;
+
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -27,6 +29,9 @@ public final class AppSettings {
     private static volatile SoundMode soundMode       = SoundMode.HIGH;
     private static volatile boolean   keepScreenAwake = true;
     private static volatile double    hudOpacity      = 1.0;
+    private static volatile String    clientVersion    = GameVersion.VERSION;
+    private static volatile String    lastUsername     = "";
+    private static volatile boolean   rememberUsername = false;
 
     static { load(); }
 
@@ -55,6 +60,8 @@ public final class AppSettings {
                           merged.getProperty("sound.enabled", soundMode.name())));
         keepScreenAwake = boolOf(merged, "display.keepScreenAwake", keepScreenAwake);
         hudOpacity      = doubleOf(merged, "display.hudOpacity", hudOpacity);
+        lastUsername      = merged.getProperty("client.lastUsername", lastUsername);
+        rememberUsername  = boolOf(merged, "client.rememberUsername", rememberUsername);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -70,6 +77,9 @@ public final class AppSettings {
         p.setProperty("sound.mode",                soundMode.name());
         p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
         p.setProperty("display.hudOpacity",        String.valueOf(hudOpacity));
+        p.setProperty("client.version",            GameVersion.VERSION);
+        p.setProperty("client.lastUsername",       lastUsername);
+        p.setProperty("client.rememberUsername",   String.valueOf(rememberUsername));
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -88,12 +98,17 @@ public final class AppSettings {
     public static SoundMode getSoundMode()               { return soundMode; }
     public static boolean   isKeepScreenAwake()          { return keepScreenAwake; }
     public static double    getHudOpacity()              { return hudOpacity; }
+    public static String    getClientVersion()           { return clientVersion; }
+    public static String    getLastUsername()            { return lastUsername; }
+    public static boolean   isRememberUsername()         { return rememberUsername; }
 
     public static void setServerHost(String v)           { serverHost      = v; }
     public static void setServerPort(int v)              { serverPort      = v; }
     public static void setSoundMode(SoundMode v)         { soundMode       = v; }
     public static void setKeepScreenAwake(boolean v)     { keepScreenAwake = v; }
     public static void setHudOpacity(double v)           { hudOpacity      = v; }
+    public static void setLastUsername(String v)         { lastUsername    = v; }
+    public static void setRememberUsername(boolean v)    { rememberUsername = v; }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

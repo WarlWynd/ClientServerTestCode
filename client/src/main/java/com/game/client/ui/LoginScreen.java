@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -53,19 +54,24 @@ public class LoginScreen {
         subtitle.setFont(Font.font("System", 14));
 
         // Form
-        usernameField = new TextField();
+        boolean remember = AppSettings.isRememberUsername();
+        usernameField = new TextField(remember ? AppSettings.getLastUsername() : "");
         usernameField.setPromptText("Username");
         usernameField.setMaxWidth(280);
 
         passwordField = new PasswordField();
         passwordField.setPromptText("Password");
         passwordField.setMaxWidth(280);
-        passwordField.setOnAction(e -> doLogin());
+        CheckBox rememberBox = new CheckBox("Remember username");
+        rememberBox.setSelected(remember);
+        rememberBox.setStyle("-fx-text-fill: #a0a0c0;");
+
+        passwordField.setOnAction(e -> doLogin(rememberBox.isSelected()));
 
         loginButton = new Button("Log In");
         loginButton.setDefaultButton(true);
         loginButton.setPrefWidth(280);
-        loginButton.setOnAction(e -> doLogin());
+        loginButton.setOnAction(e -> doLogin(rememberBox.isSelected()));
 
         statusLabel = new Label();
         statusLabel.setStyle("-fx-text-fill: #cc3333;");
@@ -78,6 +84,7 @@ public class LoginScreen {
         VBox form = new VBox(12,
                 title, subtitle,
                 usernameField, passwordField,
+                rememberBox,
                 loginButton,
                 statusLabel,
                 registerLink);
@@ -101,7 +108,9 @@ public class LoginScreen {
 
     // ── Event handlers ───────────────────────────────────────────────────────
 
-    private void doLogin() {
+    private boolean pendingRemember;
+
+    private void doLogin(boolean rememberUsername) {
         String username = usernameField.getText().trim();
         String password = passwordField.getText();
 
@@ -110,6 +119,7 @@ public class LoginScreen {
             return;
         }
 
+        pendingRemember = rememberUsername;
         loginButton.setDisable(true);
         statusLabel.setText("Connecting…");
 
@@ -128,9 +138,14 @@ public class LoginScreen {
                     if (success) {
                         String  token        = packet.payload.get("sessionToken").asText();
                         String  username     = packet.payload.get("username").asText();
+                        boolean isAdmin      = packet.payload.has("isAdmin") &&
+                                              packet.payload.get("isAdmin").asBoolean();
                         boolean isAudioAdmin = packet.payload.has("isAudioAdmin") &&
                                               packet.payload.get("isAudioAdmin").asBoolean();
-                        SessionStore.set(token, username, isAudioAdmin);
+                        SessionStore.set(token, username, isAdmin, isAudioAdmin);
+                        AppSettings.setRememberUsername(pendingRemember);
+                        AppSettings.setLastUsername(pendingRemember ? username : "");
+                        AppSettings.save();
                         new GameScreen(stage, client).show();
                     } else {
                         String msg = packet.payload.get("message").asText("Login failed.");
