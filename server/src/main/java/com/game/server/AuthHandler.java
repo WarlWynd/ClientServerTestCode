@@ -1,6 +1,7 @@
 package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.CharacterRepository;
 import com.game.server.db.SessionRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.Session;
@@ -26,6 +27,7 @@ public class AuthHandler {
 
     final         UserRepository    userRepo    = new UserRepository();
     private final SessionRepository sessionRepo = new SessionRepository();
+    private final CharacterRepository charRepo  = new CharacterRepository();
 
     // ── Packet handlers ──────────────────────────────────────────────────────
 
@@ -43,7 +45,8 @@ public class AuthHandler {
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
             out.put("isAdmin",      user.get().isAdmin());
-            out.put("isAudioDev", user.get().isAudioDev());
+            out.put("isAudioDev",   user.get().isAudioDev());
+            out.put("hasCharacter", charRepo.hasCharacter(user.get().id()));
             log.info("LOGIN  ok  user='{}' admin={} audioDev={} from {}:{}",
                     user.get().username(), user.get().isAdmin(), user.get().isAudioDev(), addr.getHostAddress(), port);
         } else {

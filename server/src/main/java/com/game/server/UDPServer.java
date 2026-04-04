@@ -37,9 +37,10 @@ public class UDPServer {
     private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
 
     private final int port;
-    private final AuthHandler    authHandler    = new AuthHandler();
-    private final GameHandler    gameHandler    = new GameHandler();
-    private final AdminPacketHandler adminHandler = new AdminPacketHandler(authHandler, gameHandler);
+    private final AuthHandler        authHandler    = new AuthHandler();
+    private final GameHandler        gameHandler    = new GameHandler();
+    private final CharacterHandler   charHandler    = new CharacterHandler();
+    private final AdminPacketHandler adminHandler   = new AdminPacketHandler(authHandler, gameHandler);
     private final SessionRepository sessionRepo = new SessionRepository();
 
     private DatagramSocket         socket;
@@ -130,6 +131,7 @@ public class UDPServer {
 
         Session session = sessionOpt.get();
         switch (packet.type) {
+            case CHARACTER_CREATE_REQUEST -> charHandler.handleCreate(socket, packet, session, addr, port);
             case GAME_JOIN     -> gameHandler.handleJoin(socket, packet, session, addr, port);
             case GAME_LEAVE    -> gameHandler.handleLeave(socket, packet, session);
             case PLAYER_UPDATE -> gameHandler.handlePlayerUpdate(socket, packet, session);

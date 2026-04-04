@@ -22,6 +22,10 @@ public enum PacketType {
     PONG,
     ERROR,
 
+    // ── Character ────────────────────────────────────────────────
+    CHARACTER_CREATE_REQUEST,
+    CHARACTER_CREATE_RESPONSE,
+
     // ── Game ────────────────────────────────────────────────────
     GAME_JOIN,
     GAME_LEAVE,

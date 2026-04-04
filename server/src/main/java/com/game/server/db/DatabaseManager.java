@@ -52,6 +52,18 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
+    private static final String DDL_CHARACTERS = """
+            CREATE TABLE IF NOT EXISTS characters (
+                id              BIGINT      AUTO_INCREMENT PRIMARY KEY,
+                user_id         BIGINT      NOT NULL,
+                character_name  VARCHAR(50) NOT NULL UNIQUE,
+                created_at      TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_char_user
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
     private static final String DDL_SERVER_CHANGES = """
             CREATE TABLE IF NOT EXISTS MultiplayerServerChanges (
                 id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
@@ -101,6 +113,7 @@ public final class DatabaseManager {
             addColumnIfMissing(conn, "users", "emailaddress",    "VARCHAR(255) NOT NULL DEFAULT ''");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
+            stmt.execute(DDL_CHARACTERS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }
