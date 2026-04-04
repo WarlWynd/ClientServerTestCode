@@ -104,6 +104,10 @@ public class LoginScreen {
         stage.setTitle("Game — Login");
         stage.setScene(scene);
         stage.show();
+
+        if (remember && !usernameField.getText().isEmpty()) {
+            Platform.runLater(passwordField::requestFocus);
+        }
     }
 
     // ── Event handlers ───────────────────────────────────────────────────────
