@@ -21,6 +21,12 @@ import javafx.scene.text.FontWeight;
  */
 public class SettingsPanel {
 
+    private final Runnable onRestartClient;
+
+    public SettingsPanel(Runnable onRestartClient) {
+        this.onRestartClient = onRestartClient;
+    }
+
     // ── Build ─────────────────────────────────────────────────────────────────
 
     public Node buildView() {
@@ -175,14 +181,31 @@ public class SettingsPanel {
             setStatus(statusLabel, "Reset to current saved values.", true);
         });
 
+        Button restartClientBtn = new Button("Restart Client");
+        restartClientBtn.setStyle("""
+                -fx-background-color: #1a3a5a;
+                -fx-text-fill: #80c0ff;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 7 14 7 14;
+                """);
+        restartClientBtn.setOnAction(e -> {
+            AppSettings.save();
+            if (onRestartClient != null) onRestartClient.run();
+        });
+
         HBox buttons = new HBox(10, resetBtn, saveBtn, statusLabel);
         buttons.setAlignment(Pos.CENTER_LEFT);
-        buttons.setPadding(new Insets(16, 20, 20, 20));
+        buttons.setPadding(new Insets(16, 20, 4, 20));
+
+        HBox restartRow = new HBox(restartClientBtn);
+        restartRow.setAlignment(Pos.CENTER_LEFT);
+        restartRow.setPadding(new Insets(0, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
         VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
-        content.getChildren().add(buttons);
+        content.getChildren().addAll(buttons, restartRow);
         content.setStyle("-fx-background-color: #1a1a2e;");
 
         ScrollPane scroll = new ScrollPane(content);

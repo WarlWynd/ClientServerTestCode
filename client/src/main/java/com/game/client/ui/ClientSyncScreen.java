@@ -18,10 +18,6 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-
 /**
  * Shown between VersionCheckScreen and LoginScreen.
  *
@@ -31,15 +27,12 @@ import java.nio.file.StandardOpenOption;
  */
 public class ClientSyncScreen {
 
-    private static final Logger log          = LoggerFactory.getLogger(ClientSyncScreen.class);
-    private static final Path   VERSION_FILE = ClientSyncClient.BASE_DIR.resolve("client-version.txt");
+    private static final Logger log = LoggerFactory.getLogger(ClientSyncScreen.class);
 
     private final Stage    stage;
     private final String   assetUrl;
-    private final String   version;      // protocol/app version
     private final Runnable onComplete;
 
-    private Label       versionLabel;
     private Label       statusLabel;
     private ProgressBar progressBar;
     private Button      continueBtn;
@@ -47,20 +40,21 @@ public class ClientSyncScreen {
     public ClientSyncScreen(Stage stage, String assetUrl, String version, Runnable onComplete) {
         this.stage      = stage;
         this.assetUrl   = assetUrl;
-        this.version    = version;
         this.onComplete = onComplete;
     }
 
     public void show() {
-        String localSoftwareVersion = readLocalSoftwareVersion();
+        String softwareVersion = AppSettings.getClientVersion();
 
         Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
         title.setStyle("-fx-fill: #e0e0e0;");
 
-        // Software version display — updates once server version is known
-        versionLabel = new Label(softwareVersionText(localSoftwareVersion, null));
+        Label versionLabel = new Label("Software Version: " + softwareVersion);
         versionLabel.setStyle("-fx-text-fill: #7090c0; -fx-font-size: 12;");
+
+        Label corpLabel = new Label(AppSettings.getCorpName());
+        corpLabel.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 11;");
 
         Text subtitle = new Text("Checking for updates…");
         subtitle.setStyle("-fx-fill: #8888aa;");
@@ -86,47 +80,21 @@ public class ClientSyncScreen {
         continueBtn.setVisible(false);
         continueBtn.setOnAction(e -> onComplete.run());
 
-        VBox box = new VBox(10, title, versionLabel, subtitle, progressBar, statusLabel, continueBtn);
+        VBox box = new VBox(10, title, corpLabel, versionLabel, subtitle, progressBar, statusLabel, continueBtn);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(40));
 
         StackPane root = new StackPane(box);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + version + " - ");
+        stage.setTitle(AppSettings.getCorpName() + " — Sync v" + softwareVersion);
         stage.setScene(new Scene(root, 480, 340));
         stage.show();
 
-        startSync(localSoftwareVersion);
+        startSync();
     }
 
-    /** Text shown in the on-screen version label. */
-    private String softwareVersionText(String local, String server) {
-        if (server != null && local != null && !local.equals(server)) {
-            return "Software Version: v" + local + "  →  v" + server;
-        }
-        String ver = server != null ? server : local;
-        return ver != null ? "Software Version: v" + ver : "Software Version: unknown";
-    }
-
-    private String readLocalSoftwareVersion() {
-        try {
-            if (Files.exists(VERSION_FILE)) return Files.readString(VERSION_FILE).trim();
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    private void saveLocalSoftwareVersion(String ver) {
-        try {
-            Files.createDirectories(VERSION_FILE.getParent());
-            Files.writeString(VERSION_FILE, ver,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        } catch (Exception e) {
-            log.warn("Could not save client-version.txt: {}", e.getMessage());
-        }
-    }
-
-    private void startSync(String localVersion) {
+    private void startSync() {
         Thread.ofVirtual().name("client-sync").start(() -> {
             ClientSyncClient.SyncResult result = ClientSyncClient.sync(
                 assetUrl,
@@ -134,27 +102,14 @@ public class ClientSyncScreen {
                     progressBar.setProgress(total > 0 ? (double) done / total : 0);
                     statusLabel.setText("Checking… " + done + " / " + total);
                 }),
-                serverVer -> Platform.runLater(() -> {
-                    // Update version label and title as soon as server version is known
-                    versionLabel.setText(softwareVersionText(localVersion, serverVer));
-                    if (localVersion != null && !localVersion.equals(serverVer)) {
-                        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + localVersion + " → v" + serverVer + " - ");
-                    } else {
-                        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + serverVer + " - ");
-                    }
-                })
+                serverVer -> {}
             );
-            Platform.runLater(() -> onSyncDone(result, localVersion));
+            Platform.runLater(() -> onSyncDone(result));
         });
     }
 
-    private void onSyncDone(ClientSyncClient.SyncResult result, String localVersion) {
+    private void onSyncDone(ClientSyncClient.SyncResult result) {
         progressBar.setProgress(1.0);
-
-        if (!result.hasError() && result.serverVersion() != null) {
-            saveLocalSoftwareVersion(result.serverVersion());
-            versionLabel.setText("Software Version: v" + result.serverVersion());
-        }
 
         String statusColor;
         String statusMsg;
@@ -179,10 +134,6 @@ public class ClientSyncScreen {
             statusMsg   = result.downloaded() + " of " + result.checked() + " file(s) updated";
             if (result.failed() > 0) statusMsg += ", " + result.failed() + " failed";
             statusMsg += ".";
-            if (result.serverVersion() != null) {
-                String prev = (localVersion != null) ? "v" + localVersion : "previous version";
-                statusMsg  += " (" + prev + " → v" + result.serverVersion() + ")";
-            }
         }
 
         log.info("Client sync: {}", statusMsg);

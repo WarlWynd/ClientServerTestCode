@@ -31,7 +31,7 @@ public class LoginScreen {
     private final UDPClient client;
 
     // Form fields
-    private TextField     usernameField;
+    private TextField     emailField;
     private PasswordField passwordField;
     private Label         statusLabel;
     private Button        loginButton;
@@ -55,14 +55,14 @@ public class LoginScreen {
 
         // Form
         boolean remember = AppSettings.isRememberUsername();
-        usernameField = new TextField(remember ? AppSettings.getLastUsername() : "");
-        usernameField.setPromptText("Username");
-        usernameField.setMaxWidth(280);
+        emailField = new TextField(remember ? AppSettings.getLastUsername() : "");
+        emailField.setPromptText("Email address");
+        emailField.setMaxWidth(280);
 
         passwordField = new PasswordField();
         passwordField.setPromptText("Password");
         passwordField.setMaxWidth(280);
-        CheckBox rememberBox = new CheckBox("Remember username");
+        CheckBox rememberBox = new CheckBox("Remember email");
         rememberBox.setSelected(remember);
         rememberBox.setStyle("-fx-text-fill: #a0a0c0;");
 
@@ -83,7 +83,7 @@ public class LoginScreen {
 
         VBox form = new VBox(12,
                 title, subtitle,
-                usernameField, passwordField,
+                emailField, passwordField,
                 rememberBox,
                 loginButton,
                 statusLabel,
@@ -96,16 +96,16 @@ public class LoginScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
         title.setStyle("-fx-fill: #e0e0e0;");
         subtitle.setStyle("-fx-fill: #a0a0c0;");
-        styleField(usernameField);
+        styleField(emailField);
         styleField(passwordField);
         styleButton(loginButton);
 
         Scene scene = new Scene(root, 480, 400);
-        stage.setTitle(AppSettings.getProgramName() + " — Login");
+        stage.setTitle(AppSettings.getProgramName() + " — Login v" + AppSettings.getClientVersion());
         stage.setScene(scene);
         stage.show();
 
-        if (remember && !usernameField.getText().isEmpty()) {
+        if (remember && !emailField.getText().isEmpty()) {
             Platform.runLater(passwordField::requestFocus);
         }
     }
@@ -114,21 +114,21 @@ public class LoginScreen {
 
     private boolean pendingRemember;
 
-    private void doLogin(boolean rememberUsername) {
-        String username = usernameField.getText().trim();
+    private void doLogin(boolean rememberEmail) {
+        String email    = emailField.getText().trim();
         String password = passwordField.getText();
 
-        if (username.isEmpty() || password.isEmpty()) {
-            statusLabel.setText("Please enter both username and password.");
+        if (email.isEmpty() || password.isEmpty()) {
+            statusLabel.setText("Please enter both email and password.");
             return;
         }
 
-        pendingRemember = rememberUsername;
+        pendingRemember = rememberEmail;
         loginButton.setDisable(true);
         statusLabel.setText("Connecting…");
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("username", username);
+        payload.put("email",    email);
         payload.put("password", password);
 
         client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
@@ -148,7 +148,7 @@ public class LoginScreen {
                                               packet.payload.get("isAudioAdmin").asBoolean();
                         SessionStore.set(token, username, isAdmin, isAudioAdmin);
                         AppSettings.setRememberUsername(pendingRemember);
-                        AppSettings.setLastUsername(pendingRemember ? username : "");
+                        AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
                         AppSettings.save();
                         new GameScreen(stage, client).show();
                     } else {

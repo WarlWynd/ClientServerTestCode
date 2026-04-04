@@ -25,6 +25,7 @@ public final class AppSettings {
 
     // ── Fields ────────────────────────────────────────────────────────────────
     private static volatile String         programName     = "Adventure Friends";
+    private static volatile String         corpName        = "Wynd Farm";
     private static volatile GameResolution resolution      = GameResolution.STANDARD;
     private static volatile String         serverHost      = "localhost";
     private static volatile int       serverPort      = 9876;
@@ -57,6 +58,7 @@ public final class AppSettings {
         }
 
         programName     = merged.getProperty("ProgramName", programName);
+        corpName        = merged.getProperty("CorpName",    corpName);
         resolution      = GameResolution.fromString(merged.getProperty("display.resolution", resolution.name()));
         serverHost      = merged.getProperty("server.host", serverHost);
         serverPort      = intOf(merged, "server.port", serverPort);
@@ -99,6 +101,7 @@ public final class AppSettings {
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
     public static String         getProgramName()  { return programName; }
+    public static String         getCorpName()     { return corpName; }
     public static GameResolution getResolution()   { return resolution; }
     public static String         getServerHost()   { return serverHost; }
     public static int       getServerPort()              { return serverPort; }

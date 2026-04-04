@@ -133,9 +133,6 @@ public class GameScreen {
         controls.setStyle("-fx-text-fill: #808080; -fx-font-size: 11;");
         controls.setWrapText(true);
 
-        Region spacer = new Region();
-        VBox.setVgrow(spacer, Priority.ALWAYS);
-
         Button logoutBtn = new Button("⏻  Logout");
         logoutBtn.setMaxWidth(Double.MAX_VALUE);
         logoutBtn.setStyle("""
@@ -150,6 +147,7 @@ public class GameScreen {
 
         VBox sidebar = new VBox(10,
                 gameTitle,
+                logoutBtn,
                 sep1,
                 playingAsLbl, nameLabel,
                 sep2,
@@ -157,9 +155,7 @@ public class GameScreen {
                 sep3,
                 pingLbl, pingLabel,
                 sep4,
-                controlsLbl, controls,
-                spacer,
-                logoutBtn);
+                controlsLbl, controls);
         sidebar.setPadding(new Insets(16, 12, 16, 12));
         sidebar.setPrefWidth(160);
         sidebar.setMinWidth(160);
@@ -180,7 +176,7 @@ public class GameScreen {
         gameTab.setClosable(false);
 
         // ── Settings tab (all users) ──────────────────────────────────────────
-        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel().buildView());
+        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart).buildView());
         settingsTab.setClosable(false);
 
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
@@ -419,6 +415,16 @@ public class GameScreen {
         if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
+        SessionStore.clear();
+        new LoginScreen(stage, client).show();
+    }
+
+    private void doRestart() {
+        gameLoop.stop();
+        pingTimer.stop();
+        if (adminPanel != null) adminPanel.stop();
+        sendPacket(PacketType.GAME_LEAVE,     PacketSerializer.emptyPayload());
+        sendPacket(PacketType.LOGOUT_REQUEST,  PacketSerializer.emptyPayload());
         SessionStore.clear();
         new LoginScreen(stage, client).show();
     }

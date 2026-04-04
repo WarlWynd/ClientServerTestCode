@@ -29,6 +29,7 @@ public class RegisterScreen {
     private final UDPClient client;
 
     private TextField     usernameField;
+    private TextField     emailField;
     private PasswordField passwordField;
     private PasswordField confirmField;
     private Label         statusLabel;
@@ -51,6 +52,10 @@ public class RegisterScreen {
         usernameField = new TextField();
         usernameField.setPromptText("Username (letters, digits, underscores)");
         usernameField.setMaxWidth(280);
+
+        emailField = new TextField();
+        emailField.setPromptText("Email address");
+        emailField.setMaxWidth(280);
 
         passwordField = new PasswordField();
         passwordField.setPromptText("Password (min 6 characters)");
@@ -75,7 +80,7 @@ public class RegisterScreen {
 
         VBox form = new VBox(12,
                 title,
-                usernameField, passwordField, confirmField,
+                usernameField, emailField, passwordField, confirmField,
                 registerButton,
                 statusLabel,
                 backLink);
@@ -87,11 +92,12 @@ public class RegisterScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         styleField(usernameField);
+        styleField(emailField);
         styleField(passwordField);
         styleField(confirmField);
         styleButton(registerButton);
 
-        Scene scene = new Scene(root, 480, 420);
+        Scene scene = new Scene(root, 480, 480);
         stage.setTitle(AppSettings.getProgramName() + " — Register");
         stage.setScene(scene);
     }
@@ -100,10 +106,11 @@ public class RegisterScreen {
 
     private void doRegister() {
         String username = usernameField.getText().trim();
+        String email    = emailField.getText().trim();
         String password = passwordField.getText();
         String confirm  = confirmField.getText();
 
-        if (username.isEmpty() || password.isEmpty()) {
+        if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
             status("Please fill in all fields.", false);
             return;
         }
@@ -117,6 +124,7 @@ public class RegisterScreen {
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
+        payload.put("email",    email);
         payload.put("password", password);
         client.send(new Packet(PacketType.REGISTER_REQUEST, null, payload));
     }

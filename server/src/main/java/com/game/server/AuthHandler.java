@@ -31,10 +31,10 @@ public class AuthHandler {
 
     public void handleLogin(DatagramSocket socket, Packet in,
                             InetAddress addr, int port) throws Exception {
-        String username = in.payload.get("username").asText();
+        String email    = in.payload.get("email").asText();
         String password = in.payload.get("password").asText();
 
-        Optional<User> user = userRepo.authenticate(username, password);
+        Optional<User> user = userRepo.authenticate(email, password);
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
 
         if (user.isPresent()) {
@@ -45,11 +45,11 @@ public class AuthHandler {
             out.put("isAdmin",      user.get().isAdmin());
             out.put("isAudioAdmin", user.get().isAudioAdmin());
             log.info("LOGIN  ok  user='{}' admin={} audioAdmin={} from {}:{}",
-                    username, user.get().isAdmin(), user.get().isAudioAdmin(), addr.getHostAddress(), port);
+                    user.get().username(), user.get().isAdmin(), user.get().isAudioAdmin(), addr.getHostAddress(), port);
         } else {
             out.put("success", false);
             out.put("message", "Invalid username or password.");
-            log.warn("LOGIN  fail user='{}' from {}:{}", username, addr.getHostAddress(), port);
+            log.warn("LOGIN  fail email='{}' from {}:{}", email, addr.getHostAddress(), port);
         }
 
         send(socket, PacketType.LOGIN_RESPONSE, null, out, addr, port);
@@ -59,6 +59,7 @@ public class AuthHandler {
                                InetAddress addr, int port) throws Exception {
         String username = in.payload.get("username").asText().trim();
         String password = in.payload.get("password").asText();
+        String email    = in.payload.has("email") ? in.payload.get("email").asText().trim() : "";
 
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
 
@@ -71,13 +72,16 @@ public class AuthHandler {
         } else if (password.length() < 6) {
             out.put("success", false);
             out.put("message", "Password must be at least 6 characters.");
-        } else if (userRepo.register(username, password)) {
+        } else if (email.isEmpty() || !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            out.put("success", false);
+            out.put("message", "A valid email address is required.");
+        } else if (userRepo.register(username, password, email)) {
             out.put("success", true);
             out.put("message", "Account created! You can now log in.");
-            log.info("REGISTER ok  user='{}'", username);
+            log.info("REGISTER ok  user='{}' email='{}'", username, email);
         } else {
             out.put("success", false);
-            out.put("message", "Username is already taken.");
+            out.put("message", "Username or email address is already taken.");
         }
 
         send(socket, PacketType.REGISTER_RESPONSE, null, out, addr, port);

@@ -16,16 +16,17 @@ public class UserRepository {
 
     /**
      * Creates a new account.
-     * @return true on success; false if the username is already taken.
+     * @return true on success; false if the username or email is already taken.
      */
-    public boolean register(String username, String plainPassword) {
+    public boolean register(String username, String plainPassword, String email) {
         String hash = BCrypt.hashpw(plainPassword, BCrypt.gensalt(12));
-        String sql  = "INSERT INTO users (username, password_hash) VALUES (?, ?)";
+        String sql  = "INSERT INTO users (username, password_hash, emailaddress) VALUES (?, ?, ?)";
 
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
             ps.setString(2, hash);
+            ps.setString(3, email);
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
@@ -35,16 +36,16 @@ public class UserRepository {
     }
 
     /**
-     * Validates credentials.
+     * Validates credentials by email address.
      * @return the User (including isAudioAdmin flag) if credentials are correct.
      */
-    public Optional<User> authenticate(String username, String plainPassword) {
+    public Optional<User> authenticate(String email, String plainPassword) {
         String sql = "SELECT id, username, password_hash, is_admin, is_audio_admin " +
-                     "FROM users WHERE username = ?";
+                     "FROM users WHERE emailaddress = ?";
 
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username);
+            ps.setString(1, email);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     String hash = rs.getString("password_hash");

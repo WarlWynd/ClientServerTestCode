@@ -1,0 +1,50 @@
+plugins {
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'application'
+}
+
+javafx {
+    version = "26"
+    modules = ['javafx.controls', 'javafx.graphics']
+}
+
+dependencies {
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    implementation 'ch.qos.logback:logback-classic:1.5.8'
+}
+
+application {
+    mainClass = 'com.game.syncapp.SyncApp'
+    applicationDefaultJvmArgs = ['--enable-preview']
+}
+
+jar {
+    archiveBaseName = 'sync-app'
+    manifest {
+        attributes 'Main-Class': 'com.game.syncapp.SyncApp'
+    }
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+task packageExe(type: Exec, dependsOn: jar) {
+    def jpackage  = "${System.getProperty('java.home')}/bin/jpackage"
+    def outputDir = layout.buildDirectory.dir('jpackage').get().asFile.absolutePath
+
+    doFirst { delete outputDir }
+
+    commandLine jpackage,
+        '--type',        'app-image',
+        '--name',        'Sync App',
+        '--app-version', '1.0.0',
+        '--input',       layout.buildDirectory.dir('libs').get().asFile.absolutePath,
+        '--main-jar',    'sync-app.jar',
+        '--main-class',  'com.game.syncapp.SyncApp',
+        '--dest',        outputDir,
+        '--java-options', '--enable-preview',
+        '--java-options', '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+}

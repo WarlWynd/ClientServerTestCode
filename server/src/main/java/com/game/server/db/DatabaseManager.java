@@ -22,6 +22,7 @@ public final class DatabaseManager {
                 id              BIGINT       AUTO_INCREMENT PRIMARY KEY,
                 username        VARCHAR(50)  NOT NULL UNIQUE,
                 password_hash   VARCHAR(255) NOT NULL,
+                emailaddress    VARCHAR(255) NOT NULL UNIQUE,
                 created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 last_login      TIMESTAMP    NULL,
                 is_audio_admin  TINYINT(1)   NOT NULL DEFAULT 0,
@@ -95,8 +96,9 @@ public final class DatabaseManager {
              Statement  stmt = conn.createStatement()) {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_SESSIONS);
-            addColumnIfMissing(conn, "users", "is_audio_admin", "TINYINT(1) NOT NULL DEFAULT 0");
-            addColumnIfMissing(conn, "users", "is_admin",       "TINYINT(1) NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_audio_admin",  "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_admin",        "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "emailaddress",    "VARCHAR(255) NOT NULL DEFAULT ''");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
         } catch (SQLException e) {
