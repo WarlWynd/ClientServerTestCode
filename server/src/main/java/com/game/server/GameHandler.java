@@ -82,6 +82,7 @@ public class GameHandler {
                            InetAddress addr, int port) throws Exception {
         Packet pong = new Packet(PacketType.PONG, in.sessionToken,
                 PacketSerializer.emptyPayload());
+        pong.timestamp = in.timestamp; // echo client's send time so RTT = now - timestamp
         byte[] data = PacketSerializer.serialize(pong);
         socket.send(new DatagramPacket(data, data.length, addr, port));
     }

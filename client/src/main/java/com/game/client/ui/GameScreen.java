@@ -8,6 +8,9 @@ import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
 import javafx.animation.AnimationTimer;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.util.Duration;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -70,6 +73,7 @@ public class GameScreen {
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
+    private Timeline pingTimer;
     private AdminPanel adminPanel;
 
     public GameScreen(Stage stage, UDPClient client) {
@@ -224,6 +228,12 @@ public class GameScreen {
         };
         gameLoop.start();
         if (adminPanel != null) adminPanel.start();
+
+        // ── Ping ─────────────────────────────────────────────────────────────
+        pingTimer = new Timeline(new KeyFrame(Duration.seconds(2),
+                e -> sendPacket(PacketType.PING, PacketSerializer.emptyPayload())));
+        pingTimer.setCycleCount(Timeline.INDEFINITE);
+        pingTimer.play();
     }
 
     // ── Input processing ─────────────────────────────────────────────────────
@@ -399,6 +409,7 @@ public class GameScreen {
 
     private void doLogout() {
         gameLoop.stop();
+        pingTimer.stop();
         if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
