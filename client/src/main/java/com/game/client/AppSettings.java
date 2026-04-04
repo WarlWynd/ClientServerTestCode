@@ -24,8 +24,9 @@ public final class AppSettings {
             System.getProperty("user.home"), ".game", "settings.properties");
 
     // ── Fields ────────────────────────────────────────────────────────────────
-    private static volatile String    programName     = "Adventure Friends";
-    private static volatile String    serverHost      = "localhost";
+    private static volatile String         programName     = "Adventure Friends";
+    private static volatile GameResolution resolution      = GameResolution.STANDARD;
+    private static volatile String         serverHost      = "localhost";
     private static volatile int       serverPort      = 9876;
     private static volatile SoundMode soundMode       = SoundMode.HIGH;
     private static volatile boolean   keepScreenAwake = true;
@@ -56,6 +57,7 @@ public final class AppSettings {
         }
 
         programName     = merged.getProperty("ProgramName", programName);
+        resolution      = GameResolution.fromString(merged.getProperty("display.resolution", resolution.name()));
         serverHost      = merged.getProperty("server.host", serverHost);
         serverPort      = intOf(merged, "server.port", serverPort);
         soundMode       = SoundMode.fromString(merged.getProperty("sound.mode",
@@ -77,6 +79,7 @@ public final class AppSettings {
         p.setProperty("server.host",               serverHost);
         p.setProperty("server.port",               String.valueOf(serverPort));
         p.setProperty("sound.mode",                soundMode.name());
+        p.setProperty("display.resolution",        resolution.name());
         p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
         p.setProperty("display.hudOpacity",        String.valueOf(hudOpacity));
         p.setProperty("client.version",            GameVersion.VERSION);
@@ -95,8 +98,9 @@ public final class AppSettings {
 
     // ── Getters / Setters ─────────────────────────────────────────────────────
 
-    public static String    getProgramName()              { return programName; }
-    public static String    getServerHost()              { return serverHost; }
+    public static String         getProgramName()  { return programName; }
+    public static GameResolution getResolution()   { return resolution; }
+    public static String         getServerHost()   { return serverHost; }
     public static int       getServerPort()              { return serverPort; }
     public static SoundMode getSoundMode()               { return soundMode; }
     public static boolean   isKeepScreenAwake()          { return keepScreenAwake; }
@@ -105,6 +109,7 @@ public final class AppSettings {
     public static String    getLastUsername()            { return lastUsername; }
     public static boolean   isRememberUsername()         { return rememberUsername; }
 
+    public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void setServerHost(String v)           { serverHost      = v; }
     public static void setServerPort(int v)              { serverPort      = v; }
     public static void setSoundMode(SoundMode v)         { soundMode       = v; }

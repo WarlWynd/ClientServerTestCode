@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.GameResolution;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -49,8 +50,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameScreen {
 
     // ── Constants ────────────────────────────────────────────────────────────
-    private static final int   WORLD_W       = 800;
-    private static final int   WORLD_H       = 600;
     private static final float PLAYER_SPEED  = 3.5f;
     private static final float PLAYER_RADIUS = 14f;
     private static final long  SEND_INTERVAL_MS  = 50;     // max 20 updates/s to server
@@ -59,9 +58,11 @@ public class GameScreen {
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
     private final UDPClient client;
+    private final int       WORLD_W;
+    private final int       WORLD_H;
 
-    private float   localX = WORLD_W / 2f;
-    private float   localY = WORLD_H / 2f;
+    private float   localX;
+    private float   localY;
     private int     localScore = 0;
 
     /** Latest server snapshot: username → {x, y, score} */
@@ -78,8 +79,14 @@ public class GameScreen {
     private AdminPanel adminPanel;
 
     public GameScreen(Stage stage, UDPClient client) {
-        this.stage  = stage;
-        this.client = client;
+        this.stage   = stage;
+        this.client  = client;
+        GameResolution res = AppSettings.getResolution();
+        this.WORLD_W  = res.width;
+        this.WORLD_H  = res.height;
+        this.FLOOR_Y  = res.height - 40;
+        this.localX   = WORLD_W / 2f;
+        this.localY   = WORLD_H / 2f;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -279,11 +286,11 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    // Floor constants
-    private static final int   FLOOR_Y        = WORLD_H - 40;  // floor surface Y position
-    private static final int   FLOOR_H        = 40;            // floor thickness
-    private static final int   PLANK_W        = 80;            // width of each floor plank
-    private static final int   PLANK_GAP      = 2;             // gap between planks
+    // Floor constants (instance — depend on WORLD_H)
+    private final int   FLOOR_Y;  // floor surface Y position
+    private static final int   FLOOR_H        = 40;
+    private static final int   PLANK_W        = 80;
+    private static final int   PLANK_GAP      = 2;
 
     private void render() {
         GraphicsContext gc = canvas.getGraphicsContext2D();

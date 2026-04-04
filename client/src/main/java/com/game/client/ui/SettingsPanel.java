@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.game.client.AppSettings;
+import com.game.client.GameResolution;
 import com.game.client.SessionStore;
 import com.game.client.SoundMode;
 import javafx.geometry.Insets;
@@ -72,10 +73,34 @@ public class SettingsPanel {
             if (val != null) AppSettings.setHudOpacity((double) val.getUserData());
         });
 
+        // ── Resolution ────────────────────────────────────────────────────────
+        Label resLabel = new Label("Resolution:");
+        resLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+
+        ToggleGroup resGroup = new ToggleGroup();
+        VBox resCol = new VBox(6);
+        for (GameResolution res : GameResolution.values()) {
+            RadioButton rb = new RadioButton(res.displayLabel());
+            rb.setToggleGroup(resGroup);
+            rb.setUserData(res);
+            rb.setSelected(AppSettings.getResolution() == res);
+            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            resCol.getChildren().add(rb);
+        }
+        resGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val != null) AppSettings.setResolution((GameResolution) val.getUserData());
+        });
+
+        Label resNote = new Label("Resolution applies next time you enter the game.");
+        resNote.setStyle("-fx-text-fill: #505065; -fx-font-style: italic; -fx-font-size: 11;");
+
         VBox displaySection = section("Display",
                 row(keepAwakeCheck),
                 row(hudLabel),
-                row(hudRow));
+                row(hudRow),
+                row(resLabel),
+                row(resCol),
+                row(resNote));
 
         // ── Gameplay ──────────────────────────────────────────────────────────
         VBox gameplaySection = section("Gameplay",
