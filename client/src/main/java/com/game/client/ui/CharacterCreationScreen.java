@@ -103,6 +103,14 @@ public class CharacterCreationScreen {
                         try { Thread.sleep(800); } catch (InterruptedException ignored) {}
                         Platform.runLater(() -> new GameScreen(stage, client).show());
                     }).start();
+                } else if (packet.payload.has("characterName")) {
+                    // User already has a character — store it and proceed to game
+                    SessionStore.setCharacterName(packet.payload.get("characterName").asText());
+                    status("Loading your character…", true);
+                    new Thread(() -> {
+                        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+                        Platform.runLater(() -> new GameScreen(stage, client).show());
+                    }).start();
                 } else {
                     status(message, false);
                     createBtn.setDisable(false);

@@ -176,7 +176,7 @@ public class GameScreen {
         gameTab.setClosable(false);
 
         // ── Characters tab (all users) ───────────────────────────────────────
-        Tab charactersTab = new Tab("⚔ Character", new CharactersPanel().buildView());
+        Tab charactersTab = new Tab("⚔ Character", new CharactersPanel(stage, client).buildView());
         charactersTab.setClosable(false);
 
         // ── Settings tab (all users) ──────────────────────────────────────────
@@ -217,6 +217,8 @@ public class GameScreen {
                 e.consume();
             }
         });
+
+        tabPane.getSelectionModel().select(charactersTab);
 
         stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " - ");
         stage.setScene(scene);

@@ -1,22 +1,34 @@
 package com.game.client.ui;
 
 import com.game.client.SessionStore;
+import com.game.client.UDPClient;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
 
 /**
  * Characters tab — shown to all users.
  * Displays the current character's details, with room for future fields
  * (class, race, stats, etc.).
+ * If the user has no character, offers a button to create one.
  */
 public class CharactersPanel {
+
+    private final Stage     stage;
+    private final UDPClient client;
+
+    public CharactersPanel(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
+    }
 
     public Node buildView() {
         Label title = new Label("My Character");
@@ -36,9 +48,20 @@ public class CharactersPanel {
             root.getChildren().add(field("Character Name", charName));
             // Future fields (class, race, etc.) will be added here
         } else {
-            Label none = new Label("No character found.");
+            Label none = new Label("You don't have a character yet.");
             none.setStyle("-fx-text-fill: #808080;");
-            root.getChildren().add(none);
+
+            Button createBtn = new Button("Create Character");
+            createBtn.setStyle("""
+                    -fx-background-color: #e94560;
+                    -fx-text-fill: white;
+                    -fx-font-weight: bold;
+                    -fx-background-radius: 4;
+                    -fx-padding: 10 20 10 20;
+                    """);
+            createBtn.setOnAction(e -> new CharacterCreationScreen(stage, client).show());
+
+            root.getChildren().addAll(none, createBtn);
         }
 
         return root;

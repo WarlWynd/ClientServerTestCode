@@ -38,6 +38,8 @@ public class CharacterHandler {
         } else if (charRepo.hasCharacter(session.userId())) {
             out.put("success", false);
             out.put("message", "You already have a character.");
+            String existing = charRepo.getCharacterName(session.userId());
+            if (existing != null) out.put("characterName", existing);
         } else if (!charRepo.isNameAvailable(name)) {
             out.put("success", false);
             out.put("message", "That name is already taken.");
