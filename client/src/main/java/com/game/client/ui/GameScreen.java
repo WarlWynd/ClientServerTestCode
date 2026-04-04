@@ -102,9 +102,12 @@ public class GameScreen {
         Separator sep1 = new Separator();
         sep1.setStyle("-fx-background-color: #3a3a6a;");
 
-        Label playingAsLbl = new Label("PLAYER");
+        Label playingAsLbl = new Label("CHARACTER");
         playingAsLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
-        Label nameLabel = new Label(SessionStore.getUsername());
+        String displayName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
+                ? SessionStore.getCharacterName()
+                : SessionStore.getUsername();
+        Label nameLabel = new Label(displayName);
         nameLabel.setStyle("-fx-text-fill: #e0e0e0; -fx-font-weight: bold; -fx-font-size: 14;");
         nameLabel.setWrapText(true);
 
@@ -343,8 +346,9 @@ public class GameScreen {
         }
 
         // Local player (on top)
-        drawPlayer(gc, localX, localY, SessionStore.getUsername(), localScore,
-                Color.web("#e0e0ff"), true);
+        String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
+                ? SessionStore.getCharacterName() : SessionStore.getUsername();
+        drawPlayer(gc, localX, localY, localName, localScore, Color.web("#e0e0ff"), true);
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,
