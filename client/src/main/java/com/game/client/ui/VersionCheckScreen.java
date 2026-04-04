@@ -91,7 +91,7 @@ public class VersionCheckScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         Scene scene = new Scene(root, 480, 320);
-        stage.setTitle("Game — Connecting…");
+        stage.setTitle(AppSettings.getProgramName() + " — Connecting…");
         stage.setScene(scene);
         stage.show();
 
@@ -146,7 +146,7 @@ public class VersionCheckScreen {
                         "Server requires: v" + serverVersion + "\n\n" +
                         "Please download the latest client.");
                 statusLabel.setStyle("-fx-text-fill: #e94560;");
-                stage.setTitle("Game — Version Mismatch");
+                stage.setTitle(AppSettings.getProgramName() + " — Version Mismatch");
             }
         });
     }

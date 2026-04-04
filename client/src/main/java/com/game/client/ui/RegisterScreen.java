@@ -1,6 +1,7 @@
 package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.AppSettings;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -91,7 +92,7 @@ public class RegisterScreen {
         styleButton(registerButton);
 
         Scene scene = new Scene(root, 480, 420);
-        stage.setTitle("Game — Register");
+        stage.setTitle(AppSettings.getProgramName() + " — Register");
         stage.setScene(scene);
     }
 

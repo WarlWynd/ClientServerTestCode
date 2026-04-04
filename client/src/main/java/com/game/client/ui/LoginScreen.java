@@ -101,7 +101,7 @@ public class LoginScreen {
         styleButton(loginButton);
 
         Scene scene = new Scene(root, 480, 400);
-        stage.setTitle("Game — Login");
+        stage.setTitle(AppSettings.getProgramName() + " — Login");
         stage.setScene(scene);
         stage.show();
 

@@ -93,7 +93,7 @@ public class ClientSyncScreen {
         StackPane root = new StackPane(box);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setTitle("Game — Syncing v" + version + " - ");
+        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + version + " - ");
         stage.setScene(new Scene(root, 480, 340));
         stage.show();
 
@@ -138,9 +138,9 @@ public class ClientSyncScreen {
                     // Update version label and title as soon as server version is known
                     versionLabel.setText(softwareVersionText(localVersion, serverVer));
                     if (localVersion != null && !localVersion.equals(serverVer)) {
-                        stage.setTitle("Game — Syncing v" + localVersion + " → v" + serverVer + " - ");
+                        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + localVersion + " → v" + serverVer + " - ");
                     } else {
-                        stage.setTitle("Game — Syncing v" + serverVer + " - ");
+                        stage.setTitle(AppSettings.getProgramName() + " — Syncing v" + serverVer + " - ");
                     }
                 })
             );
