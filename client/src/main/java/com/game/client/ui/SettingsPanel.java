@@ -103,7 +103,7 @@ public class SettingsPanel {
             if (val != null) AppSettings.setResolution((GameResolution) val.getUserData());
         });
 
-        Label resNote = new Label("Resolution scales the view. All clients share the same 800×600 world.");
+        Label resNote = new Label("Resolution applies next time you enter the game.");
         resNote.getStyleClass().addAll("text-muted", "italic", "font-11");
 
         // ── Tabs ──────────────────────────────────────────────────────────────

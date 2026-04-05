@@ -56,19 +56,11 @@ public class GameScreen {
     private static final long  SEND_INTERVAL_MS  = 50;     // max 20 updates/s to server
     private static final long  KEEPALIVE_MS      = 15_000; // keepalive when idle (prevents server eviction)
 
-    /** Fixed game-world size — all clients share the same coordinate space. */
-    private static final int WORLD_W = 800;
-    private static final int WORLD_H = 600;
-
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
     private final UDPClient client;
-
-    /** Canvas display dimensions — scaled from world size per the user's resolution setting. */
-    private final int    canvasW;
-    private final int    canvasH;
-    private final double scaleX;
-    private final double scaleY;
+    private final int       WORLD_W;
+    private final int       WORLD_H;
 
     private float   localX;
     private float   localY;
@@ -112,12 +104,11 @@ public class GameScreen {
         this.stage   = stage;
         this.client  = client;
         GameResolution res = AppSettings.getResolution();
-        this.canvasW = res.width;
-        this.canvasH = res.height;
-        this.scaleX  = (double) res.width  / WORLD_W;
-        this.scaleY  = (double) res.height / WORLD_H;
-        this.localX  = WORLD_W / 2f;
-        this.localY  = WORLD_H / 2f;
+        this.WORLD_W  = res.width;
+        this.WORLD_H  = res.height;
+        this.FLOOR_Y  = res.height - 40;
+        this.localX   = WORLD_W / 2f;
+        this.localY   = WORLD_H / 2f;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -184,7 +175,7 @@ public class GameScreen {
         sidebar.getStyleClass().add("app-surface");
 
         // ── Canvas ───────────────────────────────────────────────────────────
-        canvas = new Canvas(canvasW, canvasH);
+        canvas = new Canvas(WORLD_W, WORLD_H);
 
         // Disconnected overlay (stacked on top of canvas, hidden by default)
         overlayTitleLabel = new Label("SERVER RESTARTING");
@@ -266,7 +257,7 @@ public class GameScreen {
         VBox root = new VBox(tabPane);
         root.getStyleClass().add("app-root");
 
-        Scene scene = new Scene(root, canvasW + 160, canvasH + 30);
+        Scene scene = new Scene(root, WORLD_W + 160, WORLD_H + 30);
         ThemeManager.apply(scene);
         // Use filters (capture phase) so keys are tracked before any node handler runs.
         scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
@@ -361,18 +352,14 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    // Floor constants
-    private static final int   FLOOR_Y        = WORLD_H - 40;  // 560
+    // Floor constants (instance — depend on WORLD_H)
+    private final int   FLOOR_Y;  // floor surface Y position
     private static final int   FLOOR_H        = 40;
     private static final int   PLANK_W        = 80;
     private static final int   PLANK_GAP      = 2;
 
     private void render() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
-
-        // Scale all drawing from world coords (800×600) to the canvas display size
-        gc.save();
-        gc.scale(scaleX, scaleY);
 
         // Background
         gc.setFill(Color.web("#1a1a2e"));
@@ -431,8 +418,6 @@ public class GameScreen {
         String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
         drawPlayer(gc, localX, localY, localName, localScore, Color.web("#e0e0ff"), true);
-
-        gc.restore();
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,
