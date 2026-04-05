@@ -37,10 +37,10 @@ public class UserRepository {
 
     /**
      * Validates credentials by email address.
-     * @return the User (including isAudioDev flag) if credentials are correct.
+     * @return the User if credentials are correct.
      */
     public Optional<User> authenticate(String email, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_admin, is_audio_dev " +
+        String sql = "SELECT id, username, password_hash, is_admin " +
                      "FROM users WHERE emailaddress = ?";
 
         try (Connection conn = db.getConnection();
@@ -54,8 +54,7 @@ public class UserRepository {
                         return Optional.of(new User(
                                 rs.getLong("id"),
                                 rs.getString("username"),
-                                rs.getBoolean("is_admin"),
-                                rs.getBoolean("is_audio_dev")
+                                rs.getBoolean("is_admin")
                         ));
                     }
                 }
@@ -64,22 +63,6 @@ public class UserRepository {
             throw new RuntimeException("authenticate() failed", e);
         }
         return Optional.empty();
-    }
-
-    /**
-     * Grants or revokes the audio admin role for a given username.
-     * @return true if the user was found and updated.
-     */
-    public boolean setAudioDev(String username, boolean isAdmin) {
-        String sql = "UPDATE users SET is_audio_dev = ? WHERE username = ?";
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setBoolean(1, isAdmin);
-            ps.setString(2, username);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new RuntimeException("setAudioDev() failed", e);
-        }
     }
 
     public long getUserId(String username) {
