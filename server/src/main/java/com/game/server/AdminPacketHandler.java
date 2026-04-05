@@ -3,6 +3,7 @@ package com.game.server;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.server.db.CharacterRepository;
+import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
@@ -25,10 +26,11 @@ public class AdminPacketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AdminPacketHandler.class);
 
-    private final AuthHandler         authHandler;
-    private final GameHandler         gameHandler;
-    private final UserRepository      userRepo  = new UserRepository();
-    private final CharacterRepository charRepo  = new CharacterRepository();
+    private final AuthHandler              authHandler;
+    private final GameHandler              gameHandler;
+    private final UserRepository           userRepo     = new UserRepository();
+    private final CharacterRepository      charRepo     = new CharacterRepository();
+    private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
 
     public AdminPacketHandler(AuthHandler authHandler, GameHandler gameHandler) {
         this.authHandler = authHandler;
@@ -50,8 +52,9 @@ public class AdminPacketHandler {
             case ADMIN_KICK_REQUEST       -> handleKick(socket, packet, session, addr, port);
             case ADMIN_BAN_REQUEST        -> handleBan(socket, packet, session, addr, port);
             case ADMIN_SET_ADMIN_REQUEST  -> handleSetAdmin(socket, packet, session, addr, port);
-            case ADMIN_RESTART_REQUEST    -> handleRestart(socket, packet, session, addr, port);
-            case ADMIN_DEPLOY_REQUEST     -> handleDeploy(socket, packet, session, addr, port);
+            case ADMIN_RESTART_REQUEST      -> handleRestart(socket, packet, session, addr, port);
+            case ADMIN_DEPLOY_REQUEST       -> handleDeploy(socket, packet, session, addr, port);
+            case ADMIN_SAVE_SETTINGS_REQUEST -> handleSaveSettings(socket, packet, session, addr, port);
             default -> log.warn("Unhandled admin packet type: {}", packet.type);
         }
     }
@@ -139,6 +142,35 @@ public class AdminPacketHandler {
             out.put("message", "User '" + target + "' not found.");
         }
         sendResponse(socket, out, PacketType.ADMIN_SET_ADMIN_RESPONSE, addr, port);
+    }
+
+    private void handleSaveSettings(DatagramSocket socket, Packet in, Session session,
+                                    InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+        try {
+            float gravity      = (float) in.payload.get("gravity").asDouble();
+            float jumpStrength = (float) in.payload.get("jumpStrength").asDouble();
+            float runSpeed     = (float) in.payload.get("runSpeed").asDouble();
+
+            boolean saved = settingsRepo.save(gravity, jumpStrength, runSpeed, session.username());
+            if (saved) {
+                gameHandler.updateSettings(gravity, jumpStrength, runSpeed, socket);
+                out.put("success",      true);
+                out.put("gravity",      gravity);
+                out.put("jumpStrength", jumpStrength);
+                out.put("runSpeed",     runSpeed);
+                log.info("ADMIN_SAVE_SETTINGS by '{}': gravity={}, jump={}, runSpeed={}",
+                        session.username(), gravity, jumpStrength, runSpeed);
+            } else {
+                out.put("success", false);
+                out.put("message", "Failed to save settings to database.");
+            }
+        } catch (Exception e) {
+            out.put("success", false);
+            out.put("message", "Invalid settings payload: " + e.getMessage());
+            log.warn("ADMIN_SAVE_SETTINGS bad payload from '{}': {}", session.username(), e.getMessage());
+        }
+        sendResponse(socket, out, PacketType.ADMIN_SAVE_SETTINGS_RESPONSE, addr, port);
     }
 
     private static final int    DEFAULT_SHUTDOWN_DELAY   = 60;
@@ -236,9 +268,10 @@ public class AdminPacketHandler {
             case ADMIN_KICK_REQUEST      -> PacketType.ADMIN_KICK_RESPONSE;
             case ADMIN_BAN_REQUEST       -> PacketType.ADMIN_BAN_RESPONSE;
             case ADMIN_SET_ADMIN_REQUEST -> PacketType.ADMIN_SET_ADMIN_RESPONSE;
-            case ADMIN_RESTART_REQUEST   -> PacketType.ADMIN_RESTART_RESPONSE;
-            case ADMIN_DEPLOY_REQUEST    -> PacketType.ADMIN_DEPLOY_RESPONSE;
-            default                      -> PacketType.ERROR;
+            case ADMIN_RESTART_REQUEST        -> PacketType.ADMIN_RESTART_RESPONSE;
+            case ADMIN_DEPLOY_REQUEST         -> PacketType.ADMIN_DEPLOY_RESPONSE;
+            case ADMIN_SAVE_SETTINGS_REQUEST  -> PacketType.ADMIN_SAVE_SETTINGS_RESPONSE;
+            default                           -> PacketType.ERROR;
         };
     }
 

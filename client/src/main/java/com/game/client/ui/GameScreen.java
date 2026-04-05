@@ -260,7 +260,7 @@ public class GameScreen {
             adminPanel.setRestartCallback(this::startReconnectCountdown);
             Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
             adminTab.setClosable(false);
-            Tab gameSettingsTab = new Tab("⚙ Game Settings", new GameSettingsPanel().buildView());
+            Tab gameSettingsTab = new Tab("⚙ Game Settings", new GameSettingsPanel(client).buildView());
             gameSettingsTab.setClosable(false);
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
@@ -571,6 +571,23 @@ public class GameScreen {
                 int countdown = packet.payload.has("countdown")
                         ? packet.payload.get("countdown").asInt(0) : 0;
                 Platform.runLater(() -> showSystemMessage(msg, countdown));
+            }
+            case ADMIN_SAVE_SETTINGS_RESPONSE -> {
+                boolean ok  = packet.payload.has("success") && packet.payload.get("success").asBoolean();
+                String  msg = ok ? "Game settings committed to server."
+                                 : packet.payload.has("message")
+                                     ? packet.payload.get("message").asText("Save failed.")
+                                     : "Save failed.";
+                Platform.runLater(() -> showSystemMessage(msg, 0));
+            }
+            case SERVER_SETTINGS -> {
+                float g  = (float) packet.payload.get("gravity").asDouble(AppSettings.getGravity());
+                float j  = (float) packet.payload.get("jumpStrength").asDouble(AppSettings.getJumpStrength());
+                float rs = (float) packet.payload.get("runSpeed").asDouble(AppSettings.getRunSpeed());
+                AppSettings.setGravity(g);
+                AppSettings.setJumpStrength(j);
+                AppSettings.setRunSpeed(rs);
+                AppSettings.save();
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");

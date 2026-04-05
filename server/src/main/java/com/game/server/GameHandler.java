@@ -3,6 +3,7 @@ package com.game.server;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.server.db.CharacterRepository;
+import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
@@ -41,8 +42,24 @@ public class GameHandler {
     /** session token → client network address */
     private final Map<String, ClientAddr>  clients  = new ConcurrentHashMap<>();
 
-    private final CharacterRepository charRepo = new CharacterRepository();
-    private final UserRepository      userRepo = new UserRepository();
+    private final CharacterRepository      charRepo     = new CharacterRepository();
+    private final UserRepository           userRepo     = new UserRepository();
+    private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
+
+    /** Current committed game settings — loaded from DB on first use. */
+    private volatile ServerSettingsRepository.Settings currentSettings = null;
+
+    private ServerSettingsRepository.Settings getSettings() {
+        if (currentSettings == null) currentSettings = settingsRepo.load();
+        return currentSettings;
+    }
+
+    /** Called by AdminPacketHandler after a successful DB save — updates cached settings and broadcasts. */
+    public void updateSettings(float gravity, float jumpStrength, float runSpeed,
+                               DatagramSocket socket) throws Exception {
+        currentSettings = new ServerSettingsRepository.Settings(gravity, jumpStrength, runSpeed);
+        broadcastSettings(socket);
+    }
 
     // ── Packet handlers ──────────────────────────────────────────────────────
 
@@ -52,6 +69,7 @@ public class GameHandler {
         players.put(session.token(), new PlayerState(session.userId(), session.username(), charName, addr.getHostAddress()));
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
+        sendSettings(socket, addr, port);
         broadcastGameState(socket);
     }
 
@@ -102,6 +120,33 @@ public class GameHandler {
             log.info("EVICT  user='{}' (timeout/logout) players_online={}", p.username, players.size());
             try { broadcastGameState(socket); } catch (Exception ignored) {}
         }
+    }
+
+    // ── Settings delivery ────────────────────────────────────────────────────
+
+    /** Sends current committed settings to a single client (called on GAME_JOIN). */
+    private void sendSettings(DatagramSocket socket, InetAddress addr, int port) throws Exception {
+        byte[] data = PacketSerializer.serialize(
+                new Packet(PacketType.SERVER_SETTINGS, null, buildSettingsPayload()));
+        socket.send(new DatagramPacket(data, data.length, addr, port));
+    }
+
+    /** Broadcasts current committed settings to all connected clients. */
+    private void broadcastSettings(DatagramSocket socket) throws Exception {
+        byte[] data = PacketSerializer.serialize(
+                new Packet(PacketType.SERVER_SETTINGS, null, buildSettingsPayload()));
+        for (ClientAddr ci : clients.values()) {
+            socket.send(new DatagramPacket(data, data.length, ci.address(), ci.port()));
+        }
+    }
+
+    private ObjectNode buildSettingsPayload() {
+        ServerSettingsRepository.Settings s = getSettings();
+        ObjectNode node = PacketSerializer.mapper().createObjectNode();
+        node.put("gravity",      s.gravity());
+        node.put("jumpStrength", s.jumpStrength());
+        node.put("runSpeed",     s.runSpeed());
+        return node;
     }
 
     // ── Broadcast ────────────────────────────────────────────────────────────

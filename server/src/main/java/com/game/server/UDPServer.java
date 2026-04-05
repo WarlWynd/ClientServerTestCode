@@ -140,7 +140,8 @@ public class UDPServer {
                  ADMIN_BAN_REQUEST,
                  ADMIN_SET_ADMIN_REQUEST,
                  ADMIN_RESTART_REQUEST,
-                 ADMIN_DEPLOY_REQUEST   -> adminHandler.dispatch(socket, packet, session, addr, port);
+                 ADMIN_DEPLOY_REQUEST,
+                 ADMIN_SAVE_SETTINGS_REQUEST -> adminHandler.dispatch(socket, packet, session, addr, port);
             default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }
