@@ -141,14 +141,21 @@ public class AdminPacketHandler {
         sendResponse(socket, out, PacketType.ADMIN_SET_ADMIN_RESPONSE, addr, port);
     }
 
+    private static final int SHUTDOWN_DELAY_SECONDS = 15;
+
     private void handleRestart(DatagramSocket socket, Session session,
                                InetAddress addr, int port) throws Exception {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
         sendResponse(socket, out, PacketType.ADMIN_RESTART_RESPONSE, addr, port);
-        log.info("ADMIN_RESTART requested by '{}' — exiting with code 42", session.username());
+        log.info("ADMIN_RESTART requested by '{}' — broadcasting notice, shutting down in {}s",
+                session.username(), SHUTDOWN_DELAY_SECONDS);
         Thread.ofVirtual().start(() -> {
-            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            try {
+                gameHandler.broadcastNotice(socket,
+                        "Server Shutting Down in " + SHUTDOWN_DELAY_SECONDS + " Seconds...");
+                Thread.sleep(SHUTDOWN_DELAY_SECONDS * 1000L);
+            } catch (Exception ignored) {}
             System.exit(42);
         });
     }
@@ -158,9 +165,14 @@ public class AdminPacketHandler {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
         sendResponse(socket, out, PacketType.ADMIN_DEPLOY_RESPONSE, addr, port);
-        log.info("ADMIN_DEPLOY requested by '{}' — exiting with code 43", session.username());
+        log.info("ADMIN_DEPLOY requested by '{}' — broadcasting notice, shutting down in {}s",
+                session.username(), SHUTDOWN_DELAY_SECONDS);
         Thread.ofVirtual().start(() -> {
-            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            try {
+                gameHandler.broadcastNotice(socket,
+                        "Server Shutting Down in " + SHUTDOWN_DELAY_SECONDS + " Seconds...");
+                Thread.sleep(SHUTDOWN_DELAY_SECONDS * 1000L);
+            } catch (Exception ignored) {}
             System.exit(43);
         });
     }

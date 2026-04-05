@@ -32,6 +32,9 @@ public enum PacketType {
     PLAYER_UPDATE,
     GAME_STATE,
 
+    // ── Server broadcasts ────────────────────────────────────────────────────
+    SERVER_NOTICE,
+
     // ── Admin ────────────────────────────────────────────────────
     ADMIN_USER_LIST_REQUEST,
     ADMIN_USER_LIST_RESPONSE,

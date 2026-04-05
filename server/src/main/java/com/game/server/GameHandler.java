@@ -106,6 +106,16 @@ public class GameHandler {
 
     // ── Broadcast ────────────────────────────────────────────────────────────
 
+    public void broadcastNotice(DatagramSocket socket, String message) throws Exception {
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("message", message);
+        byte[] data = PacketSerializer.serialize(new Packet(PacketType.SERVER_NOTICE, null, payload));
+        for (ClientAddr ci : clients.values()) {
+            socket.send(new DatagramPacket(data, data.length, ci.address(), ci.port()));
+        }
+        log.info("SERVER_NOTICE broadcast to {} client(s): {}", clients.size(), message);
+    }
+
     private void broadcastGameState(DatagramSocket socket) throws Exception {
         byte[] data = PacketSerializer.serialize(
                 new Packet(PacketType.GAME_STATE, null, buildSnapshot()));

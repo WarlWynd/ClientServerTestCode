@@ -88,7 +88,8 @@ public class GameScreen {
     private Timeline heartbeatTimer;
     private volatile boolean reconnecting = false;
     private volatile long    lastGameStateMs = 0;
-    private static final long HEARTBEAT_TIMEOUT_MS = 8_000;
+    private static final long HEARTBEAT_TIMEOUT_MS  = 8_000;
+    private static final int  SHUTDOWN_DELAY_SECONDS = 15;
 
     public GameScreen(Stage stage, UDPClient client) {
         this.stage   = stage;
@@ -460,6 +461,11 @@ public class GameScreen {
                     if (reconnecting) onReconnected();
                 });
             }
+            case SERVER_NOTICE -> {
+                String msg = packet.payload.has("message")
+                        ? packet.payload.get("message").asText() : "Server shutting down";
+                Platform.runLater(() -> startReconnectCountdown(msg, SHUTDOWN_DELAY_SECONDS));
+            }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
                 Platform.runLater(() -> {
@@ -486,14 +492,19 @@ public class GameScreen {
         });
     }
 
-    /** Called by AdminPanel when deploy/restart succeeds. Must be called on FX thread. */
+    /** Called by AdminPanel callback (Consumer&lt;Integer&gt;). */
     public void startReconnectCountdown(int seconds) {
+        startReconnectCountdown("SERVER RESTARTING", seconds);
+    }
+
+    private void startReconnectCountdown(String title, int seconds) {
         Platform.runLater(() -> {
+            if (reconnecting) return; // already showing — don't reset
             reconnecting = true;
             if (countdownTimer != null) countdownTimer.stop();
             if (retryTimer    != null) retryTimer.stop();
             if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
-            overlayTitleLabel.setText("SERVER RESTARTING");
+            overlayTitleLabel.setText(title);
             disconnectedOverlay.setVisible(true);
             countdownLabel.setText("Reconnecting in " + seconds + "s…");
 
