@@ -16,7 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -225,12 +228,30 @@ public class SyncApp extends Application {
         java.nio.file.Path clientJar = INSTALL_DIR.resolve("client").resolve("game-client.jar");
         try {
             String java = ProcessHandle.current().info().command().orElse("java");
-            Process proc = new ProcessBuilder(
-                    java,
-                    "--enable-preview",
-                    "--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED",
-                    "-jar", clientJar.toAbsolutePath().toString()
-            ).inheritIO().start();
+
+            // Forward the current JVM's module-path and add-opens so JavaFX is available
+            List<String> jvmArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
+
+            List<String> cmd = new ArrayList<>();
+            cmd.add(java);
+            // Carry over module-path, add-modules, add-opens from the current JVM
+            for (int i = 0; i < jvmArgs.size(); i++) {
+                String a = jvmArgs.get(i);
+                if (a.startsWith("--module-path") || a.startsWith("--add-modules")
+                        || a.startsWith("--add-opens") || a.startsWith("--add-reads")) {
+                    cmd.add(a);
+                } else if (a.equals("--module-path") || a.equals("--add-modules")) {
+                    cmd.add(a);
+                    if (i + 1 < jvmArgs.size()) cmd.add(jvmArgs.get(++i));
+                }
+            }
+            cmd.add("--enable-preview");
+            cmd.add("-jar");
+            cmd.add(clientJar.toAbsolutePath().toString());
+
+            Process proc = new ProcessBuilder(cmd).inheritIO().start();
+            // Give the process a moment to fail fast on startup errors
+            Thread.sleep(500);
             if (proc.isAlive()) {
                 Platform.exit();
             } else {
