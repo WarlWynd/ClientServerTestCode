@@ -202,6 +202,9 @@ public class GameScreen {
         canvasPane.getStyleClass().add("app-root");
 
         // ── System message bar (server notices only) ─────────────────────────
+        Label statusLabel = new Label("Status: ");
+        statusLabel.getStyleClass().add("system-msg-text");
+
         systemMsgText = new Label();
         systemMsgText.getStyleClass().add("system-msg-text");
 
@@ -211,12 +214,12 @@ public class GameScreen {
         Region msgSpacer = new Region();
         HBox.setHgrow(msgSpacer, Priority.ALWAYS);
 
-        systemMsgBar = new HBox(12, systemMsgText, msgSpacer, systemMsgCountdown);
+        systemMsgBar = new HBox(12, statusLabel, systemMsgText, msgSpacer, systemMsgCountdown);
         systemMsgBar.setAlignment(Pos.CENTER_LEFT);
         systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
         systemMsgBar.getStyleClass().add("system-msg-bar");
-        systemMsgBar.setVisible(false);
-        systemMsgBar.setManaged(false);
+        systemMsgBar.setVisible(true);
+        systemMsgBar.setManaged(true);
 
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
         HBox gameContent = new HBox(sidebar, canvasPane);
@@ -530,8 +533,6 @@ public class GameScreen {
 
     private void clearSystemMessage() {
         if (sysMsgTimer != null) { sysMsgTimer.stop(); sysMsgTimer = null; }
-        systemMsgBar.setVisible(false);
-        systemMsgBar.setManaged(false);
         systemMsgText.setText("");
         systemMsgCountdown.setText("");
     }
