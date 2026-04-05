@@ -75,6 +75,8 @@ public class GameScreen {
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
+    private TabPane tabPane;
+    private Tab     gameTab;
     private boolean gameLoopRunning = false;
     private Timeline pingTimer;
     private AdminPanel adminPanel;
@@ -210,7 +212,7 @@ public class GameScreen {
         HBox.setHgrow(canvasPane, Priority.ALWAYS);
         gameContent.setStyle("-fx-background-color: #1a1a2e;");
 
-        Tab gameTab = new Tab("🎮 Game", gameContent);
+        gameTab = new Tab("🎮 Game", gameContent);
         gameTab.setClosable(false);
 
         // ── Settings tab (all users) ──────────────────────────────────────────
@@ -218,7 +220,6 @@ public class GameScreen {
         settingsTab.setClosable(false);
 
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
-        TabPane tabPane;
         if (SessionStore.isAdmin()) {
             adminPanel = new AdminPanel(client);
             adminPanel.setRestartCallback(this::startReconnectCountdown);
@@ -231,6 +232,7 @@ public class GameScreen {
         } else {
             tabPane = new TabPane(gameTab, settingsTab);
         }
+
 
         // ── Tab pane ─────────────────────────────────────────────────────────
         tabPane.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 120;");
@@ -488,6 +490,7 @@ public class GameScreen {
             overlayTitleLabel.setText("CONNECTION LOST");
             countdownLabel.setText("Attempting to reconnect…");
             disconnectedOverlay.setVisible(true);
+            tabPane.getSelectionModel().select(gameTab);
             attemptReconnect();
         });
     }
@@ -505,6 +508,7 @@ public class GameScreen {
             if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
             overlayTitleLabel.setText(title);
             disconnectedOverlay.setVisible(true);
+            tabPane.getSelectionModel().select(gameTab);
             countdownLabel.setText("Reconnecting in " + seconds + "s…");
 
             int[] remaining = {seconds};
