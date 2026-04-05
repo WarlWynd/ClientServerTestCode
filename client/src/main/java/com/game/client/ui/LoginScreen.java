@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
 import com.game.client.SessionStore;
+import com.game.client.ThemeManager;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -18,19 +19,11 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
-/**
- * Login screen — shown at startup.
- *
- * Sends LOGIN_REQUEST and waits for LOGIN_RESPONSE.
- * On success navigates to the GameScreen.
- * Provides a link to the RegisterScreen.
- */
 public class LoginScreen {
 
     private final Stage     stage;
     private final UDPClient client;
 
-    // Form fields
     private TextField     emailField;
     private PasswordField passwordField;
     private Label         statusLabel;
@@ -41,40 +34,42 @@ public class LoginScreen {
         this.client = client;
     }
 
-    // ── Build & show ─────────────────────────────────────────────────────────
-
     public void show() {
         client.setPacketListener(this::onPacket);
 
-        // Title
         Text title = new Text(AppSettings.getProgramName());
         title.setFont(Font.font("System", FontWeight.BOLD, 28));
+        title.getStyleClass().add("title-text");
 
         Text subtitle = new Text("Sign in to play");
         subtitle.setFont(Font.font("System", 14));
+        subtitle.getStyleClass().add("subtitle-text");
 
-        // Form
         boolean remember = AppSettings.isRememberUsername();
         emailField = new TextField(remember ? AppSettings.getLastUsername() : "");
         emailField.setPromptText("Email address");
         emailField.setMaxWidth(280);
+        emailField.getStyleClass().addAll("input-field");
 
         passwordField = new PasswordField();
         passwordField.setPromptText("Password");
         passwordField.setMaxWidth(280);
+        passwordField.getStyleClass().add("input-field");
+
         CheckBox rememberBox = new CheckBox("Remember email");
         rememberBox.setSelected(remember);
-        rememberBox.setStyle("-fx-text-fill: #a0a0c0;");
+        rememberBox.getStyleClass().add("check-secondary");
 
         passwordField.setOnAction(e -> doLogin(rememberBox.isSelected()));
 
         loginButton = new Button("Log In");
         loginButton.setDefaultButton(true);
         loginButton.setPrefWidth(280);
+        loginButton.getStyleClass().add("btn-primary");
         loginButton.setOnAction(e -> doLogin(rememberBox.isSelected()));
 
         statusLabel = new Label();
-        statusLabel.setStyle("-fx-text-fill: #cc3333;");
+        statusLabel.getStyleClass().addAll("text-error", "font-12");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(280);
 
@@ -93,15 +88,11 @@ public class LoginScreen {
         form.setMaxWidth(360);
 
         StackPane root = new StackPane(form);
-        root.setStyle("-fx-background-color: #1a1a2e;");
-        title.setStyle("-fx-fill: #e0e0e0;");
-        subtitle.setStyle("-fx-fill: #a0a0c0;");
-        styleField(emailField);
-        styleField(passwordField);
-        styleButton(loginButton);
+        root.getStyleClass().add("app-root");
 
         Scene scene = new Scene(root, 480, 400);
-        stage.setTitle(AppSettings.getProgramName() + " — Login v" + AppSettings.getClientVersion());
+        ThemeManager.apply(scene);
+        stage.setTitle(AppSettings.getProgramName() + " — Login");
         stage.setScene(scene);
         stage.show();
 
@@ -109,8 +100,6 @@ public class LoginScreen {
             Platform.runLater(passwordField::requestFocus);
         }
     }
-
-    // ── Event handlers ───────────────────────────────────────────────────────
 
     private boolean pendingRemember;
 
@@ -130,7 +119,6 @@ public class LoginScreen {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("email",    email);
         payload.put("password", password);
-
         client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
     }
 
@@ -140,12 +128,10 @@ public class LoginScreen {
                 case LOGIN_RESPONSE -> {
                     boolean success = packet.payload.get("success").asBoolean();
                     if (success) {
-                        String  token        = packet.payload.get("sessionToken").asText();
-                        String  username     = packet.payload.get("username").asText();
-                        boolean isAdmin      = packet.payload.has("isAdmin") &&
-                                              packet.payload.get("isAdmin").asBoolean();
-                        boolean isAudioDev = packet.payload.has("isAudioDev") &&
-                                              packet.payload.get("isAudioDev").asBoolean();
+                        String  token    = packet.payload.get("sessionToken").asText();
+                        String  username = packet.payload.get("username").asText();
+                        boolean isAdmin  = packet.payload.has("isAdmin") && packet.payload.get("isAdmin").asBoolean();
+                        boolean isAudioDev = packet.payload.has("isAudioDev") && packet.payload.get("isAudioDev").asBoolean();
                         SessionStore.set(token, username, isAdmin, isAudioDev);
                         AppSettings.setRememberUsername(pendingRemember);
                         AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
@@ -154,8 +140,7 @@ public class LoginScreen {
                             SessionStore.setCharacterName(packet.payload.get("characterName").asText());
                         new CharacterScreen(stage, client).show();
                     } else {
-                        String msg = packet.payload.get("message").asText("Login failed.");
-                        statusLabel.setText(msg);
+                        statusLabel.setText(packet.payload.get("message").asText("Login failed."));
                         loginButton.setDisable(false);
                     }
                 }
@@ -163,32 +148,8 @@ public class LoginScreen {
                     statusLabel.setText(packet.payload.get("message").asText("Server error."));
                     loginButton.setDisable(false);
                 }
-                default -> { /* ignore other packet types on this screen */ }
+                default -> {}
             }
         });
-    }
-
-    // ── Styling helpers ──────────────────────────────────────────────────────
-
-    private void styleField(TextInputControl f) {
-        f.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-prompt-text-fill: #6060a0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 8;
-                """);
-    }
-
-    private void styleButton(Button b) {
-        b.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 10 0 10 0;
-                """);
     }
 }

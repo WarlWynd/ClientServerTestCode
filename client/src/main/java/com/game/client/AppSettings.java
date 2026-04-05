@@ -38,6 +38,7 @@ public final class AppSettings {
     private static volatile String    assetUrl         = "http://localhost:9877";
     private static volatile String    uploadKey        = "";
     private static volatile String    tabSide          = "LEFT";
+    private static volatile String    theme            = "DARK";
 
     static { load(); }
 
@@ -71,9 +72,10 @@ public final class AppSettings {
         hudOpacity      = doubleOf(merged, "display.hudOpacity", hudOpacity);
         lastUsername      = merged.getProperty("client.lastUsername", lastUsername);
         rememberUsername  = boolOf(merged, "client.rememberUsername", rememberUsername);
-        assetUrl          = merged.getProperty("asset.url",      assetUrl);
-        uploadKey         = merged.getProperty("upload.key",    uploadKey);
+        assetUrl          = merged.getProperty("asset.url",       assetUrl);
+        uploadKey         = merged.getProperty("upload.key",     uploadKey);
         tabSide           = merged.getProperty("display.tabSide", tabSide);
+        theme             = merged.getProperty("display.theme",   theme);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ public final class AppSettings {
         p.setProperty("client.lastUsername",       lastUsername);
         p.setProperty("client.rememberUsername",   String.valueOf(rememberUsername));
         p.setProperty("display.tabSide",           tabSide);
+        p.setProperty("display.theme",             theme);
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -122,6 +125,8 @@ public final class AppSettings {
     public static String    getUploadKey()              { return uploadKey; }
     public static String    getTabSide()               { return tabSide; }
     public static void      setTabSide(String v)       { tabSide = v; }
+    public static String    getTheme()                 { return theme; }
+    public static void      setTheme(String v)         { theme = v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void setServerHost(String v)           { serverHost      = v; }

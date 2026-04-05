@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
 import com.game.client.GameResolution;
 import com.game.client.SessionStore;
+import com.game.client.ThemeManager;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -117,56 +118,49 @@ public class GameScreen {
 
         // ── Left sidebar ─────────────────────────────────────────────────────
         Label gameTitle = new Label(AppSettings.getProgramName().toUpperCase());
-        gameTitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 16; -fx-font-weight: bold;");
+        gameTitle.getStyleClass().addAll("section-title", "font-16");
         gameTitle.setWrapText(true);
 
         Separator sep1 = new Separator();
-        sep1.setStyle("-fx-background-color: #3a3a6a;");
+        sep1.getStyleClass().add("sep");
 
         Label playingAsLbl = new Label("CHARACTER");
-        playingAsLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        playingAsLbl.getStyleClass().addAll("text-muted", "font-10");
         String displayName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName()
                 : SessionStore.getUsername();
         Label nameLabel = new Label(displayName);
-        nameLabel.setStyle("-fx-text-fill: #e0e0e0; -fx-font-weight: bold; -fx-font-size: 14;");
+        nameLabel.getStyleClass().addAll("text-primary", "bold", "font-14");
         nameLabel.setWrapText(true);
 
         Separator sep2 = new Separator();
-        sep2.setStyle("-fx-background-color: #3a3a6a;");
+        sep2.getStyleClass().add("sep");
 
         Label onlineLbl = new Label("ONLINE");
-        onlineLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        onlineLbl.getStyleClass().addAll("text-muted", "font-10");
         playerCountLabel = new Label("1 Player");
-        playerCountLabel.setStyle("-fx-text-fill: #53c0f0; -fx-font-weight: bold; -fx-font-size: 13;");
+        playerCountLabel.getStyleClass().addAll("text-info", "bold", "font-13");
 
         Separator sep3 = new Separator();
-        sep3.setStyle("-fx-background-color: #3a3a6a;");
+        sep3.getStyleClass().add("sep");
 
         Label pingLbl = new Label("PING");
-        pingLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        pingLbl.getStyleClass().addAll("text-muted", "font-10");
         pingLabel = new Label("-- ms");
-        pingLabel.setStyle("-fx-text-fill: #80c080; -fx-font-weight: bold; -fx-font-size: 13;");
+        pingLabel.getStyleClass().addAll("text-success", "bold", "font-13");
 
         Separator sep4 = new Separator();
-        sep4.setStyle("-fx-background-color: #3a3a6a;");
+        sep4.getStyleClass().add("sep");
 
         Label controlsLbl = new Label("CONTROLS");
-        controlsLbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        controlsLbl.getStyleClass().addAll("text-muted", "font-10");
         Label controls = new Label("W A S D\nor Arrow Keys\nto move");
-        controls.setStyle("-fx-text-fill: #808080; -fx-font-size: 11;");
+        controls.getStyleClass().addAll("text-muted", "font-11");
         controls.setWrapText(true);
 
         Button logoutBtn = new Button("⏻  Logout");
         logoutBtn.setMaxWidth(Double.MAX_VALUE);
-        logoutBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-size: 12;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 8 0 8 0;
-                """);
+        logoutBtn.getStyleClass().add("btn-logout");
         logoutBtn.setOnAction(e -> doLogout());
 
         VBox sidebar = new VBox(10,
@@ -184,41 +178,35 @@ public class GameScreen {
         sidebar.setPrefWidth(160);
         sidebar.setMinWidth(160);
         sidebar.setMaxWidth(160);
-        sidebar.setStyle("-fx-background-color: #0f0f1e;");
+        sidebar.getStyleClass().add("app-surface");
 
         // ── Canvas ───────────────────────────────────────────────────────────
         canvas = new Canvas(WORLD_W, WORLD_H);
 
         // Disconnected overlay (stacked on top of canvas, hidden by default)
         overlayTitleLabel = new Label("SERVER RESTARTING");
-        overlayTitleLabel.setStyle("-fx-text-fill: #e94560; -fx-font-size: 22; -fx-font-weight: bold;");
+        overlayTitleLabel.getStyleClass().add("overlay-title");
         countdownLabel = new Label();
-        countdownLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 14;");
+        countdownLabel.getStyleClass().add("overlay-subtitle");
         Button retryNowBtn = new Button("Retry Now");
-        retryNowBtn.setStyle("""
-                -fx-background-color: #2a6a4a;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 8 24 8 24;
-                """);
+        retryNowBtn.getStyleClass().add("btn-success");
         retryNowBtn.setOnAction(e -> attemptReconnect());
         disconnectedOverlay = new VBox(16, overlayTitleLabel, countdownLabel, retryNowBtn);
         disconnectedOverlay.setAlignment(Pos.CENTER);
-        disconnectedOverlay.setStyle("-fx-background-color: rgba(10,10,20,0.92);");
+        disconnectedOverlay.getStyleClass().add("overlay-bg");
         disconnectedOverlay.setVisible(false);
         // Make overlay fill the canvas pane
         disconnectedOverlay.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
 
         StackPane canvasPane = new StackPane(canvas, disconnectedOverlay);
-        canvasPane.setStyle("-fx-background-color: #1a1a2e;");
+        canvasPane.getStyleClass().add("app-root");
 
         // ── System message bar ────────────────────────────────────────────────
         systemMsgText = new Label();
-        systemMsgText.setStyle("-fx-text-fill: #1a1000; -fx-font-weight: bold; -fx-font-size: 12;");
+        systemMsgText.getStyleClass().add("system-msg-text");
 
         systemMsgCountdown = new Label();
-        systemMsgCountdown.setStyle("-fx-text-fill: #3a2000; -fx-font-size: 12;");
+        systemMsgCountdown.getStyleClass().add("system-msg-countdown");
 
         Region msgSpacer = new Region();
         HBox.setHgrow(msgSpacer, Priority.ALWAYS);
@@ -226,18 +214,18 @@ public class GameScreen {
         systemMsgBar = new HBox(12, systemMsgText, msgSpacer, systemMsgCountdown);
         systemMsgBar.setAlignment(Pos.CENTER_LEFT);
         systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
-        systemMsgBar.setStyle("-fx-background-color: #c8960a;");
+        systemMsgBar.getStyleClass().add("system-msg-bar");
         systemMsgBar.setVisible(false);
         systemMsgBar.setManaged(false);
 
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
         HBox gameContent = new HBox(sidebar, canvasPane);
         HBox.setHgrow(canvasPane, Priority.ALWAYS);
-        gameContent.setStyle("-fx-background-color: #1a1a2e;");
+        gameContent.getStyleClass().add("app-root");
         VBox.setVgrow(gameContent, Priority.ALWAYS);
 
         VBox gameTabRoot = new VBox(systemMsgBar, gameContent);
-        gameTabRoot.setStyle("-fx-background-color: #1a1a2e;");
+        gameTabRoot.getStyleClass().add("app-root");
 
         gameTab = new Tab("🎮 Game", gameTabRoot);
         gameTab.setClosable(false);
@@ -265,13 +253,15 @@ public class GameScreen {
         // ── Tab pane ─────────────────────────────────────────────────────────
         tabPane.setSide("LEFT".equalsIgnoreCase(AppSettings.getTabSide())
                 ? javafx.geometry.Side.LEFT : javafx.geometry.Side.TOP);
-        tabPane.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 120;");
+        tabPane.getStyleClass().add("tab-pane-dark");
+        tabPane.setStyle("-fx-tab-min-width: 120;");
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         VBox root = new VBox(tabPane);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        root.getStyleClass().add("app-root");
 
         Scene scene = new Scene(root, WORLD_W + 160, WORLD_H + 30);
+        ThemeManager.apply(scene);
         // Use filters (capture phase) so keys are tracked before any node handler runs.
         scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
         scene.addEventFilter(KeyEvent.KEY_RELEASED, e -> heldKeys.remove(e.getCode()));
@@ -502,7 +492,7 @@ public class GameScreen {
                 String msg = packet.payload.get("message").asText("Server error.");
                 Platform.runLater(() -> {
                     pingLabel.setText("⚠ " + msg);
-                    pingLabel.setStyle("-fx-text-fill: #e94560;");
+                    pingLabel.setStyle("-fx-text-fill: -af-error;");
                 });
             }
             default -> { /* ignore */ }
@@ -519,7 +509,6 @@ public class GameScreen {
         systemMsgCountdown.setText(countdownSeconds > 0 ? countdownSeconds + "s" : "");
         systemMsgBar.setVisible(true);
         systemMsgBar.setManaged(true);
-        tabPane.getSelectionModel().select(gameTab);
 
         if (countdownSeconds > 0) {
             int[] remaining = {countdownSeconds};
@@ -554,7 +543,6 @@ public class GameScreen {
             overlayTitleLabel.setText("CONNECTION LOST");
             countdownLabel.setText("Attempting to reconnect…");
             disconnectedOverlay.setVisible(true);
-            tabPane.getSelectionModel().select(gameTab);
             attemptReconnect();
         });
     }

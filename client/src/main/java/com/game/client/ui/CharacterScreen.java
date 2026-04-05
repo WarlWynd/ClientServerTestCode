@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
 import com.game.client.SessionStore;
+import com.game.client.ThemeManager;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -13,7 +14,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
@@ -54,7 +54,7 @@ public class CharacterScreen {
     private void showSummary(String charName) {
         Label pageTitle = new Label("Your Character");
         pageTitle.setFont(Font.font("System", FontWeight.BOLD, 22));
-        pageTitle.setTextFill(Color.web("#e0e0ff"));
+        pageTitle.getStyleClass().add("text-primary");
 
         VBox details = new VBox(10,
                 summaryField("Character Name", charName),
@@ -62,19 +62,12 @@ public class CharacterScreen {
                 summaryField("Class",          "—")
         );
         details.setPadding(new Insets(16));
-        details.setStyle("-fx-background-color: #16213e; -fx-background-radius: 6;");
+        details.getStyleClass().add("app-card");
 
         Button enterBtn = new Button("Enter Game  ▶");
         enterBtn.setDefaultButton(true);
         enterBtn.setMaxWidth(Double.MAX_VALUE);
-        enterBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-size: 14;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 12 0 12 0;
-                """);
+        enterBtn.getStyleClass().add("btn-enter-game");
         enterBtn.setOnAction(e -> new GameScreen(stage, client).show());
 
         VBox content = new VBox(20, pageTitle, details, enterBtn);
@@ -83,18 +76,22 @@ public class CharacterScreen {
         content.setAlignment(Pos.TOP_CENTER);
 
         StackPane root = new StackPane(content);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        root.getStyleClass().add("app-root");
         StackPane.setAlignment(content, Pos.CENTER);
 
+        Scene scene = new Scene(root, 520, 400);
+        ThemeManager.apply(scene);
         stage.setTitle(AppSettings.getProgramName() + " — Character");
-        stage.setScene(new Scene(root, 520, 400));
+        stage.setScene(scene);
     }
 
     private VBox summaryField(String label, String value) {
         Label lbl = new Label(label.toUpperCase());
-        lbl.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        lbl.getStyleClass().addAll("text-muted", "font-10");
+
         Label val = new Label(value);
-        val.setStyle("-fx-text-fill: #e0e0e0; -fx-font-size: 14; -fx-font-weight: bold;");
+        val.getStyleClass().addAll("text-primary", "bold", "font-14");
+
         VBox box = new VBox(2, lbl, val);
         box.setPadding(new Insets(0, 0, 4, 0));
         return box;
@@ -103,13 +100,12 @@ public class CharacterScreen {
     // ── Creation form ────────────────────────────────────────────────────────
 
     private void showCreationForm() {
-        // ── Page header ──────────────────────────────────────────────────────
         Label pageTitle = new Label("Create Your Character");
         pageTitle.setFont(Font.font("System", FontWeight.BOLD, 22));
-        pageTitle.setTextFill(Color.web("#e0e0ff"));
+        pageTitle.getStyleClass().add("text-primary");
 
         Label subtitle = new Label("Fill in the details below to create your character.");
-        subtitle.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        subtitle.getStyleClass().addAll("text-secondary", "font-12");
 
         // ── Section: Identity ─────────────────────────────────────────────
         VBox identitySection = section("Identity",
@@ -119,31 +115,18 @@ public class CharacterScreen {
 
         // ── Section: Origin ───────────────────────────────────────────────
         VBox originSection = section("Origin",
-                formRow("Race",
-                        lockedField("Coming soon"),
-                        comingSoonBadge()),
-                formRow("Class",
-                        lockedField("Coming soon"),
-                        comingSoonBadge()),
-                formRow("Background",
-                        lockedField("Coming soon"),
-                        comingSoonBadge())
+                formRow("Race",       lockedField("Coming soon"), comingSoonBadge()),
+                formRow("Class",      lockedField("Coming soon"), comingSoonBadge()),
+                formRow("Background", lockedField("Coming soon"), comingSoonBadge())
         );
 
         // ── Section: Appearance ───────────────────────────────────────────
         VBox appearanceSection = section("Appearance",
-                formRow("Gender",
-                        lockedField("Coming soon"),
-                        comingSoonBadge()),
-                formRow("Hair Style",
-                        lockedField("Coming soon"),
-                        comingSoonBadge()),
-                formRow("Hair Color",
-                        lockedField("Coming soon"),
-                        comingSoonBadge())
+                formRow("Gender",     lockedField("Coming soon"), comingSoonBadge()),
+                formRow("Hair Style", lockedField("Coming soon"), comingSoonBadge()),
+                formRow("Hair Color", lockedField("Coming soon"), comingSoonBadge())
         );
 
-        // ── Status label & submit ─────────────────────────────────────────
         statusLabel = new Label();
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
@@ -151,14 +134,7 @@ public class CharacterScreen {
         actionBtn = new Button("Create Character");
         actionBtn.setDefaultButton(true);
         actionBtn.setMaxWidth(Double.MAX_VALUE);
-        actionBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-size: 13;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 12 0 12 0;
-                """);
+        actionBtn.getStyleClass().add("btn-enter-game");
         actionBtn.setOnAction(e -> doCreate());
         nameField.setOnAction(e -> doCreate());
 
@@ -173,11 +149,13 @@ public class CharacterScreen {
 
         ScrollPane scroll = new ScrollPane(form);
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
+        scroll.getStyleClass().add("scroll-dark");
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
+        Scene scene = new Scene(scroll, 560, 620);
+        ThemeManager.apply(scene);
         stage.setTitle(AppSettings.getProgramName() + " — Create Character");
-        stage.setScene(new Scene(scroll, 560, 620));
+        stage.setScene(scene);
     }
 
     // ── Form helpers ─────────────────────────────────────────────────────────
@@ -185,24 +163,24 @@ public class CharacterScreen {
     /** Titled card containing one or more form rows. */
     private VBox section(String title, HBox... rows) {
         Label hdr = new Label(title.toUpperCase());
-        hdr.setStyle("-fx-text-fill: #8080c0; -fx-font-size: 10; -fx-font-weight: bold;");
+        hdr.getStyleClass().addAll("text-secondary", "bold", "font-10");
 
         Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #2a2a4a;");
+        sep.getStyleClass().add("sep-dark");
 
         VBox body = new VBox(10);
         body.getChildren().add(hdr);
         body.getChildren().add(sep);
         for (HBox row : rows) body.getChildren().add(row);
         body.setPadding(new Insets(14));
-        body.setStyle("-fx-background-color: #16213e; -fx-background-radius: 6;");
+        body.getStyleClass().add("app-card");
         return body;
     }
 
     /** A label + control row, with optional trailing badge. */
     private HBox formRow(String labelText, Control field, Label badge) {
         Label lbl = new Label(labelText);
-        lbl.setStyle("-fx-text-fill: #c0c0e0; -fx-font-size: 12;");
+        lbl.getStyleClass().addAll("text-secondary", "font-12");
         lbl.setMinWidth(130);
 
         HBox row = new HBox(10, lbl, field);
@@ -216,33 +194,19 @@ public class CharacterScreen {
         TextField f = new TextField();
         f.setPromptText(prompt);
         f.setDisable(locked);
-        f.setStyle("""
-                -fx-background-color: #0f1a30;
-                -fx-text-fill: #e0e0e0;
-                -fx-prompt-text-fill: #505070;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 7;
-                """);
+        f.getStyleClass().add("input-field");
         return f;
     }
 
     private TextField lockedField(String prompt) {
         TextField f = styledField(prompt, true);
-        f.setStyle(f.getStyle() + "-fx-opacity: 0.45;");
+        f.setStyle("-fx-opacity: 0.45;");
         return f;
     }
 
     private Label comingSoonBadge() {
         Label badge = new Label("Soon™");
-        badge.setStyle("""
-                -fx-background-color: #2a2a4a;
-                -fx-text-fill: #6060a0;
-                -fx-font-size: 9;
-                -fx-padding: 2 6 2 6;
-                -fx-background-radius: 8;
-                """);
+        badge.getStyleClass().add("badge-muted");
         return badge;
     }
 
@@ -284,7 +248,7 @@ public class CharacterScreen {
     private void status(String msg, boolean ok) {
         if (statusLabel != null) {
             statusLabel.setText(msg);
-            statusLabel.setStyle(ok ? "-fx-text-fill: #44cc44;" : "-fx-text-fill: #cc3333;");
+            statusLabel.setStyle(ok ? "-fx-text-fill: -af-success;" : "-fx-text-fill: -af-error;");
         }
     }
 }

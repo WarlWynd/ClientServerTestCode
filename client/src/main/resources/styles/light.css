@@ -1,0 +1,45 @@
+/*
+ * Light Theme — overrides all -af-* looked-up colors on .root
+ */
+.root {
+    /* ── Backgrounds ──────────────────────────────────────────────────── */
+    -af-bg:              #f0f0f8;
+    -af-surface:         #e0e0ee;
+    -af-card:            #ffffff;
+
+    /* ── Text ─────────────────────────────────────────────────────────── */
+    -af-text-primary:    #1a1a2e;
+    -af-text-secondary:  #404060;
+    -af-text-muted:      #707090;
+    -af-text-placeholder: #9090b0;
+
+    /* ── Semantic ─────────────────────────────────────────────────────── */
+    -af-accent:          #d03050;
+    -af-success:         #1a8030;
+    -af-success-bg:      #1a5a30;
+    -af-info:            #1a60a0;
+    -af-info-bg:         #1a3060;
+    -af-warning:         #a06010;
+    -af-warning-bg:      #e09010;
+    -af-error:           #cc2020;
+
+    /* ── Borders ──────────────────────────────────────────────────────── */
+    -af-border:          #9090c0;
+    -af-border-light:    #c0c0d8;
+
+    /* ── Button variants ──────────────────────────────────────────────── */
+    -af-danger-bg:       #a03030;
+    -af-restart-bg:      #7a3000;
+    -af-deploy-bg:       #1a5a1a;
+    -af-revoke-bg:       #505080;
+    -af-register-bg:     #1a3a7a;
+
+    /* ── Misc ─────────────────────────────────────────────────────────── */
+    -af-log-text:        #1a3a1a;
+    -af-warn-bar-text:   #1a1000;
+    -af-warn-bar-dim:    #3a2000;
+    -af-badge-bg:        #d0d0e8;
+    -af-badge-text:      #505090;
+    -af-overlay-bg:      rgba(240,240,248,0.94);
+    -af-progress-accent: #1a60a0;
+}

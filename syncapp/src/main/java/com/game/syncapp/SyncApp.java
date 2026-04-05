@@ -7,7 +7,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
@@ -42,6 +41,9 @@ public class SyncApp extends Application {
     private static final String ASSET_URL     = cfg("asset.url",   "http://localhost:9877");
     private static final Path   INSTALL_DIR   = resolveInstallDir(cfg("install.dir", "${user.home}/.adventure-friends"));
 
+    private static final String BASE_CSS  = "/styles/base.css";
+    private static final String DARK_CSS  = "/styles/dark.css";
+
     // ── UI nodes ──────────────────────────────────────────────────────────────
     private Label       statusLabel;
     private Label       fileLabel;
@@ -59,33 +61,27 @@ public class SyncApp extends Application {
         // ── Header ────────────────────────────────────────────────────────────
         Text title = new Text(APP_NAME);
         title.setFont(Font.font("System", FontWeight.BOLD, 22));
-        title.setStyle("-fx-fill: #e0e0e0;");
-
-        if (!CORP_NAME.isBlank()) {
-            Label corpLbl = new Label(CORP_NAME);
-            corpLbl.setStyle("-fx-text-fill: #9090c8; -fx-font-size: 11;");
-            // added below in vbox
-        }
+        title.getStyleClass().add("title-text");
 
         Label versionLbl = new Label("Version " + VERSION);
-        versionLbl.setStyle("-fx-text-fill: #90b0e0; -fx-font-size: 11;");
+        versionLbl.getStyleClass().addAll("text-info", "font-11");
 
         Label installLbl = new Label("Installing to: " + INSTALL_DIR);
-        installLbl.setStyle("-fx-text-fill: #8888a8; -fx-font-size: 10;");
+        installLbl.getStyleClass().addAll("text-muted", "font-10");
         installLbl.setWrapText(true);
         installLbl.setMaxWidth(400);
 
         Separator sep1 = new Separator();
-        sep1.setStyle("-fx-background-color: #2a2a4a;");
+        sep1.getStyleClass().add("sep-dark");
 
         // ── Progress ──────────────────────────────────────────────────────────
         progressBar = new ProgressBar(0);
         progressBar.setPrefWidth(400);
         progressBar.setPrefHeight(14);
-        progressBar.setStyle("-fx-accent: #4a90d9;");
+        progressBar.getStyleClass().add("progress-accent");
 
         fileLabel = new Label("Connecting to server…");
-        fileLabel.setStyle("-fx-text-fill: #a0a8c8; -fx-font-size: 10;");
+        fileLabel.getStyleClass().addAll("text-secondary", "font-10");
         fileLabel.setMaxWidth(400);
 
         statusLabel = new Label();
@@ -97,37 +93,18 @@ public class SyncApp extends Application {
         logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setPrefHeight(140);
-        logArea.setStyle("""
-                -fx-background-color: #0f0f1e;
-                -fx-text-fill: #c8e8c8;
-                -fx-font-family: monospace;
-                -fx-font-size: 11;
-                -fx-border-color: #3a3a5a;
-                -fx-border-radius: 4;
-                """);
+        logArea.getStyleClass().add("log-area");
 
         // ── Launch / Close buttons ────────────────────────────────────────────
         launchBtn = new Button("Launch Game");
         launchBtn.setPrefWidth(140);
-        launchBtn.setStyle("""
-                -fx-background-color: #3a6abf;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 8 28 8 28;
-                """);
+        launchBtn.getStyleClass().add("btn-info");
         launchBtn.setVisible(false);
         launchBtn.setOnAction(e -> launchGame());
 
         closeBtn = new Button("Close");
         closeBtn.setPrefWidth(120);
-        closeBtn.setStyle("""
-                -fx-background-color: #2a6a4a;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 8 28 8 28;
-                """);
+        closeBtn.getStyleClass().add("btn-success");
         closeBtn.setVisible(false);
         closeBtn.setOnAction(e -> Platform.exit());
 
@@ -137,7 +114,7 @@ public class SyncApp extends Application {
         corpRow.getChildren().add(title);
         if (!CORP_NAME.isBlank()) {
             Label c = new Label(CORP_NAME);
-            c.setStyle("-fx-text-fill: #9090c8; -fx-font-size: 11;");
+            c.getStyleClass().addAll("badge-muted", "font-11");
             corpRow.getChildren().add(c);
         }
         corpRow.getChildren().add(versionLbl);
@@ -156,12 +133,32 @@ public class SyncApp extends Application {
                 btnRow);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(24, 30, 24, 30));
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        root.getStyleClass().add("app-root");
 
-        stage.setScene(new Scene(root, 480, 420));
+        Scene scene = new Scene(root, 480, 420);
+        applyTheme(scene);
+        stage.setScene(scene);
         stage.show();
 
+        // Force the TextArea's inner content pane to use the dark background.
+        // Must run after show() so the skin and content node exist.
+        Platform.runLater(() -> {
+            javafx.scene.Node content = logArea.lookup(".content");
+            if (content != null) content.setStyle("-fx-background-color: -af-surface;");
+        });
+
         startSync();
+    }
+
+    private void applyTheme(Scene scene) {
+        scene.getStylesheets().clear();
+        addStylesheet(scene, BASE_CSS);
+        addStylesheet(scene, DARK_CSS);
+    }
+
+    private void addStylesheet(Scene scene, String resource) {
+        var url = SyncApp.class.getResource(resource);
+        if (url != null) scene.getStylesheets().add(url.toExternalForm());
     }
 
     private void startSync() {
@@ -185,26 +182,26 @@ public class SyncApp extends Application {
         progressBar.setProgress(1.0);
         fileLabel.setText("");
 
-        String color, msg;
+        String afColor, msg;
 
         if (result.hasError()) {
             if (result.error().contains("Cannot reach")) {
-                color = "#c0a040";
-                msg   = "Could not reach the server. Check your internet connection and try again.";
+                afColor = "-af-warning";
+                msg     = "Could not reach the server. Check your internet connection and try again.";
             } else {
-                color = "#c04040";
-                msg   = "Error: " + result.error();
+                afColor = "-af-error";
+                msg     = "Error: " + result.error();
             }
             appendLog("ERROR: " + result.error());
         } else if (result.allCurrent()) {
-            color = "#60c060";
-            msg   = result.checked() == 0
+            afColor = "-af-success";
+            msg     = result.checked() == 0
                     ? "Nothing to sync — no client files found on server."
                     : "All " + result.checked() + " file(s) are up to date.";
             appendLog("Sync complete — all files current.");
         } else {
-            color = "#60c060";
-            msg   = result.downloaded() + " file(s) updated";
+            afColor = "-af-success";
+            msg     = result.downloaded() + " file(s) updated";
             if (result.failed() > 0) msg += ", " + result.failed() + " failed";
             msg += " (checked " + result.checked() + " total).";
             appendLog("Sync complete — " + result.downloaded() + " downloaded, "
@@ -212,7 +209,7 @@ public class SyncApp extends Application {
         }
 
         statusLabel.setText(msg);
-        statusLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-weight: bold;");
+        statusLabel.setStyle("-fx-text-fill: " + afColor + "; -fx-font-weight: bold;");
         closeBtn.setVisible(true);
 
         // Show Launch button if the client JAR was downloaded

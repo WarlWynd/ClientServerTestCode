@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
 import com.game.client.SessionStore;
+import com.game.client.ThemeManager;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -42,19 +43,21 @@ public class CharacterCreationScreen {
 
         Text title = new Text("Create Your Character");
         title.setFont(Font.font("System", FontWeight.BOLD, 24));
-        title.setStyle("-fx-fill: #e0e0e0;");
+        title.getStyleClass().add("title-text");
 
         Text subtitle = new Text("Choose a name for your character.");
-        subtitle.setStyle("-fx-fill: #a0a0c0;");
+        subtitle.getStyleClass().add("subtitle-text");
 
         nameField = new TextField();
         nameField.setPromptText("Character name (2–50 characters)");
         nameField.setMaxWidth(300);
+        nameField.getStyleClass().add("input-field");
         nameField.setOnAction(e -> doCreate());
 
         createBtn = new Button("Create Character");
         createBtn.setDefaultButton(true);
         createBtn.setPrefWidth(300);
+        createBtn.getStyleClass().add("btn-primary");
         createBtn.setOnAction(e -> doCreate());
 
         statusLabel = new Label();
@@ -67,13 +70,12 @@ public class CharacterCreationScreen {
         form.setMaxWidth(400);
 
         StackPane root = new StackPane(form);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        root.getStyleClass().add("app-root");
 
-        styleField(nameField);
-        styleButton(createBtn);
-
+        Scene scene = new Scene(root, 480, 360);
+        ThemeManager.apply(scene);
         stage.setTitle(AppSettings.getProgramName() + " — Create Character");
-        stage.setScene(new Scene(root, 480, 360));
+        stage.setScene(scene);
     }
 
     private void doCreate() {
@@ -104,7 +106,6 @@ public class CharacterCreationScreen {
                         Platform.runLater(() -> new GameScreen(stage, client).show());
                     }).start();
                 } else if (packet.payload.has("characterName")) {
-                    // User already has a character — store it and proceed to game
                     SessionStore.setCharacterName(packet.payload.get("characterName").asText());
                     status("Loading your character…", true);
                     new Thread(() -> {
@@ -121,28 +122,6 @@ public class CharacterCreationScreen {
 
     private void status(String msg, boolean ok) {
         statusLabel.setText(msg);
-        statusLabel.setStyle(ok ? "-fx-text-fill: #44cc44;" : "-fx-text-fill: #cc3333;");
-    }
-
-    private void styleField(TextInputControl f) {
-        f.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-prompt-text-fill: #6060a0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 8;
-                """);
-    }
-
-    private void styleButton(Button b) {
-        b.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 10 0 10 0;
-                """);
+        statusLabel.setStyle(ok ? "-fx-text-fill: -af-success;" : "-fx-text-fill: -af-error;");
     }
 }

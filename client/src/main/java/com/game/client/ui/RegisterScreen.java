@@ -2,6 +2,7 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.ThemeManager;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
@@ -18,11 +19,6 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 
-/**
- * Registration screen — reachable from the LoginScreen.
- *
- * Sends REGISTER_REQUEST and navigates back to LoginScreen on success.
- */
 public class RegisterScreen {
 
     private final Stage     stage;
@@ -40,35 +36,38 @@ public class RegisterScreen {
         this.client = client;
     }
 
-    // ── Build & show ─────────────────────────────────────────────────────────
-
     public void show() {
         client.setPacketListener(this::onPacket);
 
         Text title = new Text("Create Account");
         title.setFont(Font.font("System", FontWeight.BOLD, 26));
-        title.setStyle("-fx-fill: #e0e0e0;");
+        title.getStyleClass().add("title-text");
 
         usernameField = new TextField();
         usernameField.setPromptText("Username (letters, digits, underscores)");
         usernameField.setMaxWidth(280);
+        usernameField.getStyleClass().add("input-field");
 
         emailField = new TextField();
         emailField.setPromptText("Email address");
         emailField.setMaxWidth(280);
+        emailField.getStyleClass().add("input-field");
 
         passwordField = new PasswordField();
         passwordField.setPromptText("Password (min 6 characters)");
         passwordField.setMaxWidth(280);
+        passwordField.getStyleClass().add("input-field");
 
         confirmField = new PasswordField();
         confirmField.setPromptText("Confirm password");
         confirmField.setMaxWidth(280);
+        confirmField.getStyleClass().add("input-field");
         confirmField.setOnAction(e -> doRegister());
 
         registerButton = new Button("Create Account");
         registerButton.setDefaultButton(true);
         registerButton.setPrefWidth(280);
+        registerButton.getStyleClass().add("btn-register");
         registerButton.setOnAction(e -> doRegister());
 
         statusLabel = new Label();
@@ -89,20 +88,13 @@ public class RegisterScreen {
         form.setMaxWidth(360);
 
         StackPane root = new StackPane(form);
-        root.setStyle("-fx-background-color: #1a1a2e;");
-
-        styleField(usernameField);
-        styleField(emailField);
-        styleField(passwordField);
-        styleField(confirmField);
-        styleButton(registerButton);
+        root.getStyleClass().add("app-root");
 
         Scene scene = new Scene(root, 480, 480);
+        ThemeManager.apply(scene);
         stage.setTitle(AppSettings.getProgramName() + " — Register");
         stage.setScene(scene);
     }
-
-    // ── Event handlers ───────────────────────────────────────────────────────
 
     private void doRegister() {
         String username = usernameField.getText().trim();
@@ -134,10 +126,8 @@ public class RegisterScreen {
             if (packet.type == PacketType.REGISTER_RESPONSE) {
                 boolean success = packet.payload.get("success").asBoolean();
                 String  message = packet.payload.get("message").asText();
-
                 if (success) {
                     status("✓ " + message + " Redirecting to login…", true);
-                    // Short delay so the user can read the success message
                     new Thread(() -> {
                         try { Thread.sleep(1200); } catch (InterruptedException ignored) {}
                         Platform.runLater(() -> new LoginScreen(stage, client).show());
@@ -150,32 +140,8 @@ public class RegisterScreen {
         });
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
     private void status(String msg, boolean ok) {
         statusLabel.setText(msg);
-        statusLabel.setStyle(ok ? "-fx-text-fill: #44cc44;" : "-fx-text-fill: #cc3333;");
-    }
-
-    private void styleField(TextInputControl f) {
-        f.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-prompt-text-fill: #6060a0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 8;
-                """);
-    }
-
-    private void styleButton(Button b) {
-        b.setStyle("""
-                -fx-background-color: #0f3460;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 10 0 10 0;
-                """);
+        statusLabel.setStyle(ok ? "-fx-text-fill: -af-success;" : "-fx-text-fill: -af-error;");
     }
 }

@@ -1,0 +1,316 @@
+/*
+ * Base stylesheet — all component classes defined using -af-* looked-up colors.
+ * Theme files (dark.css / light.css) define what those colors actually are.
+ */
+
+/* ── Containers ───────────────────────────────────────────────────────────── */
+.app-root      { -fx-background-color: -af-bg; }
+.app-surface   { -fx-background-color: -af-surface; }
+.app-card      { -fx-background-color: -af-card; -fx-background-radius: 6; }
+
+/* ── Text (Label) ─────────────────────────────────────────────────────────── */
+.text-primary   { -fx-text-fill: -af-text-primary; }
+.text-secondary { -fx-text-fill: -af-text-secondary; }
+.text-muted     { -fx-text-fill: -af-text-muted; }
+.text-accent    { -fx-text-fill: -af-accent; }
+.text-success   { -fx-text-fill: -af-success; }
+.text-info      { -fx-text-fill: -af-info; }
+.text-warning   { -fx-text-fill: -af-warning; }
+.text-error     { -fx-text-fill: -af-error; }
+.section-title  { -fx-text-fill: -af-accent; -fx-font-weight: bold; }
+
+/* ── Text (javafx.scene.text.Text node) ──────────────────────────────────── */
+.title-text    { -fx-fill: -af-text-primary; }
+.subtitle-text { -fx-fill: -af-text-secondary; }
+
+/* ── Font helpers ─────────────────────────────────────────────────────────── */
+.font-10 { -fx-font-size: 10; }
+.font-11 { -fx-font-size: 11; }
+.font-12 { -fx-font-size: 12; }
+.font-13 { -fx-font-size: 13; }
+.font-14 { -fx-font-size: 14; }
+.font-16 { -fx-font-size: 16; }
+.bold    { -fx-font-weight: bold; }
+.italic  { -fx-font-style: italic; }
+
+/* ── Input fields ─────────────────────────────────────────────────────────── */
+.input-field {
+    -fx-background-color: -af-card;
+    -fx-text-fill: -af-text-primary;
+    -fx-prompt-text-fill: -af-text-placeholder;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 8;
+}
+.input-field-sm {
+    -fx-background-color: -af-card;
+    -fx-text-fill: -af-text-primary;
+    -fx-prompt-text-fill: -af-text-placeholder;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 5;
+}
+.input-field-md {
+    -fx-background-color: -af-card;
+    -fx-text-fill: -af-text-primary;
+    -fx-prompt-text-fill: -af-text-placeholder;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 6;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn-primary {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 10 0 10 0;
+}
+.btn-primary-sm {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-register {
+    -fx-background-color: -af-register-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 10 0 10 0;
+}
+.btn-success {
+    -fx-background-color: -af-success-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 8 28 8 28;
+}
+.btn-success-sm {
+    -fx-background-color: -af-success-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-info {
+    -fx-background-color: -af-info-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 5 14 5 14;
+}
+.btn-info-sm {
+    -fx-background-color: -af-info-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-danger-sm {
+    -fx-background-color: -af-danger-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-deploy {
+    -fx-background-color: -af-deploy-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-restart {
+    -fx-background-color: -af-restart-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+.btn-revoke {
+    -fx-background-color: -af-revoke-bg;
+    -fx-text-fill: white;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 3 8 3 8;
+}
+.btn-grant {
+    -fx-background-color: -af-success-bg;
+    -fx-text-fill: white;
+    -fx-font-size: 11;
+    -fx-background-radius: 4;
+    -fx-padding: 3 8 3 8;
+}
+.btn-secondary {
+    -fx-background-color: -af-border-light;
+    -fx-text-fill: -af-text-secondary;
+    -fx-background-radius: 4;
+    -fx-padding: 7 14 7 14;
+}
+.btn-muted {
+    -fx-background-color: -af-surface;
+    -fx-text-fill: -af-info;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 7 14 7 14;
+}
+.btn-logout {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+    -fx-font-size: 12;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 8 0 8 0;
+}
+.btn-enter-game {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+    -fx-font-size: 14;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 12 0 12 0;
+}
+
+/* ── Checkboxes & Radio buttons ───────────────────────────────────────────── */
+.check-secondary { -fx-text-fill: -af-text-secondary; }
+.radio-secondary { -fx-text-fill: -af-text-secondary; }
+
+/* ── Hyperlinks ───────────────────────────────────────────────────────────── */
+.hyperlink         { -fx-text-fill: -af-info; -fx-border-color: transparent; }
+.hyperlink:hover   { -fx-text-fill: -af-accent; }
+.hyperlink:visited { -fx-text-fill: -af-info; }
+
+/* ── Separators ───────────────────────────────────────────────────────────── */
+.sep      { -fx-background-color: -af-border; }
+.sep-dark { -fx-background-color: -af-border-light; }
+
+/* ── Log / TextArea ───────────────────────────────────────────────────────── */
+.log-area {
+    -fx-control-inner-background: -af-surface;
+    -fx-text-fill: -af-log-text;
+    -fx-font-family: monospace;
+    -fx-font-size: 11;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+}
+.log-area .content {
+    -fx-background-color: -af-surface;
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.dark-table {
+    -fx-background-color: -af-bg;
+    -fx-text-fill: -af-text-primary;
+    -fx-table-cell-border-color: -af-border-light;
+}
+.dark-table .table-row-cell {
+    -fx-background-color: -af-bg;
+    -fx-text-fill: -af-text-primary;
+    -fx-border-color: transparent;
+}
+.dark-table .table-row-cell:odd {
+    -fx-background-color: -af-card;
+}
+.dark-table .table-row-cell:selected {
+    -fx-background-color: -af-border;
+}
+.dark-table .table-row-cell .text {
+    -fx-fill: -af-text-primary;
+}
+.dark-table .column-header-background {
+    -fx-background-color: -af-surface;
+}
+.dark-table .column-header-background .label {
+    -fx-text-fill: -af-text-secondary;
+    -fx-font-weight: bold;
+}
+.dark-table .column-header-background .filler {
+    -fx-background-color: -af-surface;
+}
+.dark-table .placeholder .label {
+    -fx-text-fill: -af-text-muted;
+}
+
+/* ── Scroll pane ──────────────────────────────────────────────────────────── */
+.scroll-dark {
+    -fx-background: -af-bg;
+    -fx-background-color: -af-bg;
+    -fx-border-color: transparent;
+}
+.scroll-dark .scroll-bar:vertical,
+.scroll-dark .scroll-bar:horizontal {
+    -fx-background-color: -af-surface;
+}
+.scroll-dark .scroll-bar .thumb {
+    -fx-background-color: -af-border;
+    -fx-background-radius: 4;
+}
+.scroll-dark .scroll-bar .track {
+    -fx-background-color: -af-surface;
+}
+.scroll-dark .scroll-bar .increment-button,
+.scroll-dark .scroll-bar .decrement-button {
+    -fx-background-color: -af-surface;
+    -fx-padding: 4;
+}
+.scroll-dark .scroll-bar .increment-arrow,
+.scroll-dark .scroll-bar .decrement-arrow {
+    -fx-background-color: -af-text-muted;
+}
+.scroll-dark .corner {
+    -fx-background-color: -af-surface;
+}
+
+/* ── Progress bar ─────────────────────────────────────────────────────────── */
+.progress-accent .bar   { -fx-background-color: -af-progress-accent; -fx-background-radius: 4; }
+.progress-accent .track { -fx-background-color: -af-border-light; -fx-background-radius: 4; }
+
+/* ── System message bar ───────────────────────────────────────────────────── */
+.system-msg-bar      { -fx-background-color: -af-warning-bg; }
+.system-msg-text     { -fx-text-fill: -af-warn-bar-text; -fx-font-weight: bold; -fx-font-size: 12; }
+.system-msg-countdown{ -fx-text-fill: -af-warn-bar-dim; -fx-font-size: 12; }
+
+/* ── Disconnected overlay ─────────────────────────────────────────────────── */
+.overlay-bg { -fx-background-color: -af-overlay-bg; }
+.overlay-title { -fx-text-fill: -af-accent; -fx-font-size: 22; -fx-font-weight: bold; }
+.overlay-subtitle { -fx-text-fill: -af-text-secondary; -fx-font-size: 14; }
+
+/* ── Badge ────────────────────────────────────────────────────────────────── */
+.badge-muted {
+    -fx-background-color: -af-badge-bg;
+    -fx-text-fill: -af-badge-text;
+    -fx-font-size: 9;
+    -fx-padding: 2 6 2 6;
+    -fx-background-radius: 8;
+}
+
+/* ── Tab pane ─────────────────────────────────────────────────────────────── */
+.tab-pane-dark .tab-header-area .tab-header-background {
+    -fx-background-color: -af-surface;
+}
+.tab-pane-dark .tab {
+    -fx-background-color: -af-surface;
+}
+.tab-pane-dark .tab .tab-label {
+    -fx-text-fill: -af-text-secondary;
+}
+.tab-pane-dark .tab:selected {
+    -fx-background-color: -af-bg;
+}
+.tab-pane-dark .tab:selected .tab-label {
+    -fx-text-fill: -af-text-primary;
+    -fx-font-weight: bold;
+}
+.tab-pane-dark .tab-pane {
+    -fx-background-color: -af-bg;
+}

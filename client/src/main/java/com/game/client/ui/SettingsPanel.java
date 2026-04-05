@@ -4,13 +4,13 @@ import com.game.client.AppSettings;
 import com.game.client.GameResolution;
 import com.game.client.SessionStore;
 import com.game.client.SoundMode;
+import com.game.client.ThemeManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import java.util.function.Consumer;
@@ -45,7 +45,7 @@ public class SettingsPanel {
             rb.setToggleGroup(soundGroup);
             rb.setUserData(mode);
             rb.setSelected(AppSettings.getSoundMode() == mode);
-            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            rb.getStyleClass().add("radio-secondary");
             radioRow.getChildren().add(rb);
         }
 
@@ -58,12 +58,12 @@ public class SettingsPanel {
         // ── Display ───────────────────────────────────────────────────────────
         CheckBox keepAwakeCheck = new CheckBox("Keep screen awake");
         keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
-        keepAwakeCheck.setStyle("-fx-text-fill: #c0c0d8;");
+        keepAwakeCheck.getStyleClass().add("check-secondary");
         keepAwakeCheck.selectedProperty().addListener((obs, old, val) ->
                 AppSettings.setKeepScreenAwake(val));
 
         Label hudLabel = new Label("HUD Opacity:");
-        hudLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        hudLabel.getStyleClass().addAll("text-secondary", "font-12");
 
         ToggleGroup hudGroup = new ToggleGroup();
         HBox hudRow = new HBox(12);
@@ -76,7 +76,7 @@ public class SettingsPanel {
             rb.setToggleGroup(hudGroup);
             rb.setUserData(opacityLevels[i]);
             rb.setSelected(Math.abs(AppSettings.getHudOpacity() - opacityLevels[i]) < 0.01);
-            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            rb.getStyleClass().add("radio-secondary");
             hudRow.getChildren().add(rb);
         }
         hudGroup.selectedToggleProperty().addListener((obs, old, val) -> {
@@ -85,7 +85,7 @@ public class SettingsPanel {
 
         // ── Resolution ────────────────────────────────────────────────────────
         Label resLabel = new Label("Resolution:");
-        resLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        resLabel.getStyleClass().addAll("text-secondary", "font-12");
 
         ToggleGroup resGroup = new ToggleGroup();
         VBox resCol = new VBox(6);
@@ -94,7 +94,7 @@ public class SettingsPanel {
             rb.setToggleGroup(resGroup);
             rb.setUserData(res);
             rb.setSelected(AppSettings.getResolution() == res);
-            rb.setStyle("-fx-text-fill: #c0c0d8;");
+            rb.getStyleClass().add("radio-secondary");
             resCol.getChildren().add(rb);
         }
         resGroup.selectedToggleProperty().addListener((obs, old, val) -> {
@@ -102,7 +102,7 @@ public class SettingsPanel {
         });
 
         Label resNote = new Label("Resolution applies next time you enter the game.");
-        resNote.setStyle("-fx-text-fill: #505065; -fx-font-style: italic; -fx-font-size: 11;");
+        resNote.getStyleClass().addAll("text-muted", "italic", "font-11");
 
         // ── Tabs ──────────────────────────────────────────────────────────────
         ToggleGroup tabSideGroup = new ToggleGroup();
@@ -112,8 +112,8 @@ public class SettingsPanel {
         tabLeft.setToggleGroup(tabSideGroup);
         tabTop.setUserData(Side.TOP);
         tabLeft.setUserData(Side.LEFT);
-        tabTop.setStyle("-fx-text-fill: #c0c0d8;");
-        tabLeft.setStyle("-fx-text-fill: #c0c0d8;");
+        tabTop.getStyleClass().add("radio-secondary");
+        tabLeft.getStyleClass().add("radio-secondary");
         boolean isLeft = "LEFT".equalsIgnoreCase(AppSettings.getTabSide());
         tabTop.setSelected(!isLeft);
         tabLeft.setSelected(isLeft);
@@ -128,6 +128,26 @@ public class SettingsPanel {
         HBox tabSideRow = new HBox(16, tabTop, tabLeft);
         tabSideRow.setAlignment(Pos.CENTER_LEFT);
 
+        // ── Theme ─────────────────────────────────────────────────────────────
+        ToggleGroup themeGroup = new ToggleGroup();
+        RadioButton darkRb  = new RadioButton("Dark");
+        RadioButton lightRb = new RadioButton("Light");
+        darkRb.setToggleGroup(themeGroup);
+        lightRb.setToggleGroup(themeGroup);
+        darkRb.setUserData(ThemeManager.Theme.DARK);
+        lightRb.setUserData(ThemeManager.Theme.LIGHT);
+        darkRb.getStyleClass().add("radio-secondary");
+        lightRb.getStyleClass().add("radio-secondary");
+        darkRb.setSelected(ThemeManager.getTheme() == ThemeManager.Theme.DARK);
+        lightRb.setSelected(ThemeManager.getTheme() == ThemeManager.Theme.LIGHT);
+
+        themeGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val != null) ThemeManager.setTheme((ThemeManager.Theme) val.getUserData());
+        });
+
+        HBox themeRow = new HBox(16, darkRb, lightRb);
+        themeRow.setAlignment(Pos.CENTER_LEFT);
+
         VBox displaySection = section("Display",
                 row(keepAwakeCheck),
                 row(hudLabel),
@@ -135,35 +155,24 @@ public class SettingsPanel {
                 row(resLabel),
                 row(resCol),
                 row(resNote),
-                row("Tabs:", tabSideRow));
+                row("Tabs:",  tabSideRow),
+                row("Theme:", themeRow));
 
         // ── Gameplay ──────────────────────────────────────────────────────────
-        VBox gameplaySection = section("Gameplay",
-                comingSoon());
+        VBox gameplaySection = section("Gameplay", comingSoon());
 
         // ── Account ───────────────────────────────────────────────────────────
         VBox accountSection = section("Account", comingSoon());
 
         // ── Save / Reset ──────────────────────────────────────────────────────
         Label statusLabel = new Label();
-        statusLabel.setStyle("-fx-font-size: 11;");
+        statusLabel.getStyleClass().add("font-11");
 
         Button saveBtn = new Button("Save Settings");
-        saveBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 7 18 7 18;
-                """);
+        saveBtn.getStyleClass().add("btn-primary");
 
         Button resetBtn = new Button("Reset to Defaults");
-        resetBtn.setStyle("""
-                -fx-background-color: #2a2a4a;
-                -fx-text-fill: #a0a0c0;
-                -fx-background-radius: 4;
-                -fx-padding: 7 14 7 14;
-                """);
+        resetBtn.getStyleClass().add("btn-secondary");
 
         // ── Admin: Connection ─────────────────────────────────────────────────
         VBox connectionSection = null;
@@ -175,7 +184,7 @@ public class SettingsPanel {
             portField = styledField(String.valueOf(AppSettings.getServerPort()));
 
             Label restartNote = new Label("Connection changes take effect on next launch.");
-            restartNote.setStyle("-fx-text-fill: #606080; -fx-font-size: 11; -fx-font-style: italic;");
+            restartNote.getStyleClass().addAll("text-muted", "italic", "font-11");
 
             connectionSection = section("Connection (Admin)",
                     row("Server Host:", hostField),
@@ -214,13 +223,7 @@ public class SettingsPanel {
         });
 
         Button restartClientBtn = new Button("Restart Client");
-        restartClientBtn.setStyle("""
-                -fx-background-color: #1a3a5a;
-                -fx-text-fill: #80c0ff;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 7 14 7 14;
-                """);
+        restartClientBtn.getStyleClass().add("btn-muted");
         restartClientBtn.setOnAction(e -> {
             AppSettings.save();
             if (onRestartClient != null) onRestartClient.run();
@@ -238,15 +241,11 @@ public class SettingsPanel {
         VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
         content.getChildren().addAll(buttons, restartRow);
-        content.setStyle("-fx-background-color: #1a1a2e;");
+        content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
-        scroll.setStyle("""
-                -fx-background: #1a1a2e;
-                -fx-background-color: #1a1a2e;
-                -fx-border-color: transparent;
-                """);
+        scroll.getStyleClass().add("scroll-dark");
 
         return scroll;
     }
@@ -256,10 +255,10 @@ public class SettingsPanel {
     private static VBox section(String title, Node... children) {
         Label header = new Label(title);
         header.setFont(Font.font("System", FontWeight.BOLD, 13));
-        header.setTextFill(Color.web("#e94560"));
+        header.getStyleClass().add("section-title");
 
         Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #2a2a4a;");
+        sep.getStyleClass().add("sep-dark");
 
         VBox body = new VBox(6);
         body.setPadding(new Insets(4, 0, 0, 0));
@@ -267,7 +266,7 @@ public class SettingsPanel {
 
         VBox box = new VBox(4, header, sep, body);
         box.setPadding(new Insets(14, 20, 8, 20));
-        box.setStyle("-fx-background-color: #1a1a2e;");
+        box.getStyleClass().add("app-root");
         return box;
     }
 
@@ -280,7 +279,7 @@ public class SettingsPanel {
     private static HBox row(String label, Node node) {
         Label lbl = new Label(label);
         lbl.setMinWidth(130);
-        lbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        lbl.getStyleClass().addAll("text-secondary", "font-12");
         HBox row = new HBox(12, lbl, node);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
@@ -296,7 +295,7 @@ public class SettingsPanel {
 
     private static Label comingSoon() {
         Label lbl = new Label("More options coming soon.");
-        lbl.setStyle("-fx-text-fill: #505065; -fx-font-style: italic; -fx-font-size: 11;");
+        lbl.getStyleClass().addAll("text-muted", "italic", "font-11");
         return lbl;
     }
 
@@ -305,21 +304,12 @@ public class SettingsPanel {
     private static TextField styledField(String value) {
         TextField f = new TextField(value);
         f.setPrefWidth(220);
-        f.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-prompt-text-fill: #6060a0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 6;
-                """);
+        f.getStyleClass().add("input-field-md");
         return f;
     }
 
     private static void setStatus(Label label, String msg, boolean success) {
         label.setText(msg);
-        label.setStyle("-fx-font-size: 11; -fx-text-fill: "
-                + (success ? "#50c050" : "#e94560") + ";");
+        label.setStyle("-fx-font-size: 11; -fx-text-fill: " + (success ? "-af-success;" : "-af-error;"));
     }
 }

@@ -23,7 +23,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
@@ -72,30 +71,18 @@ public class AdminPanel {
     public Node buildView() {
         headerLabel = new Label("Admin Panel — " + SessionStore.getUsername());
         headerLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
-        headerLabel.setTextFill(Color.web("#e0e0ff"));
+        headerLabel.getStyleClass().add("text-primary");
 
         statusLabel = new Label("");
         statusLabel.setFont(Font.font("System", 12));
-        statusLabel.setTextFill(Color.web("#80c080"));
+        statusLabel.getStyleClass().add("text-success");
 
         Button deployBtn = new Button("Deploy & Restart");
-        deployBtn.setStyle("""
-                -fx-background-color: #1a4a1a;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 4 12 4 12;
-                """);
+        deployBtn.getStyleClass().add("btn-deploy");
         deployBtn.setOnAction(e -> confirmDeploy());
 
         Button restartBtn = new Button("Restart");
-        restartBtn.setStyle("""
-                -fx-background-color: #7a3000;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 4 12 4 12;
-                """);
+        restartBtn.getStyleClass().add("btn-restart");
         restartBtn.setOnAction(e -> confirmRestart());
 
         Region headerSpacer = new Region();
@@ -104,19 +91,16 @@ public class AdminPanel {
         HBox header = new HBox(headerLabel, headerSpacer, deployBtn, restartBtn);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 6, 14));
-        header.setStyle("-fx-background-color: #0f0f1e;");
+        header.setSpacing(8);
+        header.getStyleClass().add("app-surface");
 
         HBox statusBar = new HBox(statusLabel);
         statusBar.setPadding(new Insets(2, 14, 4, 14));
-        statusBar.setStyle("-fx-background-color: #0f0f1e;");
+        statusBar.getStyleClass().add("app-surface");
 
         TableView<PlayerRow> table = new TableView<>(rows);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setStyle("""
-                -fx-background-color: #1a1a2e;
-                -fx-text-fill: #e0e0e0;
-                -fx-table-cell-border-color: #2a2a4a;
-                """);
+        table.getStyleClass().add("dark-table");
         table.setPlaceholder(new Label("No players connected"));
 
         table.getColumns().addAll(
@@ -141,7 +125,7 @@ public class AdminPanel {
 
         VBox root = new VBox(header, statusBar, connSection, uploadSection, table);
         VBox.setVgrow(table, Priority.ALWAYS);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        root.getStyleClass().add("app-root");
 
         ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
@@ -154,51 +138,38 @@ public class AdminPanel {
     private VBox buildConnectionSection() {
         Label hostLbl = new Label("Server Host");
         hostLbl.setMinWidth(100);
-        hostLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        hostLbl.getStyleClass().addAll("text-secondary", "font-12");
 
         TextField hostField = new TextField(AppSettings.getServerHost());
         hostField.setPrefWidth(200);
-        hostField.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 5;
-                """);
+        hostField.getStyleClass().add("input-field-sm");
 
         Label portLbl = new Label("Server Port");
         portLbl.setMinWidth(100);
-        portLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        portLbl.getStyleClass().addAll("text-secondary", "font-12");
 
         TextField portField = new TextField(String.valueOf(AppSettings.getServerPort()));
         portField.setPrefWidth(80);
-        portField.setStyle(hostField.getStyle());
+        portField.getStyleClass().add("input-field-sm");
 
         Label connStatus = new Label();
-        connStatus.setStyle("-fx-font-size: 11;");
+        connStatus.getStyleClass().add("font-11");
 
         Button saveBtn = new Button("Save");
-        saveBtn.setStyle("""
-                -fx-background-color: #e94560;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 5 14 5 14;
-                """);
+        saveBtn.getStyleClass().add("btn-primary-sm");
         saveBtn.setOnAction(e -> {
             int port;
             try { port = Integer.parseInt(portField.getText().trim()); }
             catch (NumberFormatException ex) {
                 connStatus.setText("Invalid port.");
-                connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
                 return;
             }
             AppSettings.setServerHost(hostField.getText().trim());
             AppSettings.setServerPort(port);
             boolean ok = AppSettings.save();
             connStatus.setText(ok ? "Saved. Restart to apply." : "Could not write settings file.");
-            connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: " + (ok ? "#50c050" : "#e94560") + ";");
+            connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: " + (ok ? "-af-success;" : "-af-error;"));
         });
 
         HBox hostRow = new HBox(10, hostLbl, hostField);
@@ -210,17 +181,7 @@ public class AdminPanel {
         HBox btnRow = new HBox(10, saveBtn, connStatus);
         btnRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label sectionTitle = new Label("Connection");
-        sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
-        sectionTitle.setTextFill(Color.web("#e94560"));
-
-        Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #2a2a4a;");
-
-        VBox section = new VBox(6, sectionTitle, sep, hostRow, portRow, btnRow);
-        section.setPadding(new Insets(10, 14, 10, 14));
-        section.setStyle("-fx-background-color: #0f0f1e;");
-        return section;
+        return buildSection("Connection", hostRow, portRow, btnRow);
     }
 
     // ── Upload section ───────────────────────────────────────────────────────
@@ -228,33 +189,20 @@ public class AdminPanel {
     private VBox buildUploadSection() {
         Label keyLbl = new Label("Upload Key");
         keyLbl.setMinWidth(100);
-        keyLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+        keyLbl.getStyleClass().addAll("text-secondary", "font-12");
 
         PasswordField keyField = new PasswordField();
         keyField.setText(AppSettings.getUploadKey());
         keyField.setPromptText("server upload key");
         keyField.setPrefWidth(200);
-        keyField.setStyle("""
-                -fx-background-color: #16213e;
-                -fx-text-fill: #e0e0e0;
-                -fx-border-color: #3a3a6a;
-                -fx-border-radius: 4;
-                -fx-background-radius: 4;
-                -fx-padding: 5;
-                """);
+        keyField.getStyleClass().add("input-field-sm");
 
         Label uploadStatus = new Label();
-        uploadStatus.setStyle("-fx-font-size: 11;");
+        uploadStatus.getStyleClass().add("font-11");
         uploadStatus.setWrapText(true);
 
         Button clientJarBtn = new Button("Upload Client JAR");
-        clientJarBtn.setStyle("""
-                -fx-background-color: #1a3a6a;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 5 14 5 14;
-                """);
+        clientJarBtn.getStyleClass().add("btn-info");
         clientJarBtn.setOnAction(e -> pickAndUpload(
                 clientJarBtn.getScene().getWindow(),
                 "Select Client JAR",
@@ -264,13 +212,7 @@ public class AdminPanel {
                 uploadStatus));
 
         Button syncAppBtn = new Button("Upload Sync App");
-        syncAppBtn.setStyle("""
-                -fx-background-color: #1a3a6a;
-                -fx-text-fill: white;
-                -fx-font-weight: bold;
-                -fx-background-radius: 4;
-                -fx-padding: 5 14 5 14;
-                """);
+        syncAppBtn.getStyleClass().add("btn-info");
         syncAppBtn.setOnAction(e -> pickAndUpload(
                 syncAppBtn.getScene().getWindow(),
                 "Select Sync App JAR",
@@ -285,16 +227,22 @@ public class AdminPanel {
         HBox btnRow = new HBox(10, clientJarBtn, syncAppBtn, uploadStatus);
         btnRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label sectionTitle = new Label("Uploads");
+        return buildSection("Uploads", keyRow, btnRow);
+    }
+
+    private VBox buildSection(String title, Node... children) {
+        Label sectionTitle = new Label(title);
         sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
-        sectionTitle.setTextFill(Color.web("#e94560"));
+        sectionTitle.getStyleClass().add("section-title");
 
         Separator sep = new Separator();
-        sep.setStyle("-fx-background-color: #2a2a4a;");
+        sep.getStyleClass().add("sep-dark");
 
-        VBox section = new VBox(6, sectionTitle, sep, keyRow, btnRow);
+        VBox section = new VBox(6);
+        section.getChildren().addAll(sectionTitle, sep);
+        section.getChildren().addAll(children);
         section.setPadding(new Insets(10, 14, 10, 14));
-        section.setStyle("-fx-background-color: #0f0f1e;");
+        section.getStyleClass().add("app-surface");
         return section;
     }
 
@@ -302,7 +250,7 @@ public class AdminPanel {
                                String uploadUrl, String displayName, Label statusLabel) {
         if (uploadKey.isEmpty()) {
             statusLabel.setText("Enter an upload key first.");
-            statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+            statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
             return;
         }
 
@@ -314,7 +262,7 @@ public class AdminPanel {
 
         Path jar = selected.toPath();
         statusLabel.setText("Uploading " + displayName + "…");
-        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #f0a030;");
+        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-warning;");
 
         Thread.ofVirtual().start(() -> {
             try {
@@ -331,19 +279,19 @@ public class AdminPanel {
                 if (code == 200) {
                     Platform.runLater(() -> {
                         statusLabel.setText("Uploaded " + displayName + " (" + (bytes.length / 1024) + " KB)");
-                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #50c050;");
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-success;");
                     });
                 } else {
                     Platform.runLater(() -> {
                         statusLabel.setText("Upload failed — HTTP " + code);
-                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
                     });
                 }
             } catch (Exception ex) {
                 log.error("Upload failed: {}", ex.getMessage(), ex);
                 Platform.runLater(() -> {
                     statusLabel.setText("Upload error: " + ex.getMessage());
-                    statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                    statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
                 });
             }
         });
@@ -370,7 +318,7 @@ public class AdminPanel {
                     String msg = packet.payload.has("message")
                             ? packet.payload.get("message").asText() : "Access denied";
                     log.warn("ADMIN_USER_LIST_RESPONSE denied: {}", msg);
-                    Platform.runLater(() -> showStatus("Access denied: " + msg, "#e94560"));
+                    Platform.runLater(() -> showStatus("Access denied: " + msg, false));
                     return;
                 }
                 JsonNode players = packet.payload.get("players");
@@ -401,14 +349,14 @@ public class AdminPanel {
                 String  msg = ok
                         ? "Kicked: "      + packet.payload.get("username").asText()
                         : "Kick failed: " + packet.payload.get("message").asText();
-                showStatus(msg, ok ? "#80c080" : "#e94560");
+                showStatus(msg, ok);
             });
             case ADMIN_BAN_RESPONSE -> Platform.runLater(() -> {
                 boolean ok  = packet.payload.get("success").asBoolean();
                 String  msg = ok
                         ? "Banned: "      + packet.payload.get("username").asText()
                         : "Ban failed: "  + packet.payload.get("message").asText();
-                showStatus(msg, ok ? "#80c080" : "#e94560");
+                showStatus(msg, ok);
             });
             case ADMIN_SET_ADMIN_RESPONSE -> Platform.runLater(() -> {
                 boolean ok  = packet.payload.get("success").asBoolean();
@@ -416,24 +364,25 @@ public class AdminPanel {
                         ? (packet.payload.get("isAdmin").asBoolean() ? "Granted admin: " : "Revoked admin: ")
                                 + packet.payload.get("username").asText()
                         : "Admin change failed: " + packet.payload.get("message").asText();
-                showStatus(msg, ok ? "#80c080" : "#e94560");
+                showStatus(msg, ok);
             });
             case ADMIN_RESTART_RESPONSE -> Platform.runLater(() -> {
                 boolean ok = packet.payload.get("success").asBoolean();
                 if (ok) {
-                    showStatus("Server restarting…", "#f0a030");
+                    statusLabel.setText("Server restarting…");
+                    statusLabel.setStyle("-fx-text-fill: -af-warning;");
                     if (onServerRestart != null) onServerRestart.accept(20);
                 } else {
-                    showStatus("Restart failed: " + packet.payload.get("message").asText(), "#e94560");
+                    showStatus("Restart failed: " + packet.payload.get("message").asText(), false);
                 }
             });
             case ADMIN_DEPLOY_RESPONSE -> Platform.runLater(() -> {
                 boolean ok = packet.payload.get("success").asBoolean();
                 if (ok) {
-                    showStatus("Deploying — pulling, rebuilding, restarting…", "#50c050");
+                    showStatus("Deploying — pulling, rebuilding, restarting…", true);
                     if (onServerRestart != null) onServerRestart.accept(60);
                 } else {
-                    showStatus("Deploy failed: " + packet.payload.get("message").asText(), "#e94560");
+                    showStatus("Deploy failed: " + packet.payload.get("message").asText(), false);
                 }
             });
         }
@@ -466,13 +415,6 @@ public class AdminPanel {
         col.setPrefWidth(80);
         col.setCellFactory(c -> new TableCell<>() {
             private final Button btn = new Button();
-            {
-                btn.setStyle("""
-                        -fx-font-size: 11;
-                        -fx-background-radius: 4;
-                        -fx-padding: 3 8 3 8;
-                        """);
-            }
             @Override protected void updateItem(Void item, boolean empty) {
                 super.updateItem(item, empty);
                 if (empty) { setGraphic(null); return; }
@@ -481,9 +423,8 @@ public class AdminPanel {
                     setGraphic(null); return;
                 }
                 btn.setText(row.isAdmin ? "Revoke" : "Grant");
-                String bg = row.isAdmin ? "#505080" : "#3a7a3a";
-                btn.setStyle("-fx-background-color: " + bg + "; -fx-text-fill: white; "
-                        + "-fx-font-size: 11; -fx-background-radius: 4; -fx-padding: 3 8 3 8;");
+                btn.getStyleClass().removeAll("btn-revoke", "btn-grant");
+                btn.getStyleClass().add(row.isAdmin ? "btn-revoke" : "btn-grant");
                 btn.setOnAction(e -> doSetAdmin(row.username.get(), !row.isAdmin));
                 setGraphic(btn);
             }
@@ -497,13 +438,7 @@ public class AdminPanel {
         col.setCellFactory(c -> new TableCell<>() {
             private final Button btn = new Button("Kick");
             {
-                btn.setStyle("""
-                        -fx-background-color: #e94560;
-                        -fx-text-fill: white;
-                        -fx-font-size: 11;
-                        -fx-background-radius: 4;
-                        -fx-padding: 3 8 3 8;
-                        """);
+                btn.getStyleClass().add("btn-primary-sm");
                 btn.setOnAction(e -> {
                     PlayerRow row = getTableView().getItems().get(getIndex());
                     doKick(row.username.get());
@@ -525,13 +460,7 @@ public class AdminPanel {
         col.setCellFactory(c -> new TableCell<>() {
             private final Button btn = new Button("Ban");
             {
-                btn.setStyle("""
-                        -fx-background-color: #a03030;
-                        -fx-text-fill: white;
-                        -fx-font-size: 11;
-                        -fx-background-radius: 4;
-                        -fx-padding: 3 8 3 8;
-                        """);
+                btn.getStyleClass().add("btn-danger-sm");
                 btn.setOnAction(e -> {
                     PlayerRow row = getTableView().getItems().get(getIndex());
                     doBan(row.username.get());
@@ -619,11 +548,14 @@ public class AdminPanel {
                 .forEach(n -> n.setStyle("-fx-text-fill: #ffff00;")));
     }
 
-    private void showStatus(String msg, String color) {
-        statusLabel.setTextFill(Color.web(color));
+    private void showStatus(String msg, boolean ok) {
         statusLabel.setText(msg);
+        statusLabel.setStyle("-fx-text-fill: " + (ok ? "-af-success;" : "-af-error;"));
         PauseTransition clear = new PauseTransition(Duration.seconds(4));
-        clear.setOnFinished(e -> statusLabel.setText(""));
+        clear.setOnFinished(e -> {
+            statusLabel.setText("");
+            statusLabel.setStyle("");
+        });
         clear.play();
     }
 

@@ -1,0 +1,47 @@
+/*
+ * Dark Theme — defines all -af-* looked-up colors on .root
+ * base.css component classes reference these names, so swapping
+ * this file for light.css switches the entire colour scheme.
+ */
+.root {
+    /* ── Backgrounds ──────────────────────────────────────────────────── */
+    -af-bg:              #1a1a2e;
+    -af-surface:         #0f0f1e;
+    -af-card:            #16213e;
+
+    /* ── Text ─────────────────────────────────────────────────────────── */
+    -af-text-primary:    #e0e0e0;
+    -af-text-secondary:  #a0a0c0;
+    -af-text-muted:      #606080;
+    -af-text-placeholder: #6060a0;
+
+    /* ── Semantic ─────────────────────────────────────────────────────── */
+    -af-accent:          #e94560;
+    -af-success:         #50c050;
+    -af-success-bg:      #2a6a4a;
+    -af-info:            #53c0f0;
+    -af-info-bg:         #1a3a6a;
+    -af-warning:         #f0a030;
+    -af-warning-bg:      #c8960a;
+    -af-error:           #cc4040;
+
+    /* ── Borders ──────────────────────────────────────────────────────── */
+    -af-border:          #3a3a6a;
+    -af-border-light:    #2a2a4a;
+
+    /* ── Button variants ──────────────────────────────────────────────── */
+    -af-danger-bg:       #a03030;
+    -af-restart-bg:      #7a3000;
+    -af-deploy-bg:       #1a4a1a;
+    -af-revoke-bg:       #505080;
+    -af-register-bg:     #0f3460;
+
+    /* ── Misc ─────────────────────────────────────────────────────────── */
+    -af-log-text:        #c8e8c8;
+    -af-warn-bar-text:   #1a1000;
+    -af-warn-bar-dim:    #3a2000;
+    -af-badge-bg:        #2a2a4a;
+    -af-badge-text:      #9090c8;
+    -af-overlay-bg:      rgba(10,10,20,0.92);
+    -af-progress-accent: #4a90d9;
+}
