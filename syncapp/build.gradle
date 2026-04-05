@@ -31,6 +31,12 @@ jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
+// Read app name and version from properties file at build time
+def syncProps = new Properties()
+file('src/main/resources/syncapp.properties').withInputStream { syncProps.load(it) }
+def syncAppName    = syncProps.getProperty('app.name',    'Adventure Friends Sync')
+def syncAppVersion = syncProps.getProperty('app.version', '1.0.0')
+
 task packageExe(type: Exec, dependsOn: jar) {
     def jpackage  = "${System.getProperty('java.home')}/bin/jpackage"
     def outputDir = layout.buildDirectory.dir('jpackage').get().asFile.absolutePath
@@ -38,13 +44,16 @@ task packageExe(type: Exec, dependsOn: jar) {
     doFirst { delete outputDir }
 
     commandLine jpackage,
-        '--type',        'app-image',
-        '--name',        'Sync App',
-        '--app-version', '1.0.0',
+        '--type',        'exe',
+        '--name',        syncAppName,
+        '--app-version', syncAppVersion,
         '--input',       layout.buildDirectory.dir('libs').get().asFile.absolutePath,
         '--main-jar',    'sync-app.jar',
         '--main-class',  'com.game.syncapp.SyncApp',
         '--dest',        outputDir,
         '--java-options', '--enable-preview',
-        '--java-options', '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+        '--java-options', '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
+        '--win-dir-chooser',
+        '--win-shortcut',
+        '--win-menu'
 }

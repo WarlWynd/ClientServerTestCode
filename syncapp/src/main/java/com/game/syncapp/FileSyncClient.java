@@ -14,13 +14,12 @@ import java.util.function.BiConsumer;
 
 /**
  * Fetches /client-manifest from the asset server and downloads any files
- * whose SHA-256 differs from the locally cached copy in ~/.game/{type}/.
+ * whose SHA-256 differs from the locally cached copy.
  */
 public final class FileSyncClient {
 
     private static final Logger       log    = LoggerFactory.getLogger(FileSyncClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    public  static final Path         BASE_DIR = Paths.get(System.getProperty("user.home"), ".game");
 
     private FileSyncClient() {}
 
@@ -30,26 +29,37 @@ public final class FileSyncClient {
     }
 
     /**
-     * Syncs all files listed in the server manifest into ~/.game/{type}/.
+     * Syncs all files listed in the server manifest into installDir/{type}/.
      *
      * @param assetBaseUrl     base URL of the asset HTTP server
-     * @param progressCallback called with (filesProcessed, totalFiles) after each file
+     * @param installDir       root directory to download files into
+     * @param progressCallback called with (filesProcessed, totalFiles, currentFileName) — may be null
+     * @param fileCallback     called with (filename, isNewDownload) after each file — may be null
      */
+    @FunctionalInterface
+    public interface TriConsumer<A, B, C> {
+        void accept(A a, B b, C c);
+    }
+
     public static SyncResult sync(String assetBaseUrl,
-                                  BiConsumer<Integer, Integer> progressCallback) {
+                                  Path installDir,
+                                  TriConsumer<Integer, Integer, String> progressCallback,
+                                  BiConsumer<String, Boolean> fileCallback) {
         try {
             HttpClient http = HttpClient.newBuilder()
                     .version(HttpClient.Version.HTTP_1_1)
+                    .connectTimeout(java.time.Duration.ofSeconds(10))
                     .build();
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(assetBaseUrl + "/client-manifest"))
+                    .timeout(java.time.Duration.ofSeconds(15))
                     .GET().build();
 
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
 
             if (resp.statusCode() == 404) {
-                return new SyncResult(0, 0, 0, null);
+                return new SyncResult(0, 0, 0, null); // no manifest = nothing to sync
             }
             if (resp.statusCode() != 200) {
                 return new SyncResult(0, 0, 0, "Server returned HTTP " + resp.statusCode());
@@ -68,20 +78,27 @@ public final class FileSyncClient {
                 String type       = entry.get("type").asText();
                 String name       = entry.get("name").asText();
                 String serverHash = entry.has("sha256") ? entry.get("sha256").asText() : "";
+                String displayName = type + "/" + name;
 
-                Path localDir  = BASE_DIR.resolve(type);
+                if (progressCallback != null) progressCallback.accept(idx, total, displayName);
+
+                Path localDir  = installDir.resolve(type);
                 Files.createDirectories(localDir);
                 Path localFile = localDir.resolve(name);
 
+                // Skip if local SHA-256 matches server
                 if (!serverHash.isEmpty() && Files.exists(localFile)) {
                     if (sha256(Files.readAllBytes(localFile)).equals(serverHash)) {
-                        if (progressCallback != null) progressCallback.accept(++idx, total);
+                        if (fileCallback != null)    fileCallback.accept(displayName, false);
+                        if (progressCallback != null) progressCallback.accept(++idx, total, null);
                         continue;
                     }
                 }
 
+                // Download
                 HttpRequest dlReq = HttpRequest.newBuilder()
                         .uri(URI.create(assetBaseUrl + "/assets/" + type + "/" + name))
+                        .timeout(java.time.Duration.ofSeconds(30))
                         .GET().build();
                 HttpResponse<byte[]> dlResp = http.send(dlReq, HttpResponse.BodyHandlers.ofByteArray());
 
@@ -89,19 +106,21 @@ public final class FileSyncClient {
                     Files.write(localFile, dlResp.body(),
                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
                     downloaded++;
-                    log.info("Synced {}/{}", type, name);
+                    log.info("Downloaded {}", displayName);
+                    if (fileCallback != null) fileCallback.accept(displayName, true);
                 } else {
                     failed++;
-                    log.warn("Failed to download {}/{}: HTTP {}", type, name, dlResp.statusCode());
+                    log.warn("Failed to download {}: HTTP {}", displayName, dlResp.statusCode());
+                    if (fileCallback != null) fileCallback.accept("FAILED: " + displayName, false);
                 }
 
-                if (progressCallback != null) progressCallback.accept(++idx, total);
+                if (progressCallback != null) progressCallback.accept(++idx, total, null);
             }
 
             return new SyncResult(total, downloaded, failed, null);
 
-        } catch (java.net.ConnectException e) {
-            return new SyncResult(0, 0, 0, "Cannot reach asset server at " + assetBaseUrl);
+        } catch (java.net.ConnectException | java.net.http.HttpConnectTimeoutException e) {
+            return new SyncResult(0, 0, 0, "Cannot reach server at " + assetBaseUrl);
         } catch (Exception e) {
             log.warn("Sync failed: {}", e.toString(), e);
             return new SyncResult(0, 0, 0, e.getMessage());

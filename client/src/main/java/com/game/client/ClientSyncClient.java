@@ -15,7 +15,7 @@ import java.util.function.Consumer;
 
 /**
  * Fetches the server's /client-manifest and downloads any files whose
- * SHA-256 differs from the locally cached copy in ~/.game/{type}/.
+ * SHA-256 differs from the locally cached copy in ~/.adventure-friends/{type}/.
  *
  * Call sync() from a background thread (e.g. from ClientSyncScreen).
  */
@@ -23,7 +23,7 @@ public final class ClientSyncClient {
 
     private static final Logger log = LoggerFactory.getLogger(ClientSyncClient.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    public  static final Path BASE_DIR = Paths.get(System.getProperty("user.home"), ".game");
+    public  static final Path BASE_DIR = Paths.get(System.getProperty("user.home"), ".adventure-friends");
 
     private ClientSyncClient() {}
 
@@ -43,7 +43,7 @@ public final class ClientSyncClient {
     }
 
     /**
-     * Fetches /client-manifest and syncs all listed files into ~/.game/{type}/.
+     * Fetches /client-manifest and syncs all listed files into ~/.adventure-friends/{type}/.
      *
      * @param assetBaseUrl      base URL of the asset HTTP server, e.g. "http://192.168.1.153:9877"
      * @param progressCallback  called with (filesProcessed, totalFiles) after each file — may be null

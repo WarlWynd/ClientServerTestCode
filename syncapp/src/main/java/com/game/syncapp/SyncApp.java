@@ -5,11 +5,9 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
@@ -18,18 +16,34 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.Properties;
 
+/**
+ * Standalone client file sync application.
+ *
+ * Distributed to end users. Connects to the asset server, downloads any
+ * missing or changed client files, and reports the result.
+ *
+ * Configuration is loaded from syncapp.properties on the classpath.
+ */
 public class SyncApp extends Application {
 
     private static final Logger log = LoggerFactory.getLogger(SyncApp.class);
 
-    private static final String APP_NAME = loadConfig().getProperty("app.name",    "Sync App");
-    private static final String VERSION  = loadConfig().getProperty("app.version", "1.0.0");
-    private static final String ASSET_URL = loadConfig().getProperty("asset.url",  "http://localhost:9877");
+    // ── Config ────────────────────────────────────────────────────────────────
+    private static final Properties CONFIG    = loadConfig();
+    private static final String APP_NAME      = cfg("app.name",    "Adventure Friends Sync");
+    private static final String VERSION       = cfg("app.version", "1.0.0");
+    private static final String CORP_NAME     = cfg("corp.name",   "");
+    private static final String ASSET_URL     = cfg("asset.url",   "http://localhost:9877");
+    private static final Path   INSTALL_DIR   = resolveInstallDir(cfg("install.dir", "${user.home}/.adventure-friends"));
 
+    // ── UI nodes ──────────────────────────────────────────────────────────────
     private Label       statusLabel;
+    private Label       fileLabel;
     private ProgressBar progressBar;
+    private TextArea    logArea;
     private Button      closeBtn;
 
     @Override
@@ -38,27 +52,59 @@ public class SyncApp extends Application {
         stage.setResizable(false);
         stage.setOnCloseRequest(e -> Platform.exit());
 
+        // ── Header ────────────────────────────────────────────────────────────
         Text title = new Text(APP_NAME);
-        title.setFont(Font.font("System", FontWeight.BOLD, 26));
+        title.setFont(Font.font("System", FontWeight.BOLD, 22));
         title.setStyle("-fx-fill: #e0e0e0;");
 
-        Label versionLabel = new Label("Software Version: " + VERSION);
-        versionLabel.setStyle("-fx-text-fill: #7090c0; -fx-font-size: 12;");
+        if (!CORP_NAME.isBlank()) {
+            Label corpLbl = new Label(CORP_NAME);
+            corpLbl.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 11;");
+            // added below in vbox
+        }
 
-        Text subtitle = new Text("Checking for updates…");
-        subtitle.setStyle("-fx-fill: #8888aa;");
+        Label versionLbl = new Label("Version " + VERSION);
+        versionLbl.setStyle("-fx-text-fill: #7090c0; -fx-font-size: 11;");
 
-        progressBar = new ProgressBar(-1);
-        progressBar.setPrefWidth(340);
+        Label installLbl = new Label("Installing to: " + INSTALL_DIR);
+        installLbl.setStyle("-fx-text-fill: #505070; -fx-font-size: 10;");
+        installLbl.setWrapText(true);
+        installLbl.setMaxWidth(400);
+
+        Separator sep1 = new Separator();
+        sep1.setStyle("-fx-background-color: #2a2a4a;");
+
+        // ── Progress ──────────────────────────────────────────────────────────
+        progressBar = new ProgressBar(0);
+        progressBar.setPrefWidth(400);
+        progressBar.setPrefHeight(14);
         progressBar.setStyle("-fx-accent: #4a90d9;");
 
-        statusLabel = new Label("Contacting asset server…");
-        statusLabel.setStyle("-fx-text-fill: #a0a0c0;");
+        fileLabel = new Label("Connecting to server…");
+        fileLabel.setStyle("-fx-text-fill: #8080a0; -fx-font-size: 10;");
+        fileLabel.setMaxWidth(400);
+
+        statusLabel = new Label();
         statusLabel.setWrapText(true);
-        statusLabel.setMaxWidth(340);
+        statusLabel.setMaxWidth(400);
         statusLabel.setAlignment(Pos.CENTER);
 
+        // ── Log area ──────────────────────────────────────────────────────────
+        logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setPrefHeight(140);
+        logArea.setStyle("""
+                -fx-background-color: #0f0f1e;
+                -fx-text-fill: #a0c0a0;
+                -fx-font-family: monospace;
+                -fx-font-size: 11;
+                -fx-border-color: #2a2a4a;
+                -fx-border-radius: 4;
+                """);
+
+        // ── Close button ──────────────────────────────────────────────────────
         closeBtn = new Button("Close");
+        closeBtn.setPrefWidth(120);
         closeBtn.setStyle("""
                 -fx-background-color: #2a6a4a;
                 -fx-text-fill: white;
@@ -69,27 +115,48 @@ public class SyncApp extends Application {
         closeBtn.setVisible(false);
         closeBtn.setOnAction(e -> Platform.exit());
 
-        VBox box = new VBox(10, title, versionLabel, subtitle, progressBar, statusLabel, closeBtn);
-        box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(40));
+        // ── Layout ────────────────────────────────────────────────────────────
+        VBox corpRow = new VBox(2);
+        corpRow.setAlignment(Pos.CENTER);
+        corpRow.getChildren().add(title);
+        if (!CORP_NAME.isBlank()) {
+            Label c = new Label(CORP_NAME);
+            c.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 11;");
+            corpRow.getChildren().add(c);
+        }
+        corpRow.getChildren().add(versionLbl);
 
-        StackPane root = new StackPane(box);
+        VBox root = new VBox(10,
+                corpRow,
+                installLbl,
+                sep1,
+                progressBar,
+                fileLabel,
+                statusLabel,
+                logArea,
+                closeBtn);
+        root.setAlignment(Pos.CENTER);
+        root.setPadding(new Insets(24, 30, 24, 30));
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        stage.setScene(new Scene(root, 480, 320));
+        stage.setScene(new Scene(root, 480, 420));
         stage.show();
 
         startSync();
     }
 
     private void startSync() {
-        Thread.ofVirtual().name("file-sync").start(() -> {
+        appendLog("Connecting to " + ASSET_URL + " …");
+        Thread.ofVirtual().name("sync").start(() -> {
             FileSyncClient.SyncResult result = FileSyncClient.sync(
                 ASSET_URL,
-                (done, total) -> Platform.runLater(() -> {
+                INSTALL_DIR,
+                (done, total, filename) -> Platform.runLater(() -> {
                     progressBar.setProgress(total > 0 ? (double) done / total : 0);
-                    statusLabel.setText("Checking… " + done + " / " + total);
-                })
+                    fileLabel.setText(filename != null ? "Checking: " + filename : done + " / " + total);
+                }),
+                (filename, isNew) -> Platform.runLater(() ->
+                    appendLog((isNew ? "  Downloaded: " : "  Up to date: ") + filename))
             );
             Platform.runLater(() -> onSyncDone(result));
         });
@@ -97,36 +164,45 @@ public class SyncApp extends Application {
 
     private void onSyncDone(FileSyncClient.SyncResult result) {
         progressBar.setProgress(1.0);
+        fileLabel.setText("");
 
         String color, msg;
 
         if (result.hasError()) {
-            if (result.error().startsWith("Cannot reach")) {
-                log.warn("Asset server not reachable — continuing with cached files");
+            if (result.error().contains("Cannot reach")) {
                 color = "#c0a040";
-                msg   = "Asset server not reachable — using cached files.";
+                msg   = "Could not reach the server. Check your internet connection and try again.";
             } else {
-                log.warn("Sync error: {}", result.error());
                 color = "#c04040";
-                msg   = "Sync error: " + result.error();
+                msg   = "Error: " + result.error();
             }
+            appendLog("ERROR: " + result.error());
         } else if (result.allCurrent()) {
             color = "#60c060";
             msg   = result.checked() == 0
-                    ? "No new files on server — nothing to sync."
+                    ? "Nothing to sync — no client files found on server."
                     : "All " + result.checked() + " file(s) are up to date.";
+            appendLog("Sync complete — all files current.");
         } else {
             color = "#60c060";
-            msg   = result.downloaded() + " of " + result.checked() + " file(s) updated";
+            msg   = result.downloaded() + " file(s) updated";
             if (result.failed() > 0) msg += ", " + result.failed() + " failed";
-            msg += ".";
+            msg += " (checked " + result.checked() + " total).";
+            appendLog("Sync complete — " + result.downloaded() + " downloaded, "
+                    + result.failed() + " failed.");
         }
 
-        log.info("Sync complete: {}", msg);
         statusLabel.setText(msg);
-        statusLabel.setStyle("-fx-text-fill: " + color + ";");
+        statusLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-weight: bold;");
         closeBtn.setVisible(true);
+        log.info("Sync done: {}", msg);
     }
+
+    private void appendLog(String line) {
+        logArea.appendText(line + "\n");
+    }
+
+    // ── Config helpers ────────────────────────────────────────────────────────
 
     private static Properties loadConfig() {
         Properties p = new Properties();
@@ -134,6 +210,17 @@ public class SyncApp extends Application {
             if (in != null) p.load(in);
         } catch (Exception ignored) {}
         return p;
+    }
+
+    private static String cfg(String key, String def) {
+        return CONFIG.getProperty(key, def);
+    }
+
+    private static Path resolveInstallDir(String raw) {
+        String resolved = raw
+                .replace("${user.home}", System.getProperty("user.home"))
+                .replace("${appdata}",   System.getenv().getOrDefault("APPDATA", System.getProperty("user.home")));
+        return Path.of(resolved);
     }
 
     public static void main(String[] args) {
