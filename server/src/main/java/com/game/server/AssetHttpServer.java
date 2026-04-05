@@ -29,8 +29,6 @@ public class AssetHttpServer {
 
     private static final Logger log = LoggerFactory.getLogger(AssetHttpServer.class);
 
-    private static final List<String> ALLOWED_TYPES = List.of("sounds", "graphics");
-
     private final int         port;
     private final Path        assetsRoot;
     private final AuthHandler authHandler;
@@ -79,7 +77,7 @@ public class AssetHttpServer {
             } else if (parts.length == 2) {
                 String type     = parts[0];
                 String filename = parts[1];
-                if (!ALLOWED_TYPES.contains(type) || filename.contains("..") || filename.contains("/")) {
+                if (!clientSyncTypes.contains(type) || filename.contains("..") || filename.contains("/")) {
                     respond(ex, 400, "Invalid path");
                     return;
                 }
@@ -104,7 +102,7 @@ public class AssetHttpServer {
 
         StringBuilder json = new StringBuilder("{");
         boolean firstType = true;
-        for (String type : ALLOWED_TYPES) {
+        for (String type : clientSyncTypes) {
             if (!firstType) json.append(",");
             firstType = false;
             json.append("\"").append(type).append("\":[");
