@@ -34,7 +34,8 @@ public class ServerMain {
         UDPServer server = new UDPServer(config.getPort());
 
         AssetHttpServer assetServer = new AssetHttpServer(
-                config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler());
+                config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler(),
+                config.getClientSyncTypes());
         try {
             assetServer.start();
         } catch (Exception e) {

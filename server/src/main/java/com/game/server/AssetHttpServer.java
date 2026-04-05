@@ -34,17 +34,19 @@ public class AssetHttpServer {
     private final int         port;
     private final Path        assetsRoot;
     private final AuthHandler authHandler;
+    private final List<String> clientSyncTypes;
     private HttpServer        server;
 
-    public AssetHttpServer(int port, String assetsDir, AuthHandler authHandler) {
-        this.port        = port;
-        this.assetsRoot  = Path.of(assetsDir).toAbsolutePath();
-        this.authHandler = authHandler;
+    public AssetHttpServer(int port, String assetsDir, AuthHandler authHandler, List<String> clientSyncTypes) {
+        this.port            = port;
+        this.assetsRoot      = Path.of(assetsDir).toAbsolutePath();
+        this.authHandler     = authHandler;
+        this.clientSyncTypes = clientSyncTypes;
     }
 
     public void start() throws IOException {
         // Create asset subdirectories if they don't exist
-        for (String type : ALLOWED_TYPES) {
+        for (String type : clientSyncTypes) {
             Files.createDirectories(assetsRoot.resolve(type));
         }
 
@@ -158,15 +160,8 @@ public class AssetHttpServer {
             }
             json.append("\"files\":[");
             boolean first = true;
-            // Scan all subdirectories dynamically so new asset types are included automatically
-            List<Path> assetDirs = new ArrayList<>();
-            if (Files.isDirectory(assetsRoot)) {
-                try (var stream = Files.list(assetsRoot)) {
-                    stream.filter(Files::isDirectory).sorted().forEach(assetDirs::add);
-                }
-            }
-            for (Path dir : assetDirs) {
-                String type = dir.getFileName().toString();
+            for (String type : clientSyncTypes) {
+                Path dir = assetsRoot.resolve(type);
                 List<Path> files = new ArrayList<>();
                 try (var stream = Files.list(dir)) {
                     stream.filter(Files::isRegularFile).sorted().forEach(files::add);
