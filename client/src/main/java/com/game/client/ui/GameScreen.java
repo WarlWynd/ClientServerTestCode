@@ -201,9 +201,9 @@ public class GameScreen {
         StackPane canvasPane = new StackPane(canvas, disconnectedOverlay);
         canvasPane.getStyleClass().add("app-root");
 
-        // ── System message bar ────────────────────────────────────────────────
-        systemMsgText = new Label();
-        systemMsgText.getStyleClass().add("system-msg-text");
+        // ── Status / System message bar ───────────────────────────────────────
+        systemMsgText = new Label("● Connected");
+        systemMsgText.getStyleClass().add("status-bar-ok");
 
         systemMsgCountdown = new Label();
         systemMsgCountdown.getStyleClass().add("system-msg-countdown");
@@ -213,10 +213,8 @@ public class GameScreen {
 
         systemMsgBar = new HBox(12, systemMsgText, msgSpacer, systemMsgCountdown);
         systemMsgBar.setAlignment(Pos.CENTER_LEFT);
-        systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
-        systemMsgBar.getStyleClass().add("system-msg-bar");
-        systemMsgBar.setVisible(false);
-        systemMsgBar.setManaged(false);
+        systemMsgBar.setPadding(new Insets(4, 14, 4, 14));
+        systemMsgBar.getStyleClass().add("status-bar");
 
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
         HBox gameContent = new HBox(sidebar, canvasPane);
@@ -505,10 +503,11 @@ public class GameScreen {
 
     private void showSystemMessage(String msg, int countdownSeconds) {
         if (sysMsgTimer != null) sysMsgTimer.stop();
+        systemMsgBar.getStyleClass().setAll("system-msg-bar");
+        systemMsgText.getStyleClass().setAll("system-msg-text");
+        systemMsgCountdown.getStyleClass().setAll("system-msg-countdown");
         systemMsgText.setText(msg);
         systemMsgCountdown.setText(countdownSeconds > 0 ? countdownSeconds + "s" : "");
-        systemMsgBar.setVisible(true);
-        systemMsgBar.setManaged(true);
 
         if (countdownSeconds > 0) {
             int[] remaining = {countdownSeconds};
@@ -528,8 +527,11 @@ public class GameScreen {
 
     private void clearSystemMessage() {
         if (sysMsgTimer != null) { sysMsgTimer.stop(); sysMsgTimer = null; }
-        systemMsgBar.setVisible(false);
-        systemMsgBar.setManaged(false);
+        systemMsgBar.getStyleClass().setAll("status-bar");
+        systemMsgText.getStyleClass().setAll("status-bar-ok");
+        systemMsgCountdown.getStyleClass().setAll();
+        systemMsgText.setText("● Connected");
+        systemMsgCountdown.setText("");
     }
 
     // ── Reconnect overlay ────────────────────────────────────────────────────
@@ -543,6 +545,11 @@ public class GameScreen {
             overlayTitleLabel.setText("CONNECTION LOST");
             countdownLabel.setText("Attempting to reconnect…");
             disconnectedOverlay.setVisible(true);
+            systemMsgBar.getStyleClass().setAll("status-bar");
+            systemMsgText.getStyleClass().setAll("status-bar-error");
+            systemMsgCountdown.getStyleClass().setAll();
+            systemMsgText.setText("● Connection lost — reconnecting…");
+            systemMsgCountdown.setText("");
             attemptReconnect();
         });
     }

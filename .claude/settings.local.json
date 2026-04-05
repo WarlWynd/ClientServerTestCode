@@ -43,7 +43,27 @@
       "Bash(cmd /c client.bat 2>&1)",
       "Bash(./gradlew.bat :client:run)",
       "Bash(./gradlew :server:jar)",
-      "Bash(./gradlew :server:compileJava)"
+      "Bash(./gradlew :server:compileJava)",
+      "Bash(printf '#!/bin/sh\\\\nexec \"$\\(dirname \"$0\"\\)/gradlew\" :client:run\\\\n')",
+      "Bash(chmod +x E:/multiplayer-game/Client)",
+      "Bash(printf '@echo off\\\\n\"%~dp0gradlew.bat\" :client:run\\\\n')",
+      "Bash(chmod +x E:/multiplayer-game/MPClient)",
+      "Bash(chmod +x /e/multiplayer-game/MPClient)",
+      "Bash(./MPClient)",
+      "Bash(xargs grep:*)",
+      "Bash(./gradlew :server:run)",
+      "Bash(./gradlew projects:*)",
+      "Bash(echo \"Server PID: $!\")",
+      "Bash(java -XshowSettings:all)",
+      "Bash(java --version)",
+      "Bash(curl -s https://services.gradle.org/versions/current)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['version']\\)\")",
+      "Bash(./gradlew --version)",
+      "Bash(./gradlew :shared:compileJava)",
+      "Bash(./gradlew :client:compileJava :server:compileJava)",
+      "Bash(./gradlew :syncapp:run:*)",
+      "Bash(./gradlew :syncapp:compileJava)",
+      "Bash(./gradlew :client:jar)"
     ]
   }
 }

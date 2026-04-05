@@ -50,8 +50,10 @@ public class AdminPanel {
 
     private final UDPClient client;
 
-    private Label headerLabel;
-    private Label statusLabel;
+    private Label     headerLabel;
+    private Label     statusLabel;
+    private TextField rebootDelayField;
+    private TextField rebootMessageField;
     private final ObservableList<PlayerRow> rows = FXCollections.observableArrayList();
     private Timeline ticker;
 
@@ -123,7 +125,10 @@ public class AdminPanel {
         // ── Upload section ────────────────────────────────────────────────────
         VBox uploadSection = buildUploadSection();
 
-        VBox root = new VBox(header, statusBar, connSection, uploadSection, table);
+        // ── Reboot settings ───────────────────────────────────────────────────
+        VBox rebootSection = buildRebootSection();
+
+        VBox root = new VBox(header, statusBar, connSection, uploadSection, rebootSection, table);
         VBox.setVgrow(table, Priority.ALWAYS);
         root.getStyleClass().add("app-root");
 
@@ -228,6 +233,56 @@ public class AdminPanel {
         btnRow.setAlignment(Pos.CENTER_LEFT);
 
         return buildSection("Uploads", keyRow, btnRow);
+    }
+
+    // ── Reboot section ────────────────────────────────────────────────────────
+
+    private VBox buildRebootSection() {
+        Label delayLbl = new Label("Delay (seconds)");
+        delayLbl.setMinWidth(130);
+        delayLbl.getStyleClass().addAll("text-secondary", "font-12");
+
+        rebootDelayField = new TextField("15");
+        rebootDelayField.setPrefWidth(60);
+        rebootDelayField.getStyleClass().add("input-field-sm");
+
+        Label msgLbl = new Label("Notice message");
+        msgLbl.setMinWidth(130);
+        msgLbl.getStyleClass().addAll("text-secondary", "font-12");
+
+        rebootMessageField = new TextField();
+        rebootMessageField.setPromptText("The server will reboot in %d seconds.");
+        rebootMessageField.setPrefWidth(300);
+        rebootMessageField.getStyleClass().add("input-field-sm");
+
+        Label hint = new Label("Leave message blank to use default. Use %d for the delay value.");
+        hint.getStyleClass().addAll("text-muted", "italic", "font-11");
+
+        HBox delayRow = new HBox(10, delayLbl, rebootDelayField);
+        delayRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox msgRow = new HBox(10, msgLbl, rebootMessageField);
+        msgRow.setAlignment(Pos.CENTER_LEFT);
+
+        return buildSection("Reboot Settings", delayRow, msgRow, hint);
+    }
+
+    private int getRebootDelay() {
+        try {
+            int d = Integer.parseInt(rebootDelayField.getText().trim());
+            return d > 0 ? d : 15;
+        } catch (NumberFormatException e) {
+            return 15;
+        }
+    }
+
+    private String getRebootMessage() {
+        if (rebootMessageField == null) return "";
+        String msg = rebootMessageField.getText().trim();
+        if (msg.isEmpty()) return "";
+        // Replace %d with the actual delay value
+        try { return String.format(msg, getRebootDelay()); }
+        catch (Exception e) { return msg; }
     }
 
     private VBox buildSection(String title, Node... children) {
@@ -369,9 +424,10 @@ public class AdminPanel {
             case ADMIN_RESTART_RESPONSE -> Platform.runLater(() -> {
                 boolean ok = packet.payload.get("success").asBoolean();
                 if (ok) {
-                    statusLabel.setText("Server restarting…");
+                    int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
+                    statusLabel.setText("Server restarting in " + delay + "s…");
                     statusLabel.setStyle("-fx-text-fill: -af-warning;");
-                    if (onServerRestart != null) onServerRestart.accept(20);
+                    if (onServerRestart != null) onServerRestart.accept(delay);
                 } else {
                     showStatus("Restart failed: " + packet.payload.get("message").asText(), false);
                 }
@@ -379,8 +435,9 @@ public class AdminPanel {
             case ADMIN_DEPLOY_RESPONSE -> Platform.runLater(() -> {
                 boolean ok = packet.payload.get("success").asBoolean();
                 if (ok) {
-                    showStatus("Deploying — pulling, rebuilding, restarting…", true);
-                    if (onServerRestart != null) onServerRestart.accept(60);
+                    int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
+                    showStatus("Deploying — pulling, rebuilding, restarting in " + delay + "s…", true);
+                    if (onServerRestart != null) onServerRestart.accept(delay + 60);
                 } else {
                     showStatus("Deploy failed: " + packet.payload.get("message").asText(), false);
                 }
@@ -520,9 +577,13 @@ public class AdminPanel {
                 Reconnect in approximately 1 minute.""");
         styleAlert(alert);
         alert.showAndWait().ifPresent(btn -> {
-            if (btn == javafx.scene.control.ButtonType.OK)
-                client.send(new Packet(PacketType.ADMIN_DEPLOY_REQUEST,
-                        SessionStore.getToken(), PacketSerializer.emptyPayload()));
+            if (btn == javafx.scene.control.ButtonType.OK) {
+                ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+                payload.put("delay", getRebootDelay());
+                String msg = getRebootMessage();
+                if (!msg.isEmpty()) payload.put("message", msg);
+                client.send(new Packet(PacketType.ADMIN_DEPLOY_REQUEST, SessionStore.getToken(), payload));
+            }
         });
     }
 
@@ -538,8 +599,11 @@ public class AdminPanel {
     }
 
     private void doRestart() {
-        client.send(new Packet(PacketType.ADMIN_RESTART_REQUEST,
-                SessionStore.getToken(), PacketSerializer.emptyPayload()));
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("delay",   getRebootDelay());
+        String msg = getRebootMessage();
+        if (!msg.isEmpty()) payload.put("message", msg);
+        client.send(new Packet(PacketType.ADMIN_RESTART_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void styleAlert(Alert alert) {

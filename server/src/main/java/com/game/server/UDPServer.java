@@ -66,7 +66,7 @@ public class UDPServer {
         scheduler.scheduleAtFixedRate(this::periodicCleanup,  5, 5,  TimeUnit.MINUTES);
         scheduler.scheduleAtFixedRate(this::evictIdlePlayers, 30, 30, TimeUnit.SECONDS);
 
-        log.info("UDP game server listening on port {}", port);
+        log.info("*** UDP game server listening on port {} — ready", port);
 
         byte[] recvBuf = new byte[RECV_BUFFER_SIZE];
         while (running) {

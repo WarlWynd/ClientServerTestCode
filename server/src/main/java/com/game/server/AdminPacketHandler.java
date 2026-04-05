@@ -50,8 +50,8 @@ public class AdminPacketHandler {
             case ADMIN_KICK_REQUEST       -> handleKick(socket, packet, session, addr, port);
             case ADMIN_BAN_REQUEST        -> handleBan(socket, packet, session, addr, port);
             case ADMIN_SET_ADMIN_REQUEST  -> handleSetAdmin(socket, packet, session, addr, port);
-            case ADMIN_RESTART_REQUEST    -> handleRestart(socket, session, addr, port);
-            case ADMIN_DEPLOY_REQUEST     -> handleDeploy(socket, session, addr, port);
+            case ADMIN_RESTART_REQUEST    -> handleRestart(socket, packet, session, addr, port);
+            case ADMIN_DEPLOY_REQUEST     -> handleDeploy(socket, packet, session, addr, port);
             default -> log.warn("Unhandled admin packet type: {}", packet.type);
         }
     }
@@ -141,40 +141,67 @@ public class AdminPacketHandler {
         sendResponse(socket, out, PacketType.ADMIN_SET_ADMIN_RESPONSE, addr, port);
     }
 
-    private static final int SHUTDOWN_DELAY_SECONDS = 15;
+    private static final int    DEFAULT_SHUTDOWN_DELAY   = 15;
+    private static final String DEFAULT_SHUTDOWN_MESSAGE = "The server will reboot in %d seconds.";
 
-    private void handleRestart(DatagramSocket socket, Session session,
+    private void handleRestart(DatagramSocket socket, Packet packet, Session session,
                                InetAddress addr, int port) throws Exception {
+        int    delay   = getDelay(packet);
+        String message = getMessage(packet, delay);
+
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
+        out.put("delay", delay);
         sendResponse(socket, out, PacketType.ADMIN_RESTART_RESPONSE, addr, port);
-        log.info("ADMIN_RESTART requested by '{}' — broadcasting notice, shutting down in {}s",
-                session.username(), SHUTDOWN_DELAY_SECONDS);
+        log.info("*** RESTART command received from '{}' — sending shutdown notice, restarting in {}s",
+                session.username(), delay);
         Thread.ofVirtual().start(() -> {
             try {
-                gameHandler.broadcastNotice(socket,
-                        "Server Shutting Down in " + SHUTDOWN_DELAY_SECONDS + " Seconds...");
-                Thread.sleep(SHUTDOWN_DELAY_SECONDS * 1000L);
+                gameHandler.broadcastNotice(socket, message);
+                log.info("*** Shutdown notice broadcast to all clients: \"{}\" — waiting {}s before exit", message, delay);
+                Thread.sleep(delay * 1000L);
             } catch (Exception ignored) {}
+            log.info("*** Restarting now (exit 42)");
             System.exit(42);
         });
     }
 
-    private void handleDeploy(DatagramSocket socket, Session session,
+    private void handleDeploy(DatagramSocket socket, Packet packet, Session session,
                               InetAddress addr, int port) throws Exception {
+        int    delay   = getDelay(packet);
+        String message = getMessage(packet, delay);
+
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         out.put("success", true);
+        out.put("delay", delay);
         sendResponse(socket, out, PacketType.ADMIN_DEPLOY_RESPONSE, addr, port);
-        log.info("ADMIN_DEPLOY requested by '{}' — broadcasting notice, shutting down in {}s",
-                session.username(), SHUTDOWN_DELAY_SECONDS);
+        log.info("*** DEPLOY command received from '{}' — sending shutdown notice, deploying in {}s",
+                session.username(), delay);
         Thread.ofVirtual().start(() -> {
             try {
-                gameHandler.broadcastNotice(socket,
-                        "Server Shutting Down in " + SHUTDOWN_DELAY_SECONDS + " Seconds...");
-                Thread.sleep(SHUTDOWN_DELAY_SECONDS * 1000L);
+                gameHandler.broadcastNotice(socket, message);
+                log.info("*** Shutdown notice broadcast to all clients: \"{}\" — waiting {}s before deploy", message, delay);
+                Thread.sleep(delay * 1000L);
             } catch (Exception ignored) {}
+            log.info("*** Deploying now (exit 43)");
             System.exit(43);
         });
+    }
+
+    private static int getDelay(Packet packet) {
+        if (packet.payload != null && packet.payload.has("delay")) {
+            int d = packet.payload.get("delay").asInt(DEFAULT_SHUTDOWN_DELAY);
+            return d > 0 ? d : DEFAULT_SHUTDOWN_DELAY;
+        }
+        return DEFAULT_SHUTDOWN_DELAY;
+    }
+
+    private static String getMessage(Packet packet, int delay) {
+        if (packet.payload != null && packet.payload.has("message")) {
+            String m = packet.payload.get("message").asText("").trim();
+            if (!m.isEmpty()) return m;
+        }
+        return String.format(DEFAULT_SHUTDOWN_MESSAGE, delay);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

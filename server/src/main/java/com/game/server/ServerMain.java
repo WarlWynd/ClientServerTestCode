@@ -20,6 +20,7 @@ public class ServerMain {
     public static void main(String[] args) {
         ServerConfig config = new ServerConfig();
 
+        log.info("*** Server starting up …");
         log.info("Connecting to MySQL at {}:{}/{} …",
                 config.getDbHost(), config.getDbPort(), config.getDbName());
 
@@ -46,9 +47,10 @@ public class ServerMain {
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform()
                 .name("shutdown-hook")
                 .unstarted(() -> {
-                    log.info("Shutdown signal received — stopping server …");
+                    log.info("*** Server process shutting down — cleaning up …");
                     server.stop();
                     assetServer.stop();
+                    log.info("*** Shutdown complete.");
                 }));
 
         try {
