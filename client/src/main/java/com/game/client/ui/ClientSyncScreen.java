@@ -36,6 +36,7 @@ public class ClientSyncScreen {
     private Label       statusLabel;
     private ProgressBar progressBar;
     private Button      continueBtn;
+    private Button      retryBtn;
 
     public ClientSyncScreen(Stage stage, String assetUrl, String version, Runnable onComplete) {
         this.stage      = stage;
@@ -80,7 +81,24 @@ public class ClientSyncScreen {
         continueBtn.setVisible(false);
         continueBtn.setOnAction(e -> onComplete.run());
 
-        VBox box = new VBox(10, title, corpLabel, versionLabel, subtitle, progressBar, statusLabel, continueBtn);
+        retryBtn = new Button("Retry");
+        retryBtn.setStyle("""
+                -fx-background-color: #7a3000;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 8 28 8 28;
+                """);
+        retryBtn.setVisible(false);
+        retryBtn.setOnAction(e -> {
+            retryBtn.setVisible(false);
+            statusLabel.setText("Retrying…");
+            statusLabel.setStyle("-fx-text-fill: #a0a0c0;");
+            progressBar.setProgress(-1);
+            startSync();
+        });
+
+        VBox box = new VBox(10, title, corpLabel, versionLabel, subtitle, progressBar, statusLabel, continueBtn, retryBtn);
         box.setAlignment(Pos.CENTER);
         box.setPadding(new Insets(40));
 
@@ -111,34 +129,28 @@ public class ClientSyncScreen {
     private void onSyncDone(ClientSyncClient.SyncResult result) {
         progressBar.setProgress(1.0);
 
-        String statusColor;
-        String statusMsg;
-
         if (result.hasError()) {
-            if (result.error().startsWith("Cannot reach")) {
-                log.warn("Asset server not reachable at {} — continuing with cached files", assetUrl);
-                statusColor = "#c0a040";
-                statusMsg   = "Asset server not reachable — using cached files.";
-            } else {
-                log.warn("Client sync error: {}", result.error());
-                statusColor = "#c04040";
-                statusMsg   = "Sync error: " + result.error();
-            }
-        } else if (result.allCurrent()) {
-            statusColor = "#60c060";
-            statusMsg   = result.checked() == 0
-                    ? "No new client files on server — nothing to sync."
-                    : "No new client files on server — all " + result.checked() + " file(s) are up to date.";
+            log.warn("Client sync failed: {}", result.error());
+            statusLabel.setText("Cannot connect to the update server.\nPlease check your connection and try again.");
+            statusLabel.setStyle("-fx-text-fill: #e94560;");
+            retryBtn.setVisible(true);
+            return;
+        }
+
+        String statusMsg;
+        if (result.allCurrent()) {
+            statusMsg = result.checked() == 0
+                    ? "Nothing to sync."
+                    : "All " + result.checked() + " file(s) are up to date.";
         } else {
-            statusColor = "#60c060";
-            statusMsg   = result.downloaded() + " of " + result.checked() + " file(s) updated";
+            statusMsg = result.downloaded() + " file(s) updated";
             if (result.failed() > 0) statusMsg += ", " + result.failed() + " failed";
-            statusMsg += ".";
+            statusMsg += " (" + result.checked() + " checked).";
         }
 
         log.info("Client sync: {}", statusMsg);
         statusLabel.setText(statusMsg);
-        statusLabel.setStyle("-fx-text-fill: " + statusColor + ";");
+        statusLabel.setStyle("-fx-text-fill: #60c060;");
         continueBtn.setVisible(true);
     }
 }
