@@ -158,9 +158,15 @@ public class AssetHttpServer {
             }
             json.append("\"files\":[");
             boolean first = true;
-            for (String type : ALLOWED_TYPES) {
-                Path dir = assetsRoot.resolve(type);
-                if (!Files.isDirectory(dir)) continue;
+            // Scan all subdirectories dynamically so new asset types are included automatically
+            List<Path> assetDirs = new ArrayList<>();
+            if (Files.isDirectory(assetsRoot)) {
+                try (var stream = Files.list(assetsRoot)) {
+                    stream.filter(Files::isDirectory).sorted().forEach(assetDirs::add);
+                }
+            }
+            for (Path dir : assetDirs) {
+                String type = dir.getFileName().toString();
                 List<Path> files = new ArrayList<>();
                 try (var stream = Files.list(dir)) {
                     stream.filter(Files::isRegularFile).sorted().forEach(files::add);
@@ -169,10 +175,12 @@ public class AssetHttpServer {
                     if (!first) json.append(",");
                     first = false;
                     byte[] data = Files.readAllBytes(f);
+                    long lastModified = Files.getLastModifiedTime(f).toMillis();
                     json.append("{")
                         .append("\"type\":\"").append(type).append("\",")
                         .append("\"name\":\"").append(f.getFileName()).append("\",")
                         .append("\"size\":").append(data.length).append(",")
+                        .append("\"lastModified\":").append(lastModified).append(",")
                         .append("\"sha256\":\"").append(sha256(data)).append("\"")
                         .append("}");
                 }
@@ -195,8 +203,10 @@ public class AssetHttpServer {
         if (!Files.exists(file)) { respond(ex, 404, "Not found"); return; }
 
         byte[] data = Files.readAllBytes(file);
+        long lastModified = Files.getLastModifiedTime(file).toMillis();
         ex.getResponseHeaders().set("Content-Type", contentType(filename));
         ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        ex.getResponseHeaders().set("X-Last-Modified", String.valueOf(lastModified));
         ex.sendResponseHeaders(200, data.length);
         ex.getResponseBody().write(data);
         ex.getResponseBody().close();

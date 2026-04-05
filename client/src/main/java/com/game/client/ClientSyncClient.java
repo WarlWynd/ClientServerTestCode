@@ -96,7 +96,7 @@ public final class ClientSyncClient {
                 Files.createDirectories(localDir);
                 Path localFile = localDir.resolve(name);
 
-                // Skip if local file matches server checksum
+                // Skip if local file matches server SHA-256
                 if (!serverHash.isEmpty() && Files.exists(localFile)) {
                     String localHash = sha256(Files.readAllBytes(localFile));
                     if (localHash.equals(serverHash)) {
