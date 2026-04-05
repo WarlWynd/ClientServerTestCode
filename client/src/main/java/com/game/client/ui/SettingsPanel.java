@@ -25,10 +25,12 @@ public class SettingsPanel {
 
     private final Runnable        onRestartClient;
     private final Consumer<Side>  onTabSideChange;
+    private final Runnable        onLogout;
 
-    public SettingsPanel(Runnable onRestartClient, Consumer<Side> onTabSideChange) {
+    public SettingsPanel(Runnable onRestartClient, Consumer<Side> onTabSideChange, Runnable onLogout) {
         this.onRestartClient = onRestartClient;
         this.onTabSideChange = onTabSideChange;
+        this.onLogout        = onLogout;
     }
 
     // ── Build ─────────────────────────────────────────────────────────────────
@@ -235,12 +237,21 @@ public class SettingsPanel {
 
         HBox restartRow = new HBox(restartClientBtn);
         restartRow.setAlignment(Pos.CENTER_LEFT);
-        restartRow.setPadding(new Insets(0, 20, 20, 20));
+        restartRow.setPadding(new Insets(0, 20, 4, 20));
+
+        Button logoutBtn = new Button("⏻  Logout");
+        logoutBtn.setMaxWidth(Double.MAX_VALUE);
+        logoutBtn.getStyleClass().add("btn-logout");
+        logoutBtn.setOnAction(e -> { if (onLogout != null) onLogout.run(); });
+
+        HBox logoutRow = new HBox(logoutBtn);
+        logoutRow.setAlignment(Pos.CENTER_LEFT);
+        logoutRow.setPadding(new Insets(8, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
         VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
-        content.getChildren().addAll(buttons, restartRow);
+        content.getChildren().addAll(buttons, restartRow, logoutRow);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);

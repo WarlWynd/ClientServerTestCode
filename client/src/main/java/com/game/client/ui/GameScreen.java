@@ -158,14 +158,8 @@ public class GameScreen {
         controls.getStyleClass().addAll("text-muted", "font-11");
         controls.setWrapText(true);
 
-        Button logoutBtn = new Button("⏻  Logout");
-        logoutBtn.setMaxWidth(Double.MAX_VALUE);
-        logoutBtn.getStyleClass().add("btn-logout");
-        logoutBtn.setOnAction(e -> doLogout());
-
         VBox sidebar = new VBox(10,
                 gameTitle,
-                logoutBtn,
                 sep1,
                 playingAsLbl, nameLabel,
                 sep2,
@@ -235,7 +229,7 @@ public class GameScreen {
 
         // ── Settings tab (all users) ──────────────────────────────────────────
         Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart,
-                side -> tabPane.setSide(side)).buildView());
+                side -> tabPane.setSide(side), this::doLogout).buildView());
         settingsTab.setClosable(false);
 
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
