@@ -446,7 +446,9 @@ public class GameScreen {
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
             String   token = entry.getKey();
             JsonNode state = entry.getValue();
+            // Skip own entry whether keyed by session token or username
             if (token.equals(SessionStore.getToken())) continue;
+            if (token.equals(SessionStore.getUsername())) continue;
             String username = state.get("username").asText();
 
             float  rx       = (float) state.get("x").asDouble();
@@ -507,7 +509,11 @@ public class GameScreen {
                 if (players != null && players.isArray()) {
                     Map<String, JsonNode> snapshot = new HashMap<>();
                     for (JsonNode p : players) {
-                        snapshot.put(p.get("sessionToken").asText(), p);
+                        // Use sessionToken if present (new server), else fall back to username
+                        String key = p.has("sessionToken") && !p.get("sessionToken").asText().isEmpty()
+                                ? p.get("sessionToken").asText()
+                                : p.get("username").asText();
+                        snapshot.put(key, p);
                     }
                     remotePlayers.clear();
                     remotePlayers.putAll(snapshot);
