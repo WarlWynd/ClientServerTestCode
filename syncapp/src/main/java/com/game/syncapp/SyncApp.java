@@ -224,12 +224,18 @@ public class SyncApp extends Application {
     private void launchGame() {
         java.nio.file.Path clientJar = INSTALL_DIR.resolve("client").resolve("game-client.jar");
         try {
-            new ProcessBuilder(
-                    ProcessHandle.current().info().command().orElse("java"),
+            String java = ProcessHandle.current().info().command().orElse("java");
+            Process proc = new ProcessBuilder(
+                    java,
                     "--enable-preview",
+                    "--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED",
                     "-jar", clientJar.toAbsolutePath().toString()
             ).inheritIO().start();
-            Platform.exit();
+            if (proc.isAlive()) {
+                Platform.exit();
+            } else {
+                appendLog("ERROR: Game process exited immediately (exit code " + proc.exitValue() + ")");
+            }
         } catch (Exception e) {
             log.error("Failed to launch game: {}", e.getMessage(), e);
             appendLog("ERROR: Could not launch game — " + e.getMessage());
