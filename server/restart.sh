@@ -7,7 +7,6 @@
 #   43  — deploy requested: run deploy.sh, then restart
 #   any other — clean stop or crash (exit the loop)
 
-set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 JAR="${1:-$PROJECT_ROOT/server/build/libs/game-server.jar}"
@@ -16,8 +15,7 @@ cd "$PROJECT_ROOT"
 
 while true; do
     echo "[restart.sh] Starting server: java -jar $JAR"
-    java -jar "$JAR" || true
-    CODE=$?
+    java -jar "$JAR"; CODE=$?
 
     if [ "$CODE" -eq 42 ]; then
         echo "[restart.sh] Restart requested — restarting in 2s..."

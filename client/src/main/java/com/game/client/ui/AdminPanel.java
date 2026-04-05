@@ -440,7 +440,7 @@ public class AdminPanel {
 
                 All players will be disconnected.
                 Reconnect in approximately 1 minute.""");
-        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        styleAlert(alert);
         alert.showAndWait().ifPresent(btn -> {
             if (btn == javafx.scene.control.ButtonType.OK)
                 client.send(new Packet(PacketType.ADMIN_DEPLOY_REQUEST,
@@ -453,7 +453,7 @@ public class AdminPanel {
         alert.setTitle("Restart Server");
         alert.setHeaderText("Restart the game server?");
         alert.setContentText("All connected players will be disconnected.\nThe server will restart automatically if launched via restart.sh.");
-        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        styleAlert(alert);
         alert.showAndWait().ifPresent(btn -> {
             if (btn == javafx.scene.control.ButtonType.OK) doRestart();
         });
@@ -462,6 +462,12 @@ public class AdminPanel {
     private void doRestart() {
         client.send(new Packet(PacketType.ADMIN_RESTART_REQUEST,
                 SessionStore.getToken(), PacketSerializer.emptyPayload()));
+    }
+
+    private void styleAlert(Alert alert) {
+        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        alert.setOnShown(e -> alert.getDialogPane().lookupAll(".label")
+                .forEach(n -> n.setStyle("-fx-text-fill: #ffff00;")));
     }
 
     private void showStatus(String msg, String color) {
