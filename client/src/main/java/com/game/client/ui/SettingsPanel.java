@@ -10,7 +10,9 @@ import javafx.geometry.Pos;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.event.EventHandler;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -340,20 +342,26 @@ public class SettingsPanel {
         btn.setPrefWidth(100);
         btn.getStyleClass().add("btn-secondary");
 
+        // confirmed[] tracks the last saved key so Escape can restore it
+        String[] confirmed = { currentKey };
+
+        EventHandler<KeyEvent>[] filterHolder = new EventHandler[1];
+        filterHolder[0] = ke -> {
+            ke.consume(); // prevent Space/Enter from re-firing the button action
+            KeyCode code = ke.getCode();
+            btn.removeEventFilter(KeyEvent.KEY_PRESSED, filterHolder[0]);
+            if (code == KeyCode.ESCAPE) {
+                btn.setText(confirmed[0]);
+            } else {
+                confirmed[0] = code.getName();
+                setter.accept(confirmed[0]);
+                btn.setText(confirmed[0]);
+            }
+        };
+
         btn.setOnAction(e -> {
             btn.setText("Press a key…");
-            btn.setOnKeyPressed(ke -> {
-                KeyCode code = ke.getCode();
-                if (code == KeyCode.ESCAPE) {
-                    btn.setText(currentKey);
-                } else {
-                    String name = code.getName();
-                    setter.accept(name);
-                    btn.setText(name);
-                }
-                btn.setOnKeyPressed(null);
-                ke.consume();
-            });
+            btn.addEventFilter(KeyEvent.KEY_PRESSED, filterHolder[0]);
             btn.requestFocus();
         });
 
