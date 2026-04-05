@@ -334,7 +334,7 @@ public class GameScreen {
         boolean moved = false;
 
         if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-            localY = Math.min(FLOOR_Y_CANVAS_CANVAS - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
+            localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
         }
         if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
             localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
@@ -380,13 +380,13 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    // Floor constants — FLOOR_Y_CANVAS_CANVAS is the canvas Y where the floor surface sits.
+    // Floor constants — FLOOR_Y_CANVAS is the canvas Y where the floor surface sits.
     // Game coords have y=0 at the floor, positive y going up toward the sky.
-    private static final int   FLOOR_Y_CANVAS_CANVAS = WORLD_H - 40;   // 2360
+    private static final int   FLOOR_Y_CANVAS = WORLD_H - 40;   // 2360
     private static final int   FLOOR_H        = 40;
 
     /** Convert game Y (0 = floor, positive = up) to canvas Y (0 = top, positive = down). */
-    private static float toCanvasY(float gameY) { return FLOOR_Y_CANVAS_CANVAS - gameY; }
+    private static float toCanvasY(float gameY) { return FLOOR_Y_CANVAS - gameY; }
     private static final int   PLANK_W        = 80;
     private static final int   PLANK_GAP      = 2;
 
