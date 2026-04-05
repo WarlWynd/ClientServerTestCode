@@ -134,14 +134,16 @@ public class GameHandler {
         ObjectNode root      = PacketSerializer.mapper().createObjectNode();
         ArrayNode  playersArr = root.putArray("players");
 
-        for (PlayerState p : players.values()) {
-            ObjectNode node = playersArr.addObject();
+        for (Map.Entry<String, PlayerState> e : players.entrySet()) {
+            PlayerState p    = e.getValue();
+            ObjectNode  node = playersArr.addObject();
+            node.put("sessionToken",  e.getKey());
             node.put("userId",        p.userId);
             node.put("username",      p.username);
             node.put("characterName", p.characterName);
             node.put("x",             p.x);
-            node.put("y",        p.y);
-            node.put("score",    p.score);
+            node.put("y",             p.y);
+            node.put("score",         p.score);
         }
 
         root.put("playerCount", players.size());

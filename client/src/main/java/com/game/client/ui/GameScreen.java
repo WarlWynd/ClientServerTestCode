@@ -444,9 +444,10 @@ public class GameScreen {
 
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
-            String   username = entry.getKey();
-            JsonNode state    = entry.getValue();
-            if (username.equals(SessionStore.getUsername())) continue;
+            String   token = entry.getKey();
+            JsonNode state = entry.getValue();
+            if (token.equals(SessionStore.getToken())) continue;
+            String username = state.get("username").asText();
 
             float  rx       = (float) state.get("x").asDouble();
             float  ry       = (float) state.get("y").asDouble();
@@ -506,7 +507,7 @@ public class GameScreen {
                 if (players != null && players.isArray()) {
                     Map<String, JsonNode> snapshot = new HashMap<>();
                     for (JsonNode p : players) {
-                        snapshot.put(p.get("username").asText(), p);
+                        snapshot.put(p.get("sessionToken").asText(), p);
                     }
                     remotePlayers.clear();
                     remotePlayers.putAll(snapshot);
