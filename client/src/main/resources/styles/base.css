@@ -164,6 +164,20 @@
     -fx-background-radius: 4;
     -fx-padding: 7 14 7 14;
 }
+.btn-warning {
+    -fx-background-color: -af-restart-bg;
+    -fx-text-fill: -af-warning;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 7 14 7 14;
+}
+.btn-danger {
+    -fx-background-color: -af-danger-bg;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 4;
+    -fx-padding: 7 14 7 14;
+}
 .btn-logout {
     -fx-background-color: -af-accent;
     -fx-text-fill: white;

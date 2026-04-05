@@ -171,7 +171,7 @@ public class SettingsPanel {
         statusLabel.getStyleClass().add("font-11");
 
         Button saveBtn = new Button("Save Settings");
-        saveBtn.getStyleClass().add("btn-primary");
+        saveBtn.getStyleClass().add("btn-secondary");
 
         Button resetBtn = new Button("Reset to Defaults");
         resetBtn.getStyleClass().add("btn-secondary");
@@ -225,33 +225,29 @@ public class SettingsPanel {
         });
 
         Button restartClientBtn = new Button("Restart Client");
-        restartClientBtn.getStyleClass().add("btn-muted");
+        restartClientBtn.getStyleClass().add("btn-secondary");
         restartClientBtn.setOnAction(e -> {
             AppSettings.save();
             if (onRestartClient != null) onRestartClient.run();
         });
 
-        HBox buttons = new HBox(10, resetBtn, saveBtn, statusLabel);
-        buttons.setAlignment(Pos.CENTER_LEFT);
-        buttons.setPadding(new Insets(16, 20, 4, 20));
-
-        HBox restartRow = new HBox(restartClientBtn);
-        restartRow.setAlignment(Pos.CENTER_LEFT);
-        restartRow.setPadding(new Insets(0, 20, 4, 20));
+        for (Button b : new Button[]{resetBtn, saveBtn, restartClientBtn}) {
+            b.setPrefWidth(140);
+        }
 
         Button logoutBtn = new Button("⏻  Logout");
-        logoutBtn.setMaxWidth(Double.MAX_VALUE);
-        logoutBtn.getStyleClass().add("btn-logout");
+        logoutBtn.setPrefWidth(140);
+        logoutBtn.getStyleClass().add("btn-secondary");
         logoutBtn.setOnAction(e -> { if (onLogout != null) onLogout.run(); });
 
-        HBox logoutRow = new HBox(logoutBtn);
-        logoutRow.setAlignment(Pos.CENTER_LEFT);
-        logoutRow.setPadding(new Insets(8, 20, 20, 20));
+        HBox buttons = new HBox(10, resetBtn, saveBtn, restartClientBtn, logoutBtn, statusLabel);
+        buttons.setAlignment(Pos.CENTER_LEFT);
+        buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
         VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
-        content.getChildren().addAll(buttons, restartRow, logoutRow);
+        content.getChildren().add(buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
