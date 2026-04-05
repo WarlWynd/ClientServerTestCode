@@ -486,7 +486,9 @@ public class GameScreen {
             case SERVER_NOTICE -> {
                 String msg = packet.payload.has("message")
                         ? packet.payload.get("message").asText() : "Server shutting down";
-                Platform.runLater(() -> showSystemMessage(msg, SHUTDOWN_DELAY_SECONDS));
+                int countdown = packet.payload.has("countdown")
+                        ? packet.payload.get("countdown").asInt(0) : 0;
+                Platform.runLater(() -> showSystemMessage(msg, countdown));
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");

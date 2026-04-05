@@ -247,7 +247,7 @@ public class AdminPanel {
         delayLbl.setMinWidth(130);
         delayLbl.getStyleClass().addAll("text-secondary", "font-12");
 
-        rebootDelayField = new TextField("15");
+        rebootDelayField = new TextField("60");
         rebootDelayField.setPrefWidth(60);
         rebootDelayField.getStyleClass().add("input-field-sm");
 
@@ -620,7 +620,8 @@ public class AdminPanel {
             content = String.format(
                     "Client commit:  %s\nClient built:   %s\n\nServer commit:  %s\nServer built:   %s",
                     clientCommit, clientBuildTime, serverCommit, serverBuildTime);
-            if (!match) content += "\n\nThe server may need to be deployed.";
+            if (match) content += "\n\nVersions are a Match.";
+            else        content += "\n\nThe server may need to be deployed.";
         }
         alert.setContentText(content);
         styleAlert(alert);

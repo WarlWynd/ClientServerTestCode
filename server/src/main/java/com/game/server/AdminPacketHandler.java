@@ -141,8 +141,9 @@ public class AdminPacketHandler {
         sendResponse(socket, out, PacketType.ADMIN_SET_ADMIN_RESPONSE, addr, port);
     }
 
-    private static final int    DEFAULT_SHUTDOWN_DELAY   = 15;
+    private static final int    DEFAULT_SHUTDOWN_DELAY   = 60;
     private static final String DEFAULT_SHUTDOWN_MESSAGE = "The server will reboot in %d seconds.";
+    private static final int    REMINDER_INTERVAL_SECS   = 5;
 
     private void handleRestart(DatagramSocket socket, Packet packet, Session session,
                                InetAddress addr, int port) throws Exception {
@@ -157,9 +158,7 @@ public class AdminPacketHandler {
                 session.username(), delay);
         Thread.ofVirtual().start(() -> {
             try {
-                gameHandler.broadcastNotice(socket, message);
-                log.info("*** Shutdown notice broadcast to all clients: \"{}\" — waiting {}s before exit", message, delay);
-                Thread.sleep(delay * 1000L);
+                runShutdownCountdown(socket, message, delay);
             } catch (Exception ignored) {}
             log.info("*** Restarting now (exit 42)");
             System.exit(42);
@@ -179,13 +178,31 @@ public class AdminPacketHandler {
                 session.username(), delay);
         Thread.ofVirtual().start(() -> {
             try {
-                gameHandler.broadcastNotice(socket, message);
-                log.info("*** Shutdown notice broadcast to all clients: \"{}\" — waiting {}s before deploy", message, delay);
-                Thread.sleep(delay * 1000L);
+                runShutdownCountdown(socket, message, delay);
             } catch (Exception ignored) {}
             log.info("*** Deploying now (exit 43)");
             System.exit(43);
         });
+    }
+
+    private void runShutdownCountdown(DatagramSocket socket, String initialMessage, int totalSeconds)
+            throws Exception {
+        int remaining = totalSeconds;
+
+        // Initial broadcast with the (possibly custom) message
+        gameHandler.broadcastNotice(socket, initialMessage, remaining);
+        log.info("*** Shutdown notice broadcast: \"{}\" — {}s until shutdown", initialMessage, remaining);
+
+        while (remaining > REMINDER_INTERVAL_SECS) {
+            Thread.sleep(REMINDER_INTERVAL_SECS * 1000L);
+            remaining -= REMINDER_INTERVAL_SECS;
+            String reminder = String.format(DEFAULT_SHUTDOWN_MESSAGE, remaining);
+            gameHandler.broadcastNotice(socket, reminder, remaining);
+            log.info("*** Reboot reminder sent: {}s remaining", remaining);
+        }
+
+        // Sleep for the final remainder
+        Thread.sleep(remaining * 1000L);
     }
 
     private static int getDelay(Packet packet) {
