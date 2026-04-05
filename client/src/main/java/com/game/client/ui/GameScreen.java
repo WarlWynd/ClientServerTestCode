@@ -499,7 +499,6 @@ public class GameScreen {
 
     private void startReconnectCountdown(String title, int seconds) {
         Platform.runLater(() -> {
-            if (reconnecting) return; // already showing — don't reset
             reconnecting = true;
             if (countdownTimer != null) countdownTimer.stop();
             if (retryTimer    != null) retryTimer.stop();
