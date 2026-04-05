@@ -77,6 +77,16 @@ public class PlayerAnimator {
     }
 
     /**
+     * Pin the animator to a specific state without driving it from physics.
+     * Used by the Graphics Dev sprite preview.
+     */
+    public void forceState(State s) {
+        state       = s;
+        frame       = 0;
+        lastFrameMs = System.currentTimeMillis();
+    }
+
+    /**
      * Advance frame counter and draw the current pose.
      *
      * @param gc       Graphics context (transform already set to world coords)

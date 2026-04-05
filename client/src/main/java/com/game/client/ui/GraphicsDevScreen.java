@@ -1,13 +1,17 @@
 package com.game.client.ui;
 
+import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
@@ -53,20 +57,29 @@ public class GraphicsDevScreen {
     }
 
     public Node build() {
-        // ── Left panel: file browser ─────────────────────────────────────────
+        Tab filesTab   = new Tab("📁 Files",          buildFilesView());
+        Tab spritesTab = new Tab("🕹 Sprite Preview", buildSpritePreview());
+        filesTab.setClosable(false);
+        spritesTab.setClosable(false);
+
+        TabPane inner = new TabPane(filesTab, spritesTab);
+        inner.getStyleClass().add("tab-pane-dark");
+        inner.setStyle("-fx-tab-min-width: 120;");
+        return inner;
+    }
+
+    /** Wraps the existing file browser + image preview into a single node. */
+    private Node buildFilesView() {
         VBox leftPanel = buildFileBrowser();
         leftPanel.setPrefWidth(260);
 
-        // ── Right panel: preview ─────────────────────────────────────────────
         VBox rightPanel = buildPreviewPanel();
 
-        // ── Main layout ───────────────────────────────────────────────────────
         HBox content = new HBox(12, leftPanel, rightPanel);
         HBox.setHgrow(rightPanel, Priority.ALWAYS);
         content.setPadding(new Insets(12));
         content.setStyle("-fx-background-color: #1a1a2e;");
 
-        // ── Status bar ────────────────────────────────────────────────────────
         statusLabel = new Label("Ready.");
         statusLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 11;");
         statusLabel.setPadding(new Insets(4, 12, 4, 12));
@@ -76,6 +89,96 @@ public class GraphicsDevScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
 
         refreshList();
+        return root;
+    }
+
+    /** Live animated preview of every PlayerAnimator state. */
+    private Node buildSpritePreview() {
+        PlayerAnimator.State[] states = PlayerAnimator.State.values();
+
+        // One animator per state, pinned to that state
+        PlayerAnimator[] animators = new PlayerAnimator[states.length];
+        for (int i = 0; i < states.length; i++) {
+            animators[i] = new PlayerAnimator();
+            animators[i].forceState(states[i]);
+        }
+
+        // Palette — one colour per state
+        Color[] palette = {
+            Color.web("#e0e0ff"),  // IDLE      — soft white-blue (local player colour)
+            Color.web("#53c0f0"),  // RUN       — info blue
+            Color.web("#50c050"),  // JUMP      — success green
+            Color.web("#f0a030"),  // FALL      — warning amber
+            Color.web("#e94560"),  // HIT       — accent red
+            Color.web("#bd10e0")   // KNOCKED   — purple
+        };
+
+        // Canvas: 6 figures spread across, enough height for label
+        int cols      = states.length;
+        int colW      = 110;
+        int canvasW   = cols * colW + 20;
+        int canvasH   = 220;
+        double feetY  = 160; // canvas Y where feet sit
+
+        Canvas canvas = new Canvas(canvasW, canvasH);
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        // Description labels beneath the canvas
+        Label desc = new Label(
+                "Live preview of all sprite animation states. " +
+                "Colours match in-game player colouring.");
+        desc.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+        desc.setWrapText(true);
+
+        // Legend
+        StringBuilder legendText = new StringBuilder();
+        for (PlayerAnimator.State s : states) legendText.append(s.name()).append("  ");
+        Label legend = new Label(legendText.toString().trim());
+        legend.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 11;");
+
+        // ── AnimationTimer drives the canvas ─────────────────────────────────
+        AnimationTimer timer = new AnimationTimer() {
+            @Override public void handle(long now) {
+                gc.setFill(Color.web("#0f0f1e"));
+                gc.fillRect(0, 0, canvasW, canvasH);
+
+                // Grid lines
+                gc.setStroke(Color.web("#22224a"));
+                gc.setLineWidth(1);
+                for (int x = 0; x <= canvasW; x += colW) gc.strokeLine(x, 0, x, canvasH);
+                gc.strokeLine(0, feetY, canvasW, feetY);  // floor line
+
+                for (int i = 0; i < states.length; i++) {
+                    double cx = 20 + i * colW + colW / 2.0;
+
+                    // Shadow ellipse at feet
+                    gc.setFill(Color.color(0, 0, 0, 0.3));
+                    gc.fillOval(cx - 16, feetY - 4, 32, 8);
+
+                    // Sprite
+                    animators[i].draw(gc, cx, feetY, palette[i % palette.length]);
+
+                    // State name label
+                    gc.setFill(palette[i % palette.length].deriveColor(0, 1, 1.3, 1));
+                    gc.setFont(javafx.scene.text.Font.font("System",
+                            javafx.scene.text.FontWeight.BOLD, 11));
+                    String name = states[i].name();
+                    gc.fillText(name, cx - name.length() * 3.3, feetY + 24);
+                }
+            }
+        };
+        timer.start();
+
+        // Keep the canvas at a fixed size inside a scroll pane
+        ScrollPane scroll = new ScrollPane(canvas);
+        scroll.setFitToWidth(false);
+        scroll.setFitToHeight(false);
+        scroll.setStyle("-fx-background-color: #0f0f1e;");
+        scroll.setPrefViewportHeight(canvasH + 20);
+
+        VBox root = new VBox(12, scroll, desc, legend);
+        root.setPadding(new Insets(14));
+        root.setStyle("-fx-background-color: #1a1a2e;");
         return root;
     }
 
