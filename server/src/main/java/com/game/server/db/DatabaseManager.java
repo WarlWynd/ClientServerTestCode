@@ -64,6 +64,19 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
+    private static final String DDL_SERVER_SETTINGS = """
+            CREATE TABLE IF NOT EXISTS ServerSettings (
+                id            INT          NOT NULL DEFAULT 1,
+                gravity       FLOAT        NOT NULL DEFAULT 0.5,
+                jump_strength FLOAT        NOT NULL DEFAULT 8.0,
+                run_speed     FLOAT        NOT NULL DEFAULT 6.0,
+                updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                           ON UPDATE CURRENT_TIMESTAMP,
+                updated_by    VARCHAR(50)  NULL,
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
     private static final String DDL_SERVER_CHANGES = """
             CREATE TABLE IF NOT EXISTS MultiplayerServerChanges (
                 id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
@@ -114,6 +127,7 @@ public final class DatabaseManager {
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
             stmt.execute(DDL_CHARACTERS);
+            stmt.execute(DDL_SERVER_SETTINGS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }

@@ -34,6 +34,7 @@ public enum PacketType {
 
     // ── Server broadcasts ────────────────────────────────────────────────────
     SERVER_NOTICE,
+    SERVER_SETTINGS,
 
     // ── Admin ────────────────────────────────────────────────────
     ADMIN_USER_LIST_REQUEST,
@@ -47,5 +48,7 @@ public enum PacketType {
     ADMIN_RESTART_REQUEST,
     ADMIN_RESTART_RESPONSE,
     ADMIN_DEPLOY_REQUEST,
-    ADMIN_DEPLOY_RESPONSE
+    ADMIN_DEPLOY_RESPONSE,
+    ADMIN_SAVE_SETTINGS_REQUEST,
+    ADMIN_SAVE_SETTINGS_RESPONSE
 }
