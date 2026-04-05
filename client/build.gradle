@@ -3,6 +3,21 @@ plugins {
     id 'application'
 }
 
+def gitCommit = {
+    try {
+        def proc = ['git', 'rev-parse', '--short', 'HEAD'].execute(null, rootDir)
+        proc.waitFor()
+        proc.text.trim() ?: 'unknown'
+    } catch (Exception ignored) { 'unknown' }
+}()
+
+processResources {
+    filesMatching('build-info.properties') {
+        expand(gitCommit: gitCommit,
+               buildTime: new Date().format("yyyy-MM-dd HH:mm:ss z"))
+    }
+}
+
 javafx {
     version = "26"
     modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media']

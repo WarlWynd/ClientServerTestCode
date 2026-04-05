@@ -54,6 +54,7 @@ public class AssetHttpServer {
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/assets",          this::handle);
         server.createContext("/client-manifest", this::handleClientManifest);
+        server.createContext("/build-info",      this::handleBuildInfo);
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.start();
         log.info("Asset HTTP server listening on port {}", port);
@@ -62,6 +63,34 @@ public class AssetHttpServer {
     public void stop() {
         if (server != null) server.stop(0);
         log.info("Asset HTTP server stopped.");
+    }
+
+    // -- Build info --
+
+    private static final String SERVER_COMMIT;
+    private static final String SERVER_BUILD_TIME;
+
+    static {
+        java.util.Properties p = new java.util.Properties();
+        try (java.io.InputStream in = AssetHttpServer.class.getResourceAsStream("/build-info.properties")) {
+            if (in != null) p.load(in);
+        } catch (Exception ignored) {}
+        SERVER_COMMIT     = p.getProperty("git.commit", "unknown");
+        SERVER_BUILD_TIME = p.getProperty("build.time",  "unknown");
+    }
+
+    private void handleBuildInfo(HttpExchange ex) throws IOException {
+        if (!"GET".equalsIgnoreCase(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(405, -1);
+            return;
+        }
+        String json = String.format(
+                "{\"commit\":\"%s\",\"buildTime\":\"%s\"}",
+                SERVER_COMMIT, SERVER_BUILD_TIME);
+        byte[] body = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "application/json");
+        ex.sendResponseHeaders(200, body.length);
+        try (var out = ex.getResponseBody()) { out.write(body); }
     }
 
     // -- Request routing --

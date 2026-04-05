@@ -3,6 +3,7 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.BuildInfo;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -87,10 +88,14 @@ public class AdminPanel {
         restartBtn.getStyleClass().add("btn-restart");
         restartBtn.setOnAction(e -> confirmRestart());
 
+        Button versionBtn = new Button("Compare Versions");
+        versionBtn.getStyleClass().add("btn-secondary");
+        versionBtn.setOnAction(e -> checkVersions());
+
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
 
-        HBox header = new HBox(headerLabel, headerSpacer, deployBtn, restartBtn);
+        HBox header = new HBox(8, headerLabel, headerSpacer, versionBtn, deployBtn, restartBtn);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 6, 14));
         header.setSpacing(8);
@@ -560,6 +565,64 @@ public class AdminPanel {
         payload.put("username", username);
         payload.put("ban", true);
         client.send(new Packet(PacketType.ADMIN_BAN_REQUEST, SessionStore.getToken(), payload));
+    }
+
+    private void checkVersions() {
+        String clientCommit    = BuildInfo.COMMIT;
+        String clientBuildTime = BuildInfo.BUILD_TIME;
+        String url = AppSettings.getAssetUrl() + "/build-info";
+
+        Thread.ofVirtual().start(() -> {
+            String serverCommit    = "unknown";
+            String serverBuildTime = "unknown";
+            String error           = null;
+            try {
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) URI.create(url).toURL().openConnection();
+                conn.setConnectTimeout(4000);
+                conn.setReadTimeout(4000);
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    String body = new String(conn.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    com.fasterxml.jackson.databind.JsonNode json =
+                            PacketSerializer.mapper().readTree(body);
+                    serverCommit    = json.path("commit").asText("unknown");
+                    serverBuildTime = json.path("buildTime").asText("unknown");
+                } else {
+                    error = "HTTP " + code;
+                }
+            } catch (Exception ex) {
+                error = ex.getMessage();
+            }
+
+            final String sc = serverCommit, st = serverBuildTime, err = error;
+            Platform.runLater(() -> showVersionDialog(clientCommit, clientBuildTime, sc, st, err));
+        });
+    }
+
+    private void showVersionDialog(String clientCommit, String clientBuildTime,
+                                   String serverCommit, String serverBuildTime, String error) {
+        boolean match = clientCommit.equals(serverCommit) && !"unknown".equals(clientCommit);
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Version Comparison");
+        alert.setHeaderText(match ? "✓ Client and server are in sync" : "⚠ Version mismatch!");
+
+        String content;
+        if (error != null) {
+            content = "Could not reach server build-info endpoint:\n" + error
+                    + "\n\nClient commit:  " + clientCommit
+                    + "\nClient built:   " + clientBuildTime;
+        } else {
+            content = String.format(
+                    "Client commit:  %s\nClient built:   %s\n\nServer commit:  %s\nServer built:   %s",
+                    clientCommit, clientBuildTime, serverCommit, serverBuildTime);
+            if (!match) content += "\n\nThe server may need to be deployed.";
+        }
+        alert.setContentText(content);
+        styleAlert(alert);
+        alert.showAndWait();
     }
 
     private void confirmDeploy() {

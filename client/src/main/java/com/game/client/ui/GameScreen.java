@@ -548,7 +548,7 @@ public class GameScreen {
             systemMsgBar.getStyleClass().setAll("status-bar");
             systemMsgText.getStyleClass().setAll("status-bar-error");
             systemMsgCountdown.getStyleClass().setAll();
-            systemMsgText.setText("● Connection lost — reconnecting…");
+            systemMsgText.setText("● Connection Lost — Reconnecting…");
             systemMsgCountdown.setText("");
             attemptReconnect();
         });
