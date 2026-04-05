@@ -56,11 +56,21 @@ public class GameScreen {
     private static final long  SEND_INTERVAL_MS  = 50;     // max 20 updates/s to server
     private static final long  KEEPALIVE_MS      = 15_000; // keepalive when idle (prevents server eviction)
 
+    /** Fixed game-world size — shared by all clients regardless of resolution. */
+    static final int WORLD_W = 3200;
+    static final int WORLD_H = 2400;
+
     // ── State ────────────────────────────────────────────────────────────────
     private final Stage     stage;
     private final UDPClient client;
-    private final int       WORLD_W;
-    private final int       WORLD_H;
+
+    /** Viewport size = the client's chosen resolution. */
+    private final int viewportW;
+    private final int viewportH;
+
+    /** Camera top-left in world coordinates (updated each frame to follow local player). */
+    private float cameraX;
+    private float cameraY;
 
     private float   localX;
     private float   localY;
@@ -101,14 +111,13 @@ public class GameScreen {
     private static final int  SHUTDOWN_DELAY_SECONDS = 15;
 
     public GameScreen(Stage stage, UDPClient client) {
-        this.stage   = stage;
-        this.client  = client;
+        this.stage     = stage;
+        this.client    = client;
         GameResolution res = AppSettings.getResolution();
-        this.WORLD_W  = res.width;
-        this.WORLD_H  = res.height;
-        this.FLOOR_Y  = res.height - 40;
-        this.localX   = WORLD_W / 2f;
-        this.localY   = WORLD_H / 2f;
+        this.viewportW = res.width;
+        this.viewportH = res.height;
+        this.localX    = WORLD_W / 2f;
+        this.localY    = WORLD_H / 2f;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -175,7 +184,7 @@ public class GameScreen {
         sidebar.getStyleClass().add("app-surface");
 
         // ── Canvas ───────────────────────────────────────────────────────────
-        canvas = new Canvas(WORLD_W, WORLD_H);
+        canvas = new Canvas(viewportW, viewportH);
 
         // Disconnected overlay (stacked on top of canvas, hidden by default)
         overlayTitleLabel = new Label("SERVER RESTARTING");
@@ -257,7 +266,7 @@ public class GameScreen {
         VBox root = new VBox(tabPane);
         root.getStyleClass().add("app-root");
 
-        Scene scene = new Scene(root, WORLD_W + 160, WORLD_H + 30);
+        Scene scene = new Scene(root, viewportW + 160, viewportH + 30);
         ThemeManager.apply(scene);
         // Use filters (capture phase) so keys are tracked before any node handler runs.
         scene.addEventFilter(KeyEvent.KEY_PRESSED,  e -> heldKeys.add(e.getCode()));
@@ -326,6 +335,8 @@ public class GameScreen {
             localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
         }
 
+        updateCamera();
+
         long now = System.currentTimeMillis();
         if ((moved || (now - lastSendTime) > KEEPALIVE_MS) && (now - lastSendTime) > SEND_INTERVAL_MS) {
             ObjectNode payload = PacketSerializer.mapper().createObjectNode();
@@ -335,6 +346,11 @@ public class GameScreen {
             sendPacket(PacketType.PLAYER_UPDATE, payload);
             lastSendTime = now;
         }
+    }
+
+    private void updateCamera() {
+        cameraX = Math.max(0, Math.min(WORLD_W - viewportW, localX - viewportW / 2f));
+        cameraY = Math.max(0, Math.min(WORLD_H - viewportH, localY - viewportH / 2f));
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -352,14 +368,19 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    // Floor constants (instance — depend on WORLD_H)
-    private final int   FLOOR_Y;  // floor surface Y position
+    // Floor constants
+    private static final int   FLOOR_Y        = WORLD_H - 40;
     private static final int   FLOOR_H        = 40;
     private static final int   PLANK_W        = 80;
     private static final int   PLANK_GAP      = 2;
 
     private void render() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        // Clear viewport, then translate so all world drawing uses world coordinates
+        gc.clearRect(0, 0, viewportW, viewportH);
+        gc.save();
+        gc.translate(-cameraX, -cameraY);
 
         // Background
         gc.setFill(Color.web("#1a1a2e"));
@@ -418,6 +439,8 @@ public class GameScreen {
         String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
         drawPlayer(gc, localX, localY, localName, localScore, Color.web("#e0e0ff"), true);
+
+        gc.restore();
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,

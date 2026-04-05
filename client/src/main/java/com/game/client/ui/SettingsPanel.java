@@ -103,7 +103,7 @@ public class SettingsPanel {
             if (val != null) AppSettings.setResolution((GameResolution) val.getUserData());
         });
 
-        Label resNote = new Label("Resolution applies next time you enter the game.");
+        Label resNote = new Label("Resolution sets your viewport size. The world is 3200×2400 — scroll to explore.");
         resNote.getStyleClass().addAll("text-muted", "italic", "font-11");
 
         // ── Tabs ──────────────────────────────────────────────────────────────

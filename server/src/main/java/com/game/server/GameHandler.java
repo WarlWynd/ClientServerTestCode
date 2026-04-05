@@ -70,9 +70,9 @@ public class GameHandler {
         float y     = in.payload.has("y")     ? (float) in.payload.get("y").asDouble()     : state.y;
         int   score = in.payload.has("score") ?          in.payload.get("score").asInt()   : state.score;
 
-        // Clamp to world bounds (800 × 600)
-        x = Math.max(0f, Math.min(800f, x));
-        y = Math.max(0f, Math.min(600f, y));
+        // Clamp to world bounds (3200 × 2400)
+        x = Math.max(0f, Math.min(3200f, x));
+        y = Math.max(0f, Math.min(2400f, y));
 
         state.update(x, y, score);
 
