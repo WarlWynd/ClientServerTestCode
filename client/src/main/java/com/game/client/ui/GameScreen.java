@@ -51,7 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameScreen {
 
     // ── Constants ────────────────────────────────────────────────────────────
-    private static final float PLAYER_SPEED  = 3.5f;
+    private static final float PLAYER_SPEED  = 6f;
     private static final float PLAYER_RADIUS = 14f;
     private static final long  SEND_INTERVAL_MS  = 50;     // max 20 updates/s to server
     private static final long  KEEPALIVE_MS      = 15_000; // keepalive when idle (prevents server eviction)
@@ -84,6 +84,7 @@ public class GameScreen {
 
     private Label pingLabel;
     private Label playerCountLabel;
+    private Label posLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
     private TabPane tabPane;
@@ -167,6 +168,14 @@ public class GameScreen {
         controls.getStyleClass().addAll("text-muted", "font-11");
         controls.setWrapText(true);
 
+        Separator sep5 = new Separator();
+        sep5.getStyleClass().add("sep");
+
+        Label posLbl = new Label("POSITION");
+        posLbl.getStyleClass().addAll("text-muted", "font-10");
+        posLabel = new Label("0, 0");
+        posLabel.getStyleClass().addAll("text-primary", "font-11");
+
         VBox sidebar = new VBox(10,
                 gameTitle,
                 sep1,
@@ -176,7 +185,9 @@ public class GameScreen {
                 sep3,
                 pingLbl, pingLabel,
                 sep4,
-                controlsLbl, controls);
+                controlsLbl, controls,
+                sep5,
+                posLbl, posLabel);
         sidebar.setPadding(new Insets(16, 12, 16, 12));
         sidebar.setPrefWidth(160);
         sidebar.setMinWidth(160);
@@ -386,6 +397,16 @@ public class GameScreen {
         gc.setFill(Color.web("#1a1a2e"));
         gc.fillRect(0, 0, WORLD_W, WORLD_H);
 
+        // Background grid (gives visual reference for scrolling)
+        gc.setStroke(Color.web("#22224a"));
+        gc.setLineWidth(1);
+        for (int gx = 0; gx <= WORLD_W; gx += 100) {
+            gc.strokeLine(gx, 0, gx, WORLD_H);
+        }
+        for (int gy = 0; gy <= WORLD_H; gy += 100) {
+            gc.strokeLine(0, gy, WORLD_W, gy);
+        }
+
         // World border
         gc.setStroke(Color.web("#3a3a6a"));
         gc.setLineWidth(2);
@@ -441,6 +462,8 @@ public class GameScreen {
         drawPlayer(gc, localX, localY, localName, localScore, Color.web("#e0e0ff"), true);
 
         gc.restore();
+
+        posLabel.setText((int) localX + ", " + (int) localY);
     }
 
     private void drawPlayer(GraphicsContext gc, float x, float y,
