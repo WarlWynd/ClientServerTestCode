@@ -25,7 +25,8 @@ public final class DatabaseManager {
                 emailaddress    VARCHAR(255) NOT NULL UNIQUE,
                 created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 last_login      TIMESTAMP    NULL,
-                is_admin        TINYINT(1)   NOT NULL DEFAULT 0
+                is_admin        TINYINT(1)   NOT NULL DEFAULT 0,
+                is_graphics_dev TINYINT(1)   NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
@@ -121,6 +122,7 @@ public final class DatabaseManager {
             stmt.execute(DDL_USERS);
             stmt.execute(DDL_SESSIONS);
             addColumnIfMissing(conn, "users", "is_admin",        "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_graphics_dev", "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "emailaddress",    "VARCHAR(255) NOT NULL DEFAULT ''");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);

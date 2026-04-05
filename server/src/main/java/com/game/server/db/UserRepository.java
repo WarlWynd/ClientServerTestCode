@@ -40,7 +40,7 @@ public class UserRepository {
      * @return the User if credentials are correct.
      */
     public Optional<User> authenticate(String email, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_admin " +
+        String sql = "SELECT id, username, password_hash, is_admin, is_graphics_dev " +
                      "FROM users WHERE emailaddress = ?";
 
         try (Connection conn = db.getConnection();
@@ -54,7 +54,8 @@ public class UserRepository {
                         return Optional.of(new User(
                                 rs.getLong("id"),
                                 rs.getString("username"),
-                                rs.getBoolean("is_admin")
+                                rs.getBoolean("is_admin"),
+                                rs.getBoolean("is_graphics_dev")
                         ));
                     }
                 }
@@ -63,6 +64,18 @@ public class UserRepository {
             throw new RuntimeException("authenticate() failed", e);
         }
         return Optional.empty();
+    }
+
+    public boolean setGraphicsDev(String username, boolean isGraphicsDev) {
+        String sql = "UPDATE users SET is_graphics_dev = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, isGraphicsDev);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("setGraphicsDev() failed", e);
+        }
     }
 
     public long getUserId(String username) {

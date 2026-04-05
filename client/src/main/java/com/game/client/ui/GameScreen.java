@@ -254,7 +254,11 @@ public class GameScreen {
                 side -> tabPane.setSide(side), this::doLogout).buildView());
         settingsTab.setClosable(false);
 
-        // ── Audio Dev tab (audio admins only) ────────────────────────────────
+        // ── Role-gated tabs ───────────────────────────────────────────────────
+        java.util.List<Tab> tabs = new java.util.ArrayList<>();
+        tabs.add(gameTab);
+        tabs.add(settingsTab);
+
         if (SessionStore.isAdmin()) {
             adminPanel = new AdminPanel(client);
             adminPanel.setRestartCallback(this::startReconnectCountdown);
@@ -262,13 +266,21 @@ public class GameScreen {
             adminTab.setClosable(false);
             Tab gameSettingsTab = new Tab("⚙ Game Settings", new GameSettingsPanel(client).buildView());
             gameSettingsTab.setClosable(false);
-            AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
-            Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
+            Tab audioTab = new Tab("🎵 Audio Dev", new AudioDevScreen(stage).build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, settingsTab, adminTab, gameSettingsTab, audioTab);
-        } else {
-            tabPane = new TabPane(gameTab, settingsTab);
+            Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
+            graphicsTab.setClosable(false);
+            tabs.add(adminTab);
+            tabs.add(gameSettingsTab);
+            tabs.add(audioTab);
+            tabs.add(graphicsTab);
+        } else if (SessionStore.isGraphicsDev()) {
+            Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
+            graphicsTab.setClosable(false);
+            tabs.add(graphicsTab);
         }
+
+        tabPane = new TabPane(tabs.toArray(new Tab[0]));
 
 
         // ── Tab pane ─────────────────────────────────────────────────────────
