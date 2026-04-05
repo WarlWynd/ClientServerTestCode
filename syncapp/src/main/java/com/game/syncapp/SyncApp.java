@@ -236,11 +236,13 @@ public class SyncApp extends Application {
 
             java.nio.file.Path dest = INSTALL_DIR.resolve("sync").resolve("syncapp.jar");
             java.nio.file.Files.createDirectories(dest.getParent());
-            if (!java.nio.file.Files.exists(dest) ||
-                    java.nio.file.Files.size(self) != java.nio.file.Files.size(dest)) {
+            // Only bootstrap if the installed copy doesn't exist yet.
+            // Once the server has syncapp.jar in its manifest, the sync step
+            // keeps the installed copy up to date — don't overwrite it here.
+            if (!java.nio.file.Files.exists(dest)) {
                 java.nio.file.Files.copy(self, dest,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                log.info("SyncApp copied to {}", dest);
+                log.info("SyncApp bootstrapped to {}", dest);
             }
         } catch (Exception e) {
             log.warn("Could not copy SyncApp to install dir: {}", e.getMessage());
