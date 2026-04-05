@@ -7,8 +7,6 @@
 #
 # Must be run from the project root (restart.sh handles this).
 
-set -e
-
 echo "[deploy.sh] Starting deploy at $(date)"
 
 # 1. Commit any local changes (audio assets, config, etc.)
@@ -26,22 +24,25 @@ git push && echo "[deploy.sh] Pushed to remote" || echo "[deploy.sh] Push failed
 # 3. Pull latest
 git pull --rebase && echo "[deploy.sh] Pulled latest code"
 
-# 4. Rebuild server and client JARs
-./gradlew :server:jar :client:jar --quiet && echo "[deploy.sh] Build complete"
+# 4. Rebuild server JAR (required — fail deploy if this fails)
+./gradlew :server:jar --quiet && echo "[deploy.sh] Server build complete" || {
+    echo "[deploy.sh] ERROR: Server build failed"
+    exit 1
+}
 
-# 5. Copy client JAR to assets/client/ so the sync app can distribute it
-mkdir -p assets/client
-cp client/build/libs/game-client.jar assets/client/
-echo "[deploy.sh] Client JAR copied to assets/client/"
-
-# 6. Ensure server.properties includes 'client' in server.client.sync.types
-PROPS="server.properties"
-if [ -f "$PROPS" ]; then
-    CURRENT=$(grep "^server.client.sync.types" "$PROPS" | cut -d= -f2)
-    if [ -n "$CURRENT" ] && [[ "$CURRENT" != *"client"* ]]; then
-        sed -i "s|^server.client.sync.types=.*|server.client.sync.types=${CURRENT},client|" "$PROPS"
-        echo "[deploy.sh] Added 'client' to server.client.sync.types in $PROPS"
+# 5. Build client JAR and copy to assets/client/ (non-fatal)
+if ./gradlew :client:jar --quiet 2>&1; then
+    mkdir -p assets/client
+    JAR_SRC="client/build/libs/game-client.jar"
+    if [ -f "$JAR_SRC" ]; then
+        cp "$JAR_SRC" assets/client/
+        echo "[deploy.sh] Client JAR copied to assets/client/"
+    else
+        echo "[deploy.sh] WARNING: client JAR not found at $JAR_SRC"
+        ls client/build/libs/ 2>/dev/null || echo "[deploy.sh] libs dir missing"
     fi
+else
+    echo "[deploy.sh] WARNING: Client JAR build failed — client will not be updated this deploy"
 fi
 
 echo "[deploy.sh] Deploy complete — signalling restart"
