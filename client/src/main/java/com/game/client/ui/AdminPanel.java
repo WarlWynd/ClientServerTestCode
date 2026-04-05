@@ -589,6 +589,8 @@ public class AdminPanel {
                             PacketSerializer.mapper().readTree(body);
                     serverCommit    = json.path("commit").asText("unknown");
                     serverBuildTime = json.path("buildTime").asText("unknown");
+                } else if (code == 404) {
+                    error = "Server does not expose build info (HTTP 404).\nDeploy the latest server build first.";
                 } else {
                     error = "HTTP " + code;
                 }
