@@ -35,6 +35,7 @@ public class ServerConfig {
         return Arrays.stream(val.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
+    public String getUploadKey()  { return prop("server.upload.key", ""); }
     public String getDbHost()     { return prop("db.host",     "localhost"); }
     public int    getDbPort()     { return Integer.parseInt(prop("db.port",     "3306")); }
     public String getDbName()     { return prop("db.name",     "game_db"); }

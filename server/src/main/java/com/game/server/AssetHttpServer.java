@@ -29,17 +29,20 @@ public class AssetHttpServer {
 
     private static final Logger log = LoggerFactory.getLogger(AssetHttpServer.class);
 
-    private final int         port;
-    private final Path        assetsRoot;
-    private final AuthHandler authHandler;
+    private final int          port;
+    private final Path         assetsRoot;
+    private final AuthHandler  authHandler;
     private final List<String> clientSyncTypes;
-    private HttpServer        server;
+    private final String       uploadKey;
+    private HttpServer         server;
 
-    public AssetHttpServer(int port, String assetsDir, AuthHandler authHandler, List<String> clientSyncTypes) {
+    public AssetHttpServer(int port, String assetsDir, AuthHandler authHandler,
+                           List<String> clientSyncTypes, String uploadKey) {
         this.port            = port;
         this.assetsRoot      = Path.of(assetsDir).toAbsolutePath();
         this.authHandler     = authHandler;
         this.clientSyncTypes = clientSyncTypes;
+        this.uploadKey       = uploadKey;
     }
 
     public void start() throws IOException {
@@ -228,6 +231,12 @@ public class AssetHttpServer {
     // -- Helpers --
 
     private boolean authorised(HttpExchange ex) {
+        // Accept static upload key if configured
+        if (!uploadKey.isBlank()) {
+            String key = ex.getRequestHeaders().getFirst("X-Upload-Key");
+            if (uploadKey.equals(key)) return true;
+        }
+        // Accept valid session token
         String auth = ex.getRequestHeaders().getFirst("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) return false;
         String token = auth.substring(7).trim();

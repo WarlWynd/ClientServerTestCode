@@ -35,7 +35,7 @@ public class ServerMain {
 
         AssetHttpServer assetServer = new AssetHttpServer(
                 config.getHttpPort(), config.getAssetsDir(), server.getAuthHandler(),
-                config.getClientSyncTypes());
+                config.getClientSyncTypes(), config.getUploadKey());
         try {
             assetServer.start();
         } catch (Exception e) {

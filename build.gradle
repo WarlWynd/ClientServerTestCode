@@ -1,3 +1,36 @@
+// Upload the client JAR to the asset server for distribution via the sync app.
+// Usage: ./gradlew uploadClientJar -PuploadKey=<key> [-PserverUrl=http://host:9877]
+task uploadClientJar(dependsOn: ':client:jar') {
+    doLast {
+        def key       = project.findProperty('uploadKey') ?: ''
+        def serverUrl = project.findProperty('serverUrl') ?: 'http://147.136.236.127:9877'
+        def jar       = file('client/build/libs/game-client.jar')
+
+        if (key.isEmpty()) {
+            throw new GradleException('Provide -PuploadKey=<key> matching server.upload.key in server.properties')
+        }
+        if (!jar.exists()) {
+            throw new GradleException("Client JAR not found: ${jar}")
+        }
+
+        def url  = new URL("${serverUrl}/assets/client/game-client.jar")
+        def conn = url.openConnection()
+        conn.requestMethod = 'POST'
+        conn.setRequestProperty('X-Upload-Key', key)
+        conn.setRequestProperty('Content-Type', 'application/octet-stream')
+        conn.doOutput = true
+        conn.outputStream.write(jar.bytes)
+        conn.outputStream.flush()
+
+        int code = conn.responseCode
+        if (code == 200) {
+            println "Uploaded game-client.jar to ${serverUrl} (${jar.length()} bytes)"
+        } else {
+            throw new GradleException("Upload failed — HTTP ${code}")
+        }
+    }
+}
+
 subprojects {
     apply plugin: 'java'
 
