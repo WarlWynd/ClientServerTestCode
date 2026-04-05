@@ -74,6 +74,8 @@ public class GameScreen {
 
     private float   localX;
     private float   localY;
+    private float   velY       = 0f;   // vertical velocity (game coords: positive = up)
+    private boolean wasJumpHeld = false; // tracks previous frame jump key state for impulse detection
     private int     localScore = 0;
 
     /** Latest server snapshot: username → {x, y, score} */
@@ -336,21 +338,34 @@ public class GameScreen {
         boolean moved = false;
         float speed = AppSettings.getRunSpeed();
 
-        // Apply gravity — pull player toward floor each frame
-        float newY = localY - AppSettings.getGravity();
-        if (newY != localY) { localY = Math.max(PLAYER_RADIUS, newY); moved = true; }
+        // ── Vertical physics ──────────────────────────────────────────────────
+        // Accumulate gravity each frame
+        velY -= AppSettings.getGravity();
 
-        if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-            localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + AppSettings.getJumpStrength()); moved = true;
+        // Jump: impulse on key-down (rising edge only, not held)
+        KeyCode jumpKey = keyCodeOf(AppSettings.getKeyJump(), KeyCode.W);
+        boolean jumpHeld = heldKeys.contains(jumpKey) || heldKeys.contains(KeyCode.UP);
+        if (jumpHeld && !wasJumpHeld && localY <= PLAYER_RADIUS + 1f) {
+            velY = AppSettings.getJumpStrength(); // impulse overrides current velocity
         }
-        if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
-            localY = Math.max(PLAYER_RADIUS, localY - speed); moved = true;
-        }
+        wasJumpHeld = jumpHeld;
+
+        // Apply vertical velocity and clamp to world
+        localY += velY;
+        if (localY <= PLAYER_RADIUS) { localY = PLAYER_RADIUS; velY = 0f; }
+        if (localY >= FLOOR_Y_CANVAS - PLAYER_RADIUS) { localY = FLOOR_Y_CANVAS - PLAYER_RADIUS; velY = 0f; }
+        moved = true;
+
+        // ── Horizontal movement ───────────────────────────────────────────────
+        // Sprint key multiplies run speed while held
+        KeyCode sprintKey = keyCodeOf(AppSettings.getKeySprint(), KeyCode.SHIFT);
+        float actualSpeed = heldKeys.contains(sprintKey) ? speed * 1.75f : speed;
+
         if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
-            localX = Math.max(PLAYER_RADIUS, localX - speed); moved = true;
+            localX = Math.max(PLAYER_RADIUS, localX - actualSpeed); moved = true;
         }
         if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
-            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + speed); moved = true;
+            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + actualSpeed); moved = true;
         }
 
         updateCamera();
@@ -364,6 +379,11 @@ public class GameScreen {
             sendPacket(PacketType.PLAYER_UPDATE, payload);
             lastSendTime = now;
         }
+    }
+
+    private static KeyCode keyCodeOf(String name, KeyCode fallback) {
+        try { return KeyCode.valueOf(name.toUpperCase().replace(" ", "_")); }
+        catch (Exception e) { return fallback; }
     }
 
     private void updateCamera() {
