@@ -221,7 +221,30 @@ public class SyncApp extends Application {
             launchBtn.setVisible(true);
         }
 
+        // Copy this sync app's JAR to ~/.adventure-friends/sync/ so game-client.jar can find it
+        copySelfToInstallDir();
+
         log.info("Sync done: {}", msg);
+    }
+
+    private void copySelfToInstallDir() {
+        try {
+            // Find the JAR this class was loaded from
+            java.net.URI uri = getClass().getProtectionDomain().getCodeSource().getLocation().toURI();
+            java.nio.file.Path self = java.nio.file.Path.of(uri);
+            if (!self.toString().endsWith(".jar")) return; // running from class files (dev mode)
+
+            java.nio.file.Path dest = INSTALL_DIR.resolve("sync").resolve("syncapp.jar");
+            java.nio.file.Files.createDirectories(dest.getParent());
+            if (!java.nio.file.Files.exists(dest) ||
+                    java.nio.file.Files.size(self) != java.nio.file.Files.size(dest)) {
+                java.nio.file.Files.copy(self, dest,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                log.info("SyncApp copied to {}", dest);
+            }
+        } catch (Exception e) {
+            log.warn("Could not copy SyncApp to install dir: {}", e.getMessage());
+        }
     }
 
     private void launchGame() {
@@ -248,6 +271,7 @@ public class SyncApp extends Application {
             cmd.add("--enable-preview");
             cmd.add("-jar");
             cmd.add(clientJar.toAbsolutePath().toString());
+            cmd.add("--synced"); // tell the client to skip the sync redirect
 
             Process proc = new ProcessBuilder(cmd).inheritIO().start();
             // Give the process a moment to fail fast on startup errors

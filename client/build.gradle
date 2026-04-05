@@ -20,6 +20,8 @@ application {
         '--enable-preview',
         '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
     ]
+    // Pass --synced when running via Gradle so the sync redirect is skipped in dev
+    run.args '--synced'
 }
 
 jar {
