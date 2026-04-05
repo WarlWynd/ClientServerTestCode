@@ -104,9 +104,10 @@ public class AdminPanel {
         table.setPlaceholder(new Label("No players connected"));
 
         table.getColumns().addAll(
-                strCol("Email",     "email",         180),
-                strCol("Username",  "username",      140),
-                strCol("IP",        "ip",            120),
+                strCol("Email",          "email",         180),
+                strCol("Username",       "username",      130),
+                strCol("Character Name", "characterName", 130),
+                strCol("IP",             "ip",            120),
                 strCol("Connected", "connectedTime", 100),
                 strCol("Score",     "score",          55),
                 strCol("X",         "x",              45),
@@ -236,8 +237,9 @@ public class AdminPanel {
                         for (JsonNode p : players) {
                             rows.add(new PlayerRow(
                                     p.get("username").asText(),
-                                    p.has("email") ? p.get("email").asText() : "",
-                                    p.has("ip") ? p.get("ip").asText() : "—",
+                                    p.has("email")         ? p.get("email").asText()         : "",
+                                    p.has("characterName") ? p.get("characterName").asText() : "—",
+                                    p.has("ip")            ? p.get("ip").asText()            : "—",
                                     p.get("joinedAt").asLong(),
                                     p.get("x").asDouble(),
                                     p.get("y").asDouble(),
@@ -298,6 +300,7 @@ public class AdminPanel {
             return switch (field) {
                 case "email"         -> row.email;
                 case "username"      -> row.username;
+                case "characterName" -> row.characterName;
                 case "ip"            -> row.ip;
                 case "connectedTime" -> row.connectedTime;
                 case "score"         -> row.score;
@@ -474,6 +477,7 @@ public class AdminPanel {
     static class PlayerRow {
         final StringProperty  email         = new SimpleStringProperty();
         final StringProperty  username      = new SimpleStringProperty();
+        final StringProperty  characterName = new SimpleStringProperty();
         final StringProperty  ip            = new SimpleStringProperty();
         final StringProperty  connectedTime = new SimpleStringProperty();
         final StringProperty  score         = new SimpleStringProperty();
@@ -482,11 +486,12 @@ public class AdminPanel {
         volatile boolean      isAdmin;
         final long            joinedAt;
 
-        PlayerRow(String username, String email, String ip, long joinedAt, double x, double y, int score, boolean isAdmin) {
+        PlayerRow(String username, String email, String characterName, String ip, long joinedAt, double x, double y, int score, boolean isAdmin) {
             this.joinedAt = joinedAt;
             this.isAdmin  = isAdmin;
             this.email.set(email);
             this.username.set(username);
+            this.characterName.set(characterName);
             this.ip.set(ip);
             this.score.set(String.valueOf(score));
             this.x.set(String.format("%.0f", x));

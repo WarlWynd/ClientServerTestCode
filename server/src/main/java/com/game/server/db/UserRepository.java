@@ -82,6 +82,19 @@ public class UserRepository {
         }
     }
 
+    public long getUserId(String username) {
+        String sql = "SELECT id FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong("id") : -1L;
+            }
+        } catch (SQLException e) {
+            return -1L;
+        }
+    }
+
     public String getEmail(String username) {
         String sql = "SELECT emailaddress FROM users WHERE username = ?";
         try (Connection conn = db.getConnection();

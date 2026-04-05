@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.CharacterRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
@@ -24,9 +25,10 @@ public class AdminPacketHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AdminPacketHandler.class);
 
-    private final AuthHandler    authHandler;
-    private final GameHandler    gameHandler;
-    private final UserRepository userRepo = new UserRepository();
+    private final AuthHandler         authHandler;
+    private final GameHandler         gameHandler;
+    private final UserRepository      userRepo  = new UserRepository();
+    private final CharacterRepository charRepo  = new CharacterRepository();
 
     public AdminPacketHandler(AuthHandler authHandler, GameHandler gameHandler) {
         this.authHandler = authHandler;
@@ -65,8 +67,10 @@ public class AdminPacketHandler {
 
         for (PlayerState p : players.values()) {
             ObjectNode node = arr.addObject();
-            node.put("username",     p.username);
-            node.put("email",        userRepo.getEmail(p.username));
+            node.put("username",      p.username);
+            node.put("email",         userRepo.getEmail(p.username));
+            String charName = charRepo.getCharacterName(userRepo.getUserId(p.username));
+            node.put("characterName", charName != null ? charName : "—");
             node.put("ip",           p.ip);
             node.put("joinedAt",     p.joinedAt);
             node.put("x",            p.x);
