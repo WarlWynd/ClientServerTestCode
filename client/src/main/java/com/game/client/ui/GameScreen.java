@@ -81,10 +81,14 @@ public class GameScreen {
 
     // ── Reconnect overlay ────────────────────────────────────────────────────
     private VBox    disconnectedOverlay;
+    private Label   overlayTitleLabel;
     private Label   countdownLabel;
     private Timeline countdownTimer;
     private Timeline retryTimer;
+    private Timeline heartbeatTimer;
     private volatile boolean reconnecting = false;
+    private volatile long    lastGameStateMs = 0;
+    private static final long HEARTBEAT_TIMEOUT_MS = 8_000;
 
     public GameScreen(Stage stage, UDPClient client) {
         this.stage   = stage;
@@ -177,8 +181,8 @@ public class GameScreen {
         canvas = new Canvas(WORLD_W, WORLD_H);
 
         // Disconnected overlay (stacked on top of canvas, hidden by default)
-        Label disconnTitle = new Label("SERVER RESTARTING");
-        disconnTitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 22; -fx-font-weight: bold;");
+        overlayTitleLabel = new Label("SERVER RESTARTING");
+        overlayTitleLabel.setStyle("-fx-text-fill: #e94560; -fx-font-size: 22; -fx-font-weight: bold;");
         countdownLabel = new Label();
         countdownLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 14;");
         Button retryNowBtn = new Button("Retry Now");
@@ -190,7 +194,7 @@ public class GameScreen {
                 -fx-padding: 8 24 8 24;
                 """);
         retryNowBtn.setOnAction(e -> attemptReconnect());
-        disconnectedOverlay = new VBox(16, disconnTitle, countdownLabel, retryNowBtn);
+        disconnectedOverlay = new VBox(16, overlayTitleLabel, countdownLabel, retryNowBtn);
         disconnectedOverlay.setAlignment(Pos.CENTER);
         disconnectedOverlay.setStyle("-fx-background-color: rgba(10,10,20,0.92);");
         disconnectedOverlay.setVisible(false);
@@ -271,6 +275,17 @@ public class GameScreen {
                 e -> sendPacket(PacketType.PING, PacketSerializer.emptyPayload())));
         pingTimer.setCycleCount(Timeline.INDEFINITE);
         pingTimer.play();
+
+        // ── Heartbeat watchdog ────────────────────────────────────────────────
+        lastGameStateMs = System.currentTimeMillis();
+        heartbeatTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+            if (!reconnecting
+                    && System.currentTimeMillis() - lastGameStateMs > HEARTBEAT_TIMEOUT_MS) {
+                showConnectionLost();
+            }
+        }));
+        heartbeatTimer.setCycleCount(Timeline.INDEFINITE);
+        heartbeatTimer.play();
     }
 
     // ── Input processing ─────────────────────────────────────────────────────
@@ -420,6 +435,7 @@ public class GameScreen {
         if (adminPanel != null) adminPanel.onPacket(packet);
         switch (packet.type) {
             case GAME_STATE -> {
+                lastGameStateMs = System.currentTimeMillis();
                 JsonNode players = packet.payload.get("players");
                 if (players != null && players.isArray()) {
                     Map<String, JsonNode> snapshot = new HashMap<>();
@@ -457,6 +473,19 @@ public class GameScreen {
 
     // ── Reconnect ────────────────────────────────────────────────────────────
 
+    /** Called by the heartbeat watchdog when GAME_STATE stops arriving. */
+    private void showConnectionLost() {
+        Platform.runLater(() -> {
+            if (reconnecting) return;
+            reconnecting = true;
+            if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
+            overlayTitleLabel.setText("CONNECTION LOST");
+            countdownLabel.setText("Attempting to reconnect…");
+            disconnectedOverlay.setVisible(true);
+            attemptReconnect();
+        });
+    }
+
     /** Called by AdminPanel when deploy/restart succeeds. Must be called on FX thread. */
     public void startReconnectCountdown(int seconds) {
         Platform.runLater(() -> {
@@ -464,6 +493,7 @@ public class GameScreen {
             if (countdownTimer != null) countdownTimer.stop();
             if (retryTimer    != null) retryTimer.stop();
             if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
+            overlayTitleLabel.setText("SERVER RESTARTING");
             disconnectedOverlay.setVisible(true);
             countdownLabel.setText("Reconnecting in " + seconds + "s…");
 
@@ -509,6 +539,7 @@ public class GameScreen {
     private void doLogout() {
         if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
         pingTimer.stop();
+        heartbeatTimer.stop();
         if (countdownTimer != null) countdownTimer.stop();
         if (retryTimer     != null) retryTimer.stop();
         if (adminPanel != null) adminPanel.stop();
@@ -521,6 +552,7 @@ public class GameScreen {
     private void doRestart() {
         if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
         pingTimer.stop();
+        heartbeatTimer.stop();
         if (countdownTimer != null) countdownTimer.stop();
         if (retryTimer     != null) retryTimer.stop();
         if (adminPanel != null) adminPanel.stop();
