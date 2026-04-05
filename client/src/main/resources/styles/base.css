@@ -165,8 +165,8 @@
     -fx-padding: 7 14 7 14;
 }
 .btn-warning {
-    -fx-background-color: -af-restart-bg;
-    -fx-text-fill: -af-warning;
+    -fx-background-color: -af-warning;
+    -fx-text-fill: -af-bg;
     -fx-font-weight: bold;
     -fx-background-radius: 4;
     -fx-padding: 7 14 7 14;
