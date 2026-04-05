@@ -1,6 +1,5 @@
 package com.game.client;
 
-import com.game.client.ui.ClientSyncScreen;
 import com.game.client.ui.VersionCheckScreen;
 import com.game.shared.GameVersion;
 import javafx.application.Application;
@@ -28,18 +27,15 @@ public class ClientMain extends Application {
         primaryStage.setResizable(false);
         primaryStage.setOnCloseRequest(e -> shutdown());
 
-        // First: sync client files, then start UDP and version check
-        new ClientSyncScreen(primaryStage, config.getAssetUrl(), GameVersion.VERSION, () -> {
-            udpClient = new UDPClient(config);
-            try {
-                udpClient.start();
-            } catch (Exception e) {
-                log.error("Failed to start UDP client: {}", e.getMessage(), e);
-                Platform.exit();
-                return;
-            }
-            new VersionCheckScreen(primaryStage, udpClient).show();
-        }).show();
+        udpClient = new UDPClient(config);
+        try {
+            udpClient.start();
+        } catch (Exception e) {
+            log.error("Failed to start UDP client: {}", e.getMessage(), e);
+            Platform.exit();
+            return;
+        }
+        new VersionCheckScreen(primaryStage, udpClient).show();
     }
 
     @Override
