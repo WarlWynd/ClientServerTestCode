@@ -28,6 +28,8 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
 
+import java.util.function.Consumer;
+
 /**
  * Embeddable admin dashboard panel — shown as a tab in GameScreen for admin users.
  *
@@ -46,6 +48,13 @@ public class AdminPanel {
     private Label statusLabel;
     private final ObservableList<PlayerRow> rows = FXCollections.observableArrayList();
     private Timeline ticker;
+
+    /** Called with countdown seconds when the server is about to restart (deploy or restart). */
+    private Consumer<Integer> onServerRestart;
+
+    public void setRestartCallback(Consumer<Integer> callback) {
+        this.onServerRestart = callback;
+    }
 
     public AdminPanel(UDPClient client) {
         this.client = client;
@@ -274,18 +283,22 @@ public class AdminPanel {
                 showStatus(msg, ok ? "#80c080" : "#e94560");
             });
             case ADMIN_RESTART_RESPONSE -> Platform.runLater(() -> {
-                boolean ok  = packet.payload.get("success").asBoolean();
-                String  msg = ok
-                        ? "Server restarting — reconnect in a moment."
-                        : "Restart failed: " + packet.payload.get("message").asText();
-                showStatus(msg, ok ? "#f0a030" : "#e94560");
+                boolean ok = packet.payload.get("success").asBoolean();
+                if (ok) {
+                    showStatus("Server restarting…", "#f0a030");
+                    if (onServerRestart != null) onServerRestart.accept(20);
+                } else {
+                    showStatus("Restart failed: " + packet.payload.get("message").asText(), "#e94560");
+                }
             });
             case ADMIN_DEPLOY_RESPONSE -> Platform.runLater(() -> {
-                boolean ok  = packet.payload.get("success").asBoolean();
-                String  msg = ok
-                        ? "Deploying — pulling code, rebuilding, restarting. Reconnect in ~1 min."
-                        : "Deploy failed: " + packet.payload.get("message").asText();
-                showStatus(msg, ok ? "#50c050" : "#e94560");
+                boolean ok = packet.payload.get("success").asBoolean();
+                if (ok) {
+                    showStatus("Deploying — pulling, rebuilding, restarting…", "#50c050");
+                    if (onServerRestart != null) onServerRestart.accept(60);
+                } else {
+                    showStatus("Deploy failed: " + packet.payload.get("message").asText(), "#e94560");
+                }
             });
         }
     }

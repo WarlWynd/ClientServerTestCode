@@ -75,8 +75,16 @@ public class GameScreen {
     private Label playerCountLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
+    private boolean gameLoopRunning = false;
     private Timeline pingTimer;
     private AdminPanel adminPanel;
+
+    // ── Reconnect overlay ────────────────────────────────────────────────────
+    private VBox    disconnectedOverlay;
+    private Label   countdownLabel;
+    private Timeline countdownTimer;
+    private Timeline retryTimer;
+    private volatile boolean reconnecting = false;
 
     public GameScreen(Stage stage, UDPClient client) {
         this.stage   = stage;
@@ -167,7 +175,29 @@ public class GameScreen {
 
         // ── Canvas ───────────────────────────────────────────────────────────
         canvas = new Canvas(WORLD_W, WORLD_H);
-        StackPane canvasPane = new StackPane(canvas);
+
+        // Disconnected overlay (stacked on top of canvas, hidden by default)
+        Label disconnTitle = new Label("SERVER RESTARTING");
+        disconnTitle.setStyle("-fx-text-fill: #e94560; -fx-font-size: 22; -fx-font-weight: bold;");
+        countdownLabel = new Label();
+        countdownLabel.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 14;");
+        Button retryNowBtn = new Button("Retry Now");
+        retryNowBtn.setStyle("""
+                -fx-background-color: #2a6a4a;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 8 24 8 24;
+                """);
+        retryNowBtn.setOnAction(e -> attemptReconnect());
+        disconnectedOverlay = new VBox(16, disconnTitle, countdownLabel, retryNowBtn);
+        disconnectedOverlay.setAlignment(Pos.CENTER);
+        disconnectedOverlay.setStyle("-fx-background-color: rgba(10,10,20,0.92);");
+        disconnectedOverlay.setVisible(false);
+        // Make overlay fill the canvas pane
+        disconnectedOverlay.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+
+        StackPane canvasPane = new StackPane(canvas, disconnectedOverlay);
         canvasPane.setStyle("-fx-background-color: #1a1a2e;");
 
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
@@ -186,6 +216,7 @@ public class GameScreen {
         TabPane tabPane;
         if (SessionStore.isAdmin()) {
             adminPanel = new AdminPanel(client);
+            adminPanel.setRestartCallback(this::startReconnectCountdown);
             Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
             adminTab.setClosable(false);
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
@@ -232,6 +263,7 @@ public class GameScreen {
             }
         };
         gameLoop.start();
+        gameLoopRunning = true;
         if (adminPanel != null) adminPanel.start();
 
         // ── Ping ─────────────────────────────────────────────────────────────
@@ -400,11 +432,17 @@ public class GameScreen {
 
                 int count = packet.payload.has("playerCount")
                         ? packet.payload.get("playerCount").asInt() : remotePlayers.size();
-                Platform.runLater(() -> playerCountLabel.setText("Players: " + count));
+                Platform.runLater(() -> {
+                    playerCountLabel.setText("Players: " + count);
+                    if (reconnecting) onReconnected();
+                });
             }
             case PONG -> {
                 long rtt = System.currentTimeMillis() - packet.timestamp;
-                Platform.runLater(() -> pingLabel.setText("Ping: " + rtt + " ms"));
+                Platform.runLater(() -> {
+                    pingLabel.setText("Ping: " + rtt + " ms");
+                    if (reconnecting) onReconnected();
+                });
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
@@ -417,11 +455,62 @@ public class GameScreen {
         }
     }
 
+    // ── Reconnect ────────────────────────────────────────────────────────────
+
+    /** Called by AdminPanel when deploy/restart succeeds. Must be called on FX thread. */
+    public void startReconnectCountdown(int seconds) {
+        Platform.runLater(() -> {
+            reconnecting = true;
+            if (countdownTimer != null) countdownTimer.stop();
+            if (retryTimer    != null) retryTimer.stop();
+            if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
+            disconnectedOverlay.setVisible(true);
+            countdownLabel.setText("Reconnecting in " + seconds + "s…");
+
+            int[] remaining = {seconds};
+            countdownTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+                remaining[0]--;
+                if (remaining[0] > 0) {
+                    countdownLabel.setText("Reconnecting in " + remaining[0] + "s…");
+                } else {
+                    countdownTimer.stop();
+                    countdownLabel.setText("Attempting to reconnect…");
+                    attemptReconnect();
+                }
+            }));
+            countdownTimer.setCycleCount(seconds);
+            countdownTimer.play();
+        });
+    }
+
+    private void attemptReconnect() {
+        sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());
+        if (retryTimer != null) retryTimer.stop();
+        retryTimer = new Timeline(new KeyFrame(Duration.seconds(5), e -> {
+            if (reconnecting) {
+                countdownLabel.setText("Still trying…");
+                sendPacket(PacketType.GAME_JOIN, PacketSerializer.emptyPayload());
+            }
+        }));
+        retryTimer.setCycleCount(Timeline.INDEFINITE);
+        retryTimer.play();
+    }
+
+    private void onReconnected() {
+        reconnecting = false;
+        if (countdownTimer != null) { countdownTimer.stop(); countdownTimer = null; }
+        if (retryTimer     != null) { retryTimer.stop();     retryTimer     = null; }
+        disconnectedOverlay.setVisible(false);
+        if (!gameLoopRunning) { gameLoop.start(); gameLoopRunning = true; }
+    }
+
     // ── Logout ───────────────────────────────────────────────────────────────
 
     private void doLogout() {
-        gameLoop.stop();
+        if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
         pingTimer.stop();
+        if (countdownTimer != null) countdownTimer.stop();
+        if (retryTimer     != null) retryTimer.stop();
         if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
@@ -430,8 +519,10 @@ public class GameScreen {
     }
 
     private void doRestart() {
-        gameLoop.stop();
+        if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
         pingTimer.stop();
+        if (countdownTimer != null) countdownTimer.stop();
+        if (retryTimer     != null) retryTimer.stop();
         if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,     PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST,  PacketSerializer.emptyPayload());
