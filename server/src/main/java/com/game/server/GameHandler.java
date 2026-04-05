@@ -2,6 +2,8 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.CharacterRepository;
+import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
 import com.game.shared.Packet;
@@ -35,15 +37,19 @@ public class GameHandler {
     private record ClientAddr(InetAddress address, int port) {}
 
     /** session token → live player state */
-    private final Map<String, PlayerState> players = new ConcurrentHashMap<>();
+    private final Map<String, PlayerState> players  = new ConcurrentHashMap<>();
     /** session token → client network address */
-    private final Map<String, ClientAddr>  clients = new ConcurrentHashMap<>();
+    private final Map<String, ClientAddr>  clients  = new ConcurrentHashMap<>();
+
+    private final CharacterRepository charRepo = new CharacterRepository();
+    private final UserRepository      userRepo = new UserRepository();
 
     // ── Packet handlers ──────────────────────────────────────────────────────
 
     public void handleJoin(DatagramSocket socket, Packet in, Session session,
                            InetAddress addr, int port) throws Exception {
-        players.put(session.token(), new PlayerState(session.userId(), session.username(), addr.getHostAddress()));
+        String charName = charRepo.getCharacterName(session.userId());
+        players.put(session.token(), new PlayerState(session.userId(), session.username(), charName, addr.getHostAddress()));
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
         broadcastGameState(socket);
@@ -115,9 +121,10 @@ public class GameHandler {
 
         for (PlayerState p : players.values()) {
             ObjectNode node = playersArr.addObject();
-            node.put("userId",   p.userId);
-            node.put("username", p.username);
-            node.put("x",        p.x);
+            node.put("userId",        p.userId);
+            node.put("username",      p.username);
+            node.put("characterName", p.characterName);
+            node.put("x",             p.x);
             node.put("y",        p.y);
             node.put("score",    p.score);
         }

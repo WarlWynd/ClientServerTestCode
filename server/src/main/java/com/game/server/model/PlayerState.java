@@ -9,6 +9,7 @@ public class PlayerState {
 
     public final long   userId;
     public final String username;
+    public final String characterName;
     public final long   joinedAt = System.currentTimeMillis();
     public final String ip;
 
@@ -17,10 +18,11 @@ public class PlayerState {
     public volatile int   score    = 0;
     public volatile long  lastSeen = System.currentTimeMillis();
 
-    public PlayerState(long userId, String username, String ip) {
-        this.userId   = userId;
-        this.username = username;
-        this.ip       = ip;
+    public PlayerState(long userId, String username, String characterName, String ip) {
+        this.userId        = userId;
+        this.username      = username;
+        this.characterName = characterName != null ? characterName : username;
+        this.ip            = ip;
     }
 
     public void update(float x, float y, int score) {

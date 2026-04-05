@@ -335,14 +335,16 @@ public class GameScreen {
 
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
-            String   name  = entry.getKey();
-            JsonNode state = entry.getValue();
-            if (name.equals(SessionStore.getUsername())) continue;
+            String   username = entry.getKey();
+            JsonNode state    = entry.getValue();
+            if (username.equals(SessionStore.getUsername())) continue;
 
-            float rx = (float) state.get("x").asDouble();
-            float ry = (float) state.get("y").asDouble();
-            int   rs = state.get("score").asInt();
-            drawPlayer(gc, rx, ry, name, rs, colorFor(name), false);
+            float  rx       = (float) state.get("x").asDouble();
+            float  ry       = (float) state.get("y").asDouble();
+            int    rs       = state.get("score").asInt();
+            String dispName = state.has("characterName")
+                    ? state.get("characterName").asText() : username;
+            drawPlayer(gc, rx, ry, dispName, rs, colorFor(username), false);
         }
 
         // Local player (on top)
@@ -369,11 +371,15 @@ public class GameScreen {
         gc.strokeOval(x - PLAYER_RADIUS, y - PLAYER_RADIUS,
                 PLAYER_RADIUS * 2, PLAYER_RADIUS * 2);
 
-        // Name label
+        // Name label (centered above sprite)
+        String label = name + " (" + score + ")";
         gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("System", FontWeight.BOLD, 11));
-        gc.fillText(name + " (" + score + ")",
-                x - PLAYER_RADIUS, y - PLAYER_RADIUS - 5);
+        javafx.scene.text.Font nameFont = Font.font("System", FontWeight.BOLD, 11);
+        gc.setFont(nameFont);
+        javafx.scene.text.Text measurer = new javafx.scene.text.Text(label);
+        measurer.setFont(nameFont);
+        double textW = measurer.getLayoutBounds().getWidth();
+        gc.fillText(label, x - (float)(textW / 2), y - PLAYER_RADIUS - 5);
     }
 
     // ── Packet handling ──────────────────────────────────────────────────────
