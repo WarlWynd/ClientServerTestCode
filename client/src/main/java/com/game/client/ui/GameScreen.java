@@ -117,8 +117,8 @@ public class GameScreen {
         GameResolution res = AppSettings.getResolution();
         this.viewportW = res.width;
         this.viewportH = res.height;
-        this.localX    = WORLD_W / 2f;
-        this.localY    = WORLD_H / 2f;
+        this.localX    = 260f;
+        this.localY    = 20f;
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -334,10 +334,10 @@ public class GameScreen {
         boolean moved = false;
 
         if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-            localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
+            localY = Math.min(FLOOR_Y_CANVAS_CANVAS - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
         }
         if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
-            localY = Math.min(FLOOR_Y - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
+            localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
         }
         if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
             localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
@@ -360,8 +360,9 @@ public class GameScreen {
     }
 
     private void updateCamera() {
+        float playerCY = toCanvasY(localY);
         cameraX = Math.max(0, Math.min(WORLD_W - viewportW, localX - viewportW / 2f));
-        cameraY = Math.max(0, Math.min(WORLD_H - viewportH, localY - viewportH / 2f));
+        cameraY = Math.max(0, Math.min(WORLD_H - viewportH, playerCY - viewportH / 2f));
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -379,9 +380,13 @@ public class GameScreen {
                 k -> PALETTE[(colorIndex++) % PALETTE.length]);
     }
 
-    // Floor constants
-    private static final int   FLOOR_Y        = WORLD_H - 40;
+    // Floor constants — FLOOR_Y_CANVAS_CANVAS is the canvas Y where the floor surface sits.
+    // Game coords have y=0 at the floor, positive y going up toward the sky.
+    private static final int   FLOOR_Y_CANVAS_CANVAS = WORLD_H - 40;   // 2360
     private static final int   FLOOR_H        = 40;
+
+    /** Convert game Y (0 = floor, positive = up) to canvas Y (0 = top, positive = down). */
+    private static float toCanvasY(float gameY) { return FLOOR_Y_CANVAS_CANVAS - gameY; }
     private static final int   PLANK_W        = 80;
     private static final int   PLANK_GAP      = 2;
 
@@ -416,31 +421,31 @@ public class GameScreen {
 
         // Floor base fill
         gc.setFill(Color.web("#2c1810"));
-        gc.fillRect(0, FLOOR_Y, WORLD_W, FLOOR_H);
+        gc.fillRect(0, FLOOR_Y_CANVAS, WORLD_W, FLOOR_H);
 
         // Floor planks
         for (int x = 0; x < WORLD_W; x += PLANK_W + PLANK_GAP) {
             // Alternating plank shades for depth
             boolean alt = ((x / (PLANK_W + PLANK_GAP)) % 2 == 0);
             gc.setFill(alt ? Color.web("#3d2112") : Color.web("#4a2a16"));
-            gc.fillRect(x, FLOOR_Y + 4, PLANK_W, FLOOR_H - 4);
+            gc.fillRect(x, FLOOR_Y_CANVAS + 4, PLANK_W, FLOOR_H - 4);
 
             // Plank highlight (top edge)
             gc.setFill(Color.web("#6b3d1e"));
-            gc.fillRect(x, FLOOR_Y + 4, PLANK_W, 3);
+            gc.fillRect(x, FLOOR_Y_CANVAS + 4, PLANK_W, 3);
 
             // Plank shadow (right edge)
             gc.setFill(Color.web("#1e0d06"));
-            gc.fillRect(x + PLANK_W, FLOOR_Y + 4, PLANK_GAP, FLOOR_H - 4);
+            gc.fillRect(x + PLANK_W, FLOOR_Y_CANVAS + 4, PLANK_GAP, FLOOR_H - 4);
         }
 
         // Floor top edge highlight line
         gc.setFill(Color.web("#7a4a22"));
-        gc.fillRect(0, FLOOR_Y, WORLD_W, 4);
+        gc.fillRect(0, FLOOR_Y_CANVAS, WORLD_W, 4);
 
         // Floor top glow
         gc.setFill(Color.color(0.48, 0.29, 0.13, 0.25));
-        gc.fillRect(0, FLOOR_Y - 8, WORLD_W, 8);
+        gc.fillRect(0, FLOOR_Y_CANVAS - 8, WORLD_W, 8);
 
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
@@ -456,13 +461,13 @@ public class GameScreen {
             int    rs       = state.get("score").asInt();
             String dispName = state.has("characterName")
                     ? state.get("characterName").asText() : username;
-            drawPlayer(gc, rx, ry, dispName, rs, colorFor(username), false);
+            drawPlayer(gc, rx, toCanvasY(ry), dispName, rs, colorFor(username), false);
         }
 
         // Local player (on top)
         String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
-        drawPlayer(gc, localX, localY, localName, localScore, Color.web("#e0e0ff"), true);
+        drawPlayer(gc, localX, toCanvasY(localY), localName, localScore, Color.web("#e0e0ff"), true);
 
         gc.restore();
 
