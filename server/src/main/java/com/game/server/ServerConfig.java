@@ -31,7 +31,7 @@ public class ServerConfig {
     public int        getHttpPort()        { return Integer.parseInt(prop("server.http.port", "9877")); }
     public String     getAssetsDir()       { return prop("server.assets.dir", "assets"); }
     public List<String> getClientSyncTypes() {
-        String val = prop("server.client.sync.types", "sounds,graphics");
+        String val = prop("server.client.sync.types", "sounds,graphics,client");
         return Arrays.stream(val.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
     }

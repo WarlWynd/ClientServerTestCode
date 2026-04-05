@@ -34,6 +34,16 @@ mkdir -p assets/client
 cp client/build/libs/game-client.jar assets/client/
 echo "[deploy.sh] Client JAR copied to assets/client/"
 
+# 6. Ensure server.properties includes 'client' in server.client.sync.types
+PROPS="server.properties"
+if [ -f "$PROPS" ]; then
+    CURRENT=$(grep "^server.client.sync.types" "$PROPS" | cut -d= -f2)
+    if [ -n "$CURRENT" ] && [[ "$CURRENT" != *"client"* ]]; then
+        sed -i "s|^server.client.sync.types=.*|server.client.sync.types=${CURRENT},client|" "$PROPS"
+        echo "[deploy.sh] Added 'client' to server.client.sync.types in $PROPS"
+    fi
+fi
+
 echo "[deploy.sh] Deploy complete — signalling restart"
 # Exit code 42 is caught by restart.sh
 exit 42
