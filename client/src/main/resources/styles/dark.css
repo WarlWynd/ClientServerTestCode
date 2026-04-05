@@ -10,10 +10,10 @@
     -af-card:            #16213e;
 
     /* ── Text ─────────────────────────────────────────────────────────── */
-    -af-text-primary:    #e0e0e0;
-    -af-text-secondary:  #a0a0c0;
-    -af-text-muted:      #606080;
-    -af-text-placeholder: #6060a0;
+    -af-text-primary:    #f0f0f0;
+    -af-text-secondary:  #c8c8e0;
+    -af-text-muted:      #9090b0;
+    -af-text-placeholder: #8080b8;
 
     /* ── Semantic ─────────────────────────────────────────────────────── */
     -af-accent:          #e94560;
