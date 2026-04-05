@@ -39,6 +39,9 @@ public final class AppSettings {
     private static volatile String    uploadKey        = "";
     private static volatile String    tabSide          = "LEFT";
     private static volatile String    theme            = "DARK";
+    private static volatile float     gravity          = 0.5f;
+    private static volatile float     jumpStrength     = 8.0f;
+    private static volatile float     runSpeed         = 6.0f;
 
     static { load(); }
 
@@ -76,6 +79,9 @@ public final class AppSettings {
         uploadKey         = merged.getProperty("upload.key",     uploadKey);
         tabSide           = merged.getProperty("display.tabSide", tabSide);
         theme             = merged.getProperty("display.theme",   theme);
+        gravity           = floatOf(merged, "game.gravity",       gravity);
+        jumpStrength      = floatOf(merged, "game.jumpStrength",  jumpStrength);
+        runSpeed          = floatOf(merged, "game.runSpeed",      runSpeed);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -97,6 +103,9 @@ public final class AppSettings {
         p.setProperty("client.rememberUsername",   String.valueOf(rememberUsername));
         p.setProperty("display.tabSide",           tabSide);
         p.setProperty("display.theme",             theme);
+        p.setProperty("game.gravity",              String.valueOf(gravity));
+        p.setProperty("game.jumpStrength",         String.valueOf(jumpStrength));
+        p.setProperty("game.runSpeed",             String.valueOf(runSpeed));
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -127,6 +136,12 @@ public final class AppSettings {
     public static void      setTabSide(String v)       { tabSide = v; }
     public static String    getTheme()                 { return theme; }
     public static void      setTheme(String v)         { theme = v; }
+    public static float     getGravity()               { return gravity; }
+    public static void      setGravity(float v)        { gravity = v; }
+    public static float     getJumpStrength()          { return jumpStrength; }
+    public static void      setJumpStrength(float v)   { jumpStrength = v; }
+    public static float     getRunSpeed()              { return runSpeed; }
+    public static void      setRunSpeed(float v)       { runSpeed = v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void setServerHost(String v)           { serverHost      = v; }
@@ -151,6 +166,11 @@ public final class AppSettings {
 
     private static double doubleOf(Properties p, String key, double def) {
         try { return Double.parseDouble(p.getProperty(key, String.valueOf(def))); }
+        catch (NumberFormatException e) { return def; }
+    }
+
+    private static float floatOf(Properties p, String key, float def) {
+        try { return Float.parseFloat(p.getProperty(key, String.valueOf(def))); }
         catch (NumberFormatException e) { return def; }
     }
 }

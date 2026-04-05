@@ -258,10 +258,12 @@ public class GameScreen {
             adminPanel.setRestartCallback(this::startReconnectCountdown);
             Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
             adminTab.setClosable(false);
+            Tab gameSettingsTab = new Tab("⚙ Game Settings", new GameSettingsPanel().buildView());
+            gameSettingsTab.setClosable(false);
             AudioDevScreen audioDevScreen = new AudioDevScreen(stage);
             Tab audioTab = new Tab("🎵 Audio Dev", audioDevScreen.build());
             audioTab.setClosable(false);
-            tabPane = new TabPane(gameTab, settingsTab, adminTab, audioTab);
+            tabPane = new TabPane(gameTab, settingsTab, adminTab, gameSettingsTab, audioTab);
         } else {
             tabPane = new TabPane(gameTab, settingsTab);
         }
@@ -332,18 +334,23 @@ public class GameScreen {
 
     private void processInput() {
         boolean moved = false;
+        float speed = AppSettings.getRunSpeed();
+
+        // Apply gravity — pull player toward floor each frame
+        float newY = localY - AppSettings.getGravity();
+        if (newY != localY) { localY = Math.max(PLAYER_RADIUS, newY); moved = true; }
 
         if (heldKeys.contains(KeyCode.W) || heldKeys.contains(KeyCode.UP)) {
-            localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + PLAYER_SPEED); moved = true;
+            localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + AppSettings.getJumpStrength()); moved = true;
         }
         if (heldKeys.contains(KeyCode.S) || heldKeys.contains(KeyCode.DOWN)) {
-            localY = Math.max(PLAYER_RADIUS, localY - PLAYER_SPEED); moved = true;
+            localY = Math.max(PLAYER_RADIUS, localY - speed); moved = true;
         }
         if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
-            localX = Math.max(PLAYER_RADIUS, localX - PLAYER_SPEED); moved = true;
+            localX = Math.max(PLAYER_RADIUS, localX - speed); moved = true;
         }
         if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
-            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + PLAYER_SPEED); moved = true;
+            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + speed); moved = true;
         }
 
         updateCamera();
