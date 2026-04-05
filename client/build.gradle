@@ -12,6 +12,7 @@ def gitCommit = {
 }()
 
 processResources {
+    inputs.property('gitCommit', gitCommit)
     filesMatching('build-info.properties') {
         expand(gitCommit: gitCommit,
                buildTime: new Date().format("yyyy-MM-dd HH:mm:ss z"))
