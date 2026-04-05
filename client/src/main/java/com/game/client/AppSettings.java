@@ -42,6 +42,9 @@ public final class AppSettings {
     private static volatile float     gravity          = 0.5f;
     private static volatile float     jumpStrength     = 8.0f;
     private static volatile float     runSpeed         = 6.0f;
+    private static volatile String    keyJump          = "W";
+    private static volatile String    keySprint        = "SHIFT";
+    private static volatile String    keyFire          = "F";
 
     static { load(); }
 
@@ -82,6 +85,9 @@ public final class AppSettings {
         gravity           = floatOf(merged, "game.gravity",       gravity);
         jumpStrength      = floatOf(merged, "game.jumpStrength",  jumpStrength);
         runSpeed          = floatOf(merged, "game.runSpeed",      runSpeed);
+        keyJump           = merged.getProperty("key.jump",        keyJump);
+        keySprint         = merged.getProperty("key.sprint",      keySprint);
+        keyFire           = merged.getProperty("key.fire",        keyFire);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -106,6 +112,9 @@ public final class AppSettings {
         p.setProperty("game.gravity",              String.valueOf(gravity));
         p.setProperty("game.jumpStrength",         String.valueOf(jumpStrength));
         p.setProperty("game.runSpeed",             String.valueOf(runSpeed));
+        p.setProperty("key.jump",                  keyJump);
+        p.setProperty("key.sprint",               keySprint);
+        p.setProperty("key.fire",                  keyFire);
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -142,6 +151,12 @@ public final class AppSettings {
     public static void      setJumpStrength(float v)   { jumpStrength = v; }
     public static float     getRunSpeed()              { return runSpeed; }
     public static void      setRunSpeed(float v)       { runSpeed = v; }
+    public static String    getKeyJump()               { return keyJump; }
+    public static void      setKeyJump(String v)       { keyJump = v; }
+    public static String    getKeySprint()             { return keySprint; }
+    public static void      setKeySprint(String v)     { keySprint = v; }
+    public static String    getKeyFire()               { return keyFire; }
+    public static void      setKeyFire(String v)       { keyFire = v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void setServerHost(String v)           { serverHost      = v; }

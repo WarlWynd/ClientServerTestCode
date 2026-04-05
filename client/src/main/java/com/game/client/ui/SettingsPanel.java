@@ -10,6 +10,7 @@ import javafx.geometry.Pos;
 import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -160,6 +161,12 @@ public class SettingsPanel {
                 row("Tabs:",  tabSideRow),
                 row("Theme:", themeRow));
 
+        // ── Controls (key bindings) ───────────────────────────────────────────
+        HBox jumpRow   = keyBindRow("Jump:",   AppSettings.getKeyJump(),   AppSettings::setKeyJump);
+        HBox sprintRow = keyBindRow("Sprint:", AppSettings.getKeySprint(), AppSettings::setKeySprint);
+        HBox fireRow   = keyBindRow("Fire:",   AppSettings.getKeyFire(),   AppSettings::setKeyFire);
+        VBox controlsSection = section("Controls", jumpRow, sprintRow, fireRow);
+
         // ── Gameplay ──────────────────────────────────────────────────────────
         VBox gameplaySection = section("Gameplay", comingSoon());
 
@@ -245,7 +252,7 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(audioSection, displaySection, gameplaySection, accountSection);
+        VBox content = new VBox(audioSection, displaySection, controlsSection, gameplaySection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
         content.getChildren().add(buttons);
         content.getStyleClass().add("app-root");
@@ -318,5 +325,41 @@ public class SettingsPanel {
     private static void setStatus(Label label, String msg, boolean success) {
         label.setText(msg);
         label.setStyle("-fx-font-size: 11; -fx-text-fill: " + (success ? "-af-success;" : "-af-error;"));
+    }
+
+    /**
+     * A row with a label and a key-binding button.
+     * Click the button, then press any key to reassign.
+     */
+    private static HBox keyBindRow(String label, String currentKey, Consumer<String> setter) {
+        Label lbl = new Label(label);
+        lbl.setMinWidth(80);
+        lbl.getStyleClass().addAll("text-secondary", "font-12");
+
+        Button btn = new Button(currentKey);
+        btn.setPrefWidth(100);
+        btn.getStyleClass().add("btn-secondary");
+
+        btn.setOnAction(e -> {
+            btn.setText("Press a key…");
+            btn.setOnKeyPressed(ke -> {
+                KeyCode code = ke.getCode();
+                if (code == KeyCode.ESCAPE) {
+                    btn.setText(currentKey);
+                } else {
+                    String name = code.getName();
+                    setter.accept(name);
+                    btn.setText(name);
+                }
+                btn.setOnKeyPressed(null);
+                ke.consume();
+            });
+            btn.requestFocus();
+        });
+
+        HBox row = new HBox(12, lbl, btn);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.setPadding(new Insets(2, 0, 2, 0));
+        return row;
     }
 }
