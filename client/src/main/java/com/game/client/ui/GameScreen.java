@@ -78,8 +78,14 @@ public class GameScreen {
     private boolean wasJumpHeld = false; // tracks previous frame jump key state for impulse detection
     private int     localScore = 0;
 
-    /** Latest server snapshot: username → {x, y, score} */
+    /** Latest server snapshot: sessionToken → player JsonNode */
     private final Map<String, JsonNode> remotePlayers = new ConcurrentHashMap<>();
+
+    /** Sprite animators — one per player (local + remotes). */
+    private final PlayerAnimator              localAnimator   = new PlayerAnimator();
+    private final Map<String, PlayerAnimator> remoteAnimators = new ConcurrentHashMap<>();
+    /** Previous remote positions for per-packet velocity estimation. */
+    private final Map<String, float[]>        prevRemotePos   = new ConcurrentHashMap<>();
 
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
     private long lastSendTime = 0;
@@ -373,13 +379,19 @@ public class GameScreen {
         KeyCode sprintKey = keyCodeOf(AppSettings.getKeySprint(), KeyCode.SHIFT);
         float actualSpeed = heldKeys.contains(sprintKey) ? speed * 1.75f : speed;
 
+        float localVelX = 0;
         if (heldKeys.contains(KeyCode.A) || heldKeys.contains(KeyCode.LEFT)) {
-            localX = Math.max(PLAYER_RADIUS, localX - actualSpeed); moved = true;
+            localX    = Math.max(PLAYER_RADIUS, localX - actualSpeed);
+            localVelX = -actualSpeed;
+            moved     = true;
         }
         if (heldKeys.contains(KeyCode.D) || heldKeys.contains(KeyCode.RIGHT)) {
-            localX = Math.min(WORLD_W - PLAYER_RADIUS, localX + actualSpeed); moved = true;
+            localX    = Math.min(WORLD_W - PLAYER_RADIUS, localX + actualSpeed);
+            localVelX = actualSpeed;
+            moved     = true;
         }
 
+        localAnimator.update(localVelX, velY, localY <= PLAYER_RADIUS + 2f);
         updateCamera();
 
         long now = System.currentTimeMillis();
@@ -489,57 +501,44 @@ public class GameScreen {
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
             String   token = entry.getKey();
-            JsonNode state = entry.getValue();
-            // Skip own entry whether keyed by session token or username
-            if (token.equals(SessionStore.getToken())) continue;
+            JsonNode pNode = entry.getValue();
+            if (token.equals(SessionStore.getToken()))    continue;
             if (token.equals(SessionStore.getUsername())) continue;
-            String username = state.get("username").asText();
-
-            float  rx       = (float) state.get("x").asDouble();
-            float  ry       = (float) state.get("y").asDouble();
-            int    rs       = state.get("score").asInt();
-            String dispName = state.has("characterName")
-                    ? state.get("characterName").asText() : username;
-            drawPlayer(gc, rx, toCanvasY(ry), dispName, rs, colorFor(username), false);
+            String username = pNode.get("username").asText();
+            float  rx       = (float) pNode.get("x").asDouble();
+            float  ry       = (float) pNode.get("y").asDouble();
+            int    rs       = pNode.get("score").asInt();
+            String dispName = pNode.has("characterName") ? pNode.get("characterName").asText() : username;
+            PlayerAnimator anim = remoteAnimators.computeIfAbsent(token, k -> new PlayerAnimator());
+            anim.draw(gc, rx, toCanvasY(ry), colorFor(username));
+            drawNameLabel(gc, rx, toCanvasY(ry), dispName, rs);
         }
 
-        // Local player (on top)
+        // Local player (drawn on top)
         String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
-        drawPlayer(gc, localX, toCanvasY(localY), localName, localScore, Color.web("#e0e0ff"), true);
+        localAnimator.draw(gc, localX, toCanvasY(localY), Color.web("#e0e0ff"));
+        drawNameLabel(gc, localX, toCanvasY(localY), localName, localScore);
 
         gc.restore();
 
         posLabel.setText((int) localX + ", " + (int) localY);
     }
 
-    private void drawPlayer(GraphicsContext gc, float x, float y,
-                            String name, int score, Color color, boolean isLocal) {
-        // Shadow
-        gc.setFill(Color.color(0, 0, 0, 0.3));
-        gc.fillOval(x - PLAYER_RADIUS + 3, y - PLAYER_RADIUS + 3,
-                PLAYER_RADIUS * 2, PLAYER_RADIUS * 2);
-
-        // Body
-        gc.setFill(color);
-        gc.fillOval(x - PLAYER_RADIUS, y - PLAYER_RADIUS,
-                PLAYER_RADIUS * 2, PLAYER_RADIUS * 2);
-
-        // Outline
-        gc.setStroke(isLocal ? Color.WHITE : Color.color(1, 1, 1, 0.4));
-        gc.setLineWidth(isLocal ? 2.5 : 1.5);
-        gc.strokeOval(x - PLAYER_RADIUS, y - PLAYER_RADIUS,
-                PLAYER_RADIUS * 2, PLAYER_RADIUS * 2);
-
-        // Name label (centered above sprite)
+    /** Draw the name+score label centred above the sprite's head. */
+    private void drawNameLabel(GraphicsContext gc, float x, float canvasY, String name, int score) {
         String label = name + " (" + score + ")";
-        gc.setFill(Color.WHITE);
         javafx.scene.text.Font nameFont = Font.font("System", FontWeight.BOLD, 11);
         gc.setFont(nameFont);
         javafx.scene.text.Text measurer = new javafx.scene.text.Text(label);
         measurer.setFont(nameFont);
         double textW = measurer.getLayoutBounds().getWidth();
-        gc.fillText(label, x - (float)(textW / 2), y - PLAYER_RADIUS - 5);
+        // Draw a semi-transparent backing pill for readability
+        double px = x - textW / 2 - 4, py = canvasY - PlayerAnimator.LABEL_ABOVE - 15;
+        gc.setFill(Color.color(0, 0, 0, 0.45));
+        gc.fillRoundRect(px, py, textW + 8, 14, 4, 4);
+        gc.setFill(Color.WHITE);
+        gc.fillText(label, x - (float)(textW / 2), canvasY - PlayerAnimator.LABEL_ABOVE - 3);
     }
 
     // ── Packet handling ──────────────────────────────────────────────────────
@@ -553,12 +552,25 @@ public class GameScreen {
                 if (players != null && players.isArray()) {
                     Map<String, JsonNode> snapshot = new HashMap<>();
                     for (JsonNode p : players) {
-                        // Use sessionToken if present (new server), else fall back to username
                         String key = p.has("sessionToken") && !p.get("sessionToken").asText().isEmpty()
                                 ? p.get("sessionToken").asText()
                                 : p.get("username").asText();
                         snapshot.put(key, p);
+
+                        // Update remote animator from position delta (skip own entry)
+                        if (!key.equals(SessionStore.getToken())) {
+                            float rx = (float) p.get("x").asDouble();
+                            float ry = (float) p.get("y").asDouble();
+                            float[] prev = prevRemotePos.getOrDefault(key, new float[]{rx, ry});
+                            float rVelX = rx - prev[0];
+                            float rVelY = ry - prev[1];
+                            remoteAnimators.computeIfAbsent(key, k -> new PlayerAnimator())
+                                           .update(rVelX, rVelY, ry <= PLAYER_RADIUS + 4f);
+                            prevRemotePos.put(key, new float[]{rx, ry});
+                        }
                     }
+                    remoteAnimators.keySet().retainAll(snapshot.keySet());
+                    prevRemotePos.keySet().retainAll(snapshot.keySet());
                     remotePlayers.clear();
                     remotePlayers.putAll(snapshot);
                 }
