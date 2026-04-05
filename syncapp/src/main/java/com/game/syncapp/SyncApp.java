@@ -63,15 +63,15 @@ public class SyncApp extends Application {
 
         if (!CORP_NAME.isBlank()) {
             Label corpLbl = new Label(CORP_NAME);
-            corpLbl.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 11;");
+            corpLbl.setStyle("-fx-text-fill: #9090c8; -fx-font-size: 11;");
             // added below in vbox
         }
 
         Label versionLbl = new Label("Version " + VERSION);
-        versionLbl.setStyle("-fx-text-fill: #7090c0; -fx-font-size: 11;");
+        versionLbl.setStyle("-fx-text-fill: #90b0e0; -fx-font-size: 11;");
 
         Label installLbl = new Label("Installing to: " + INSTALL_DIR);
-        installLbl.setStyle("-fx-text-fill: #505070; -fx-font-size: 10;");
+        installLbl.setStyle("-fx-text-fill: #8888a8; -fx-font-size: 10;");
         installLbl.setWrapText(true);
         installLbl.setMaxWidth(400);
 
@@ -85,7 +85,7 @@ public class SyncApp extends Application {
         progressBar.setStyle("-fx-accent: #4a90d9;");
 
         fileLabel = new Label("Connecting to server…");
-        fileLabel.setStyle("-fx-text-fill: #8080a0; -fx-font-size: 10;");
+        fileLabel.setStyle("-fx-text-fill: #a0a8c8; -fx-font-size: 10;");
         fileLabel.setMaxWidth(400);
 
         statusLabel = new Label();
@@ -99,10 +99,10 @@ public class SyncApp extends Application {
         logArea.setPrefHeight(140);
         logArea.setStyle("""
                 -fx-background-color: #0f0f1e;
-                -fx-text-fill: #a0c0a0;
+                -fx-text-fill: #c8e8c8;
                 -fx-font-family: monospace;
                 -fx-font-size: 11;
-                -fx-border-color: #2a2a4a;
+                -fx-border-color: #3a3a5a;
                 -fx-border-radius: 4;
                 """);
 
@@ -137,7 +137,7 @@ public class SyncApp extends Application {
         corpRow.getChildren().add(title);
         if (!CORP_NAME.isBlank()) {
             Label c = new Label(CORP_NAME);
-            c.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 11;");
+            c.setStyle("-fx-text-fill: #9090c8; -fx-font-size: 11;");
             corpRow.getChildren().add(c);
         }
         corpRow.getChildren().add(versionLbl);

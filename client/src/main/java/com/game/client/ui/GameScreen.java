@@ -81,6 +81,12 @@ public class GameScreen {
     private Timeline pingTimer;
     private AdminPanel adminPanel;
 
+    // ── System message bar ────────────────────────────────────────────────────
+    private HBox    systemMsgBar;
+    private Label   systemMsgText;
+    private Label   systemMsgCountdown;
+    private Timeline sysMsgTimer;
+
     // ── Reconnect overlay ────────────────────────────────────────────────────
     private VBox    disconnectedOverlay;
     private Label   overlayTitleLabel;
@@ -207,16 +213,38 @@ public class GameScreen {
         StackPane canvasPane = new StackPane(canvas, disconnectedOverlay);
         canvasPane.setStyle("-fx-background-color: #1a1a2e;");
 
+        // ── System message bar ────────────────────────────────────────────────
+        systemMsgText = new Label();
+        systemMsgText.setStyle("-fx-text-fill: #1a1000; -fx-font-weight: bold; -fx-font-size: 12;");
+
+        systemMsgCountdown = new Label();
+        systemMsgCountdown.setStyle("-fx-text-fill: #3a2000; -fx-font-size: 12;");
+
+        Region msgSpacer = new Region();
+        HBox.setHgrow(msgSpacer, Priority.ALWAYS);
+
+        systemMsgBar = new HBox(12, systemMsgText, msgSpacer, systemMsgCountdown);
+        systemMsgBar.setAlignment(Pos.CENTER_LEFT);
+        systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
+        systemMsgBar.setStyle("-fx-background-color: #c8960a;");
+        systemMsgBar.setVisible(false);
+        systemMsgBar.setManaged(false);
+
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
         HBox gameContent = new HBox(sidebar, canvasPane);
         HBox.setHgrow(canvasPane, Priority.ALWAYS);
         gameContent.setStyle("-fx-background-color: #1a1a2e;");
+        VBox.setVgrow(gameContent, Priority.ALWAYS);
 
-        gameTab = new Tab("🎮 Game", gameContent);
+        VBox gameTabRoot = new VBox(systemMsgBar, gameContent);
+        gameTabRoot.setStyle("-fx-background-color: #1a1a2e;");
+
+        gameTab = new Tab("🎮 Game", gameTabRoot);
         gameTab.setClosable(false);
 
         // ── Settings tab (all users) ──────────────────────────────────────────
-        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart).buildView());
+        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart,
+                side -> tabPane.setSide(side)).buildView());
         settingsTab.setClosable(false);
 
         // ── Audio Dev tab (audio admins only) ────────────────────────────────
@@ -235,6 +263,8 @@ public class GameScreen {
 
 
         // ── Tab pane ─────────────────────────────────────────────────────────
+        tabPane.setSide("LEFT".equalsIgnoreCase(AppSettings.getTabSide())
+                ? javafx.geometry.Side.LEFT : javafx.geometry.Side.TOP);
         tabPane.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 120;");
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
@@ -466,7 +496,7 @@ public class GameScreen {
             case SERVER_NOTICE -> {
                 String msg = packet.payload.has("message")
                         ? packet.payload.get("message").asText() : "Server shutting down";
-                Platform.runLater(() -> startReconnectCountdown(msg, SHUTDOWN_DELAY_SECONDS));
+                Platform.runLater(() -> showSystemMessage(msg, SHUTDOWN_DELAY_SECONDS));
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
@@ -480,6 +510,40 @@ public class GameScreen {
     }
 
     // ── Reconnect ────────────────────────────────────────────────────────────
+
+    // ── System message bar ────────────────────────────────────────────────────
+
+    private void showSystemMessage(String msg, int countdownSeconds) {
+        if (sysMsgTimer != null) sysMsgTimer.stop();
+        systemMsgText.setText(msg);
+        systemMsgCountdown.setText(countdownSeconds > 0 ? countdownSeconds + "s" : "");
+        systemMsgBar.setVisible(true);
+        systemMsgBar.setManaged(true);
+        tabPane.getSelectionModel().select(gameTab);
+
+        if (countdownSeconds > 0) {
+            int[] remaining = {countdownSeconds};
+            sysMsgTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+                remaining[0]--;
+                if (remaining[0] > 0) {
+                    systemMsgCountdown.setText(remaining[0] + "s");
+                } else {
+                    sysMsgTimer.stop();
+                    systemMsgCountdown.setText("");
+                }
+            }));
+            sysMsgTimer.setCycleCount(countdownSeconds);
+            sysMsgTimer.play();
+        }
+    }
+
+    private void clearSystemMessage() {
+        if (sysMsgTimer != null) { sysMsgTimer.stop(); sysMsgTimer = null; }
+        systemMsgBar.setVisible(false);
+        systemMsgBar.setManaged(false);
+    }
+
+    // ── Reconnect overlay ────────────────────────────────────────────────────
 
     /** Called by the heartbeat watchdog when GAME_STATE stops arriving. */
     private void showConnectionLost() {
@@ -545,6 +609,7 @@ public class GameScreen {
         if (countdownTimer != null) { countdownTimer.stop(); countdownTimer = null; }
         if (retryTimer     != null) { retryTimer.stop();     retryTimer     = null; }
         disconnectedOverlay.setVisible(false);
+        clearSystemMessage();
         if (!gameLoopRunning) { gameLoop.start(); gameLoopRunning = true; }
     }
 
@@ -556,6 +621,7 @@ public class GameScreen {
         heartbeatTimer.stop();
         if (countdownTimer != null) countdownTimer.stop();
         if (retryTimer     != null) retryTimer.stop();
+        clearSystemMessage();
         if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());

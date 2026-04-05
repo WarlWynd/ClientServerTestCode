@@ -26,8 +26,15 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
 import javafx.util.Duration;
 
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.function.Consumer;
 
 /**
@@ -129,7 +136,10 @@ public class AdminPanel {
         // ── Connection settings ───────────────────────────────────────────────
         VBox connSection = buildConnectionSection();
 
-        VBox root = new VBox(header, statusBar, connSection, table);
+        // ── Upload section ────────────────────────────────────────────────────
+        VBox uploadSection = buildUploadSection();
+
+        VBox root = new VBox(header, statusBar, connSection, uploadSection, table);
         VBox.setVgrow(table, Priority.ALWAYS);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
@@ -211,6 +221,132 @@ public class AdminPanel {
         section.setPadding(new Insets(10, 14, 10, 14));
         section.setStyle("-fx-background-color: #0f0f1e;");
         return section;
+    }
+
+    // ── Upload section ───────────────────────────────────────────────────────
+
+    private VBox buildUploadSection() {
+        Label keyLbl = new Label("Upload Key");
+        keyLbl.setMinWidth(100);
+        keyLbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
+
+        PasswordField keyField = new PasswordField();
+        keyField.setText(AppSettings.getUploadKey());
+        keyField.setPromptText("server upload key");
+        keyField.setPrefWidth(200);
+        keyField.setStyle("""
+                -fx-background-color: #16213e;
+                -fx-text-fill: #e0e0e0;
+                -fx-border-color: #3a3a6a;
+                -fx-border-radius: 4;
+                -fx-background-radius: 4;
+                -fx-padding: 5;
+                """);
+
+        Label uploadStatus = new Label();
+        uploadStatus.setStyle("-fx-font-size: 11;");
+        uploadStatus.setWrapText(true);
+
+        Button clientJarBtn = new Button("Upload Client JAR");
+        clientJarBtn.setStyle("""
+                -fx-background-color: #1a3a6a;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 5 14 5 14;
+                """);
+        clientJarBtn.setOnAction(e -> pickAndUpload(
+                clientJarBtn.getScene().getWindow(),
+                "Select Client JAR",
+                keyField.getText().trim(),
+                AppSettings.getAssetUrl() + "/assets/client/game-client.jar",
+                "game-client.jar",
+                uploadStatus));
+
+        Button syncAppBtn = new Button("Upload Sync App");
+        syncAppBtn.setStyle("""
+                -fx-background-color: #1a3a6a;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 5 14 5 14;
+                """);
+        syncAppBtn.setOnAction(e -> pickAndUpload(
+                syncAppBtn.getScene().getWindow(),
+                "Select Sync App JAR",
+                keyField.getText().trim(),
+                AppSettings.getAssetUrl() + "/assets/sync/syncapp.jar",
+                "syncapp.jar",
+                uploadStatus));
+
+        HBox keyRow = new HBox(10, keyLbl, keyField);
+        keyRow.setAlignment(Pos.CENTER_LEFT);
+
+        HBox btnRow = new HBox(10, clientJarBtn, syncAppBtn, uploadStatus);
+        btnRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label sectionTitle = new Label("Uploads");
+        sectionTitle.setFont(Font.font("System", FontWeight.BOLD, 12));
+        sectionTitle.setTextFill(Color.web("#e94560"));
+
+        Separator sep = new Separator();
+        sep.setStyle("-fx-background-color: #2a2a4a;");
+
+        VBox section = new VBox(6, sectionTitle, sep, keyRow, btnRow);
+        section.setPadding(new Insets(10, 14, 10, 14));
+        section.setStyle("-fx-background-color: #0f0f1e;");
+        return section;
+    }
+
+    private void pickAndUpload(Window owner, String title, String uploadKey,
+                               String uploadUrl, String displayName, Label statusLabel) {
+        if (uploadKey.isEmpty()) {
+            statusLabel.setText("Enter an upload key first.");
+            statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+            return;
+        }
+
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR files", "*.jar"));
+        java.io.File selected = chooser.showOpenDialog(owner);
+        if (selected == null) return;
+
+        Path jar = selected.toPath();
+        statusLabel.setText("Uploading " + displayName + "…");
+        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #f0a030;");
+
+        Thread.ofVirtual().start(() -> {
+            try {
+                byte[] bytes = Files.readAllBytes(jar);
+                HttpURLConnection conn = (HttpURLConnection) URI.create(uploadUrl).toURL().openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-Upload-Key", uploadKey);
+                conn.setRequestProperty("Content-Type", "application/octet-stream");
+                conn.setDoOutput(true);
+                try (OutputStream out = conn.getOutputStream()) {
+                    out.write(bytes);
+                }
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("Uploaded " + displayName + " (" + (bytes.length / 1024) + " KB)");
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #50c050;");
+                    });
+                } else {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("Upload failed — HTTP " + code);
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                    });
+                }
+            } catch (Exception ex) {
+                log.error("Upload failed: {}", ex.getMessage(), ex);
+                Platform.runLater(() -> {
+                    statusLabel.setText("Upload error: " + ex.getMessage());
+                    statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: #e94560;");
+                });
+            }
+        });
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────

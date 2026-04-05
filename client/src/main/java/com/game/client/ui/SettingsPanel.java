@@ -6,12 +6,14 @@ import com.game.client.SessionStore;
 import com.game.client.SoundMode;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import java.util.function.Consumer;
 
 /**
  * Settings panel — shown as a tab in GameScreen for all users.
@@ -21,10 +23,12 @@ import javafx.scene.text.FontWeight;
  */
 public class SettingsPanel {
 
-    private final Runnable onRestartClient;
+    private final Runnable        onRestartClient;
+    private final Consumer<Side>  onTabSideChange;
 
-    public SettingsPanel(Runnable onRestartClient) {
+    public SettingsPanel(Runnable onRestartClient, Consumer<Side> onTabSideChange) {
         this.onRestartClient = onRestartClient;
+        this.onTabSideChange = onTabSideChange;
     }
 
     // ── Build ─────────────────────────────────────────────────────────────────
@@ -100,13 +104,38 @@ public class SettingsPanel {
         Label resNote = new Label("Resolution applies next time you enter the game.");
         resNote.setStyle("-fx-text-fill: #505065; -fx-font-style: italic; -fx-font-size: 11;");
 
+        // ── Tabs ──────────────────────────────────────────────────────────────
+        ToggleGroup tabSideGroup = new ToggleGroup();
+        RadioButton tabTop  = new RadioButton("Top");
+        RadioButton tabLeft = new RadioButton("Left");
+        tabTop.setToggleGroup(tabSideGroup);
+        tabLeft.setToggleGroup(tabSideGroup);
+        tabTop.setUserData(Side.TOP);
+        tabLeft.setUserData(Side.LEFT);
+        tabTop.setStyle("-fx-text-fill: #c0c0d8;");
+        tabLeft.setStyle("-fx-text-fill: #c0c0d8;");
+        boolean isLeft = "LEFT".equalsIgnoreCase(AppSettings.getTabSide());
+        tabTop.setSelected(!isLeft);
+        tabLeft.setSelected(isLeft);
+
+        tabSideGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val == null) return;
+            Side side = (Side) val.getUserData();
+            AppSettings.setTabSide(side.name());
+            if (onTabSideChange != null) onTabSideChange.accept(side);
+        });
+
+        HBox tabSideRow = new HBox(16, tabTop, tabLeft);
+        tabSideRow.setAlignment(Pos.CENTER_LEFT);
+
         VBox displaySection = section("Display",
                 row(keepAwakeCheck),
                 row(hudLabel),
                 row(hudRow),
                 row(resLabel),
                 row(resCol),
-                row(resNote));
+                row(resNote),
+                row("Tabs:", tabSideRow));
 
         // ── Gameplay ──────────────────────────────────────────────────────────
         VBox gameplaySection = section("Gameplay",
@@ -176,6 +205,9 @@ public class SettingsPanel {
             keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
             hudGroup.getToggles().forEach(t ->
                     t.setSelected(Math.abs((double) t.getUserData() - AppSettings.getHudOpacity()) < 0.01));
+            boolean leftNow = "LEFT".equalsIgnoreCase(AppSettings.getTabSide());
+            tabTop.setSelected(!leftNow);
+            tabLeft.setSelected(leftNow);
             if (finalHostField != null) finalHostField.setText(AppSettings.getServerHost());
             if (finalPortField != null) finalPortField.setText(String.valueOf(AppSettings.getServerPort()));
             setStatus(statusLabel, "Reset to current saved values.", true);
@@ -241,10 +273,15 @@ public class SettingsPanel {
 
     /** A label + control pair on one row. */
     private static HBox row(String label, Control control) {
+        return row(label, (Node) control);
+    }
+
+    /** A label + node pair on one row. */
+    private static HBox row(String label, Node node) {
         Label lbl = new Label(label);
         lbl.setMinWidth(130);
         lbl.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12;");
-        HBox row = new HBox(12, lbl, control);
+        HBox row = new HBox(12, lbl, node);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
