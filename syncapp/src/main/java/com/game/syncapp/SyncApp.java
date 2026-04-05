@@ -45,6 +45,7 @@ public class SyncApp extends Application {
     private ProgressBar progressBar;
     private TextArea    logArea;
     private Button      closeBtn;
+    private Button      launchBtn;
 
     @Override
     public void start(Stage stage) {
@@ -102,7 +103,19 @@ public class SyncApp extends Application {
                 -fx-border-radius: 4;
                 """);
 
-        // ── Close button ──────────────────────────────────────────────────────
+        // ── Launch / Close buttons ────────────────────────────────────────────
+        launchBtn = new Button("Launch Game");
+        launchBtn.setPrefWidth(140);
+        launchBtn.setStyle("""
+                -fx-background-color: #3a6abf;
+                -fx-text-fill: white;
+                -fx-font-weight: bold;
+                -fx-background-radius: 4;
+                -fx-padding: 8 28 8 28;
+                """);
+        launchBtn.setVisible(false);
+        launchBtn.setOnAction(e -> launchGame());
+
         closeBtn = new Button("Close");
         closeBtn.setPrefWidth(120);
         closeBtn.setStyle("""
@@ -126,6 +139,9 @@ public class SyncApp extends Application {
         }
         corpRow.getChildren().add(versionLbl);
 
+        HBox btnRow = new HBox(10, launchBtn, closeBtn);
+        btnRow.setAlignment(Pos.CENTER);
+
         VBox root = new VBox(10,
                 corpRow,
                 installLbl,
@@ -134,7 +150,7 @@ public class SyncApp extends Application {
                 fileLabel,
                 statusLabel,
                 logArea,
-                closeBtn);
+                btnRow);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(24, 30, 24, 30));
         root.setStyle("-fx-background-color: #1a1a2e;");
@@ -195,7 +211,29 @@ public class SyncApp extends Application {
         statusLabel.setText(msg);
         statusLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-weight: bold;");
         closeBtn.setVisible(true);
+
+        // Show Launch button if the client JAR was downloaded
+        java.nio.file.Path clientJar = INSTALL_DIR.resolve("client").resolve("game-client.jar");
+        if (java.nio.file.Files.exists(clientJar)) {
+            launchBtn.setVisible(true);
+        }
+
         log.info("Sync done: {}", msg);
+    }
+
+    private void launchGame() {
+        java.nio.file.Path clientJar = INSTALL_DIR.resolve("client").resolve("game-client.jar");
+        try {
+            new ProcessBuilder(
+                    ProcessHandle.current().info().command().orElse("java"),
+                    "--enable-preview",
+                    "-jar", clientJar.toAbsolutePath().toString()
+            ).inheritIO().start();
+            Platform.exit();
+        } catch (Exception e) {
+            log.error("Failed to launch game: {}", e.getMessage(), e);
+            appendLog("ERROR: Could not launch game — " + e.getMessage());
+        }
     }
 
     private void appendLog(String line) {

@@ -15,7 +15,7 @@ server.assets.dir=assets
 # Comma-separated list of asset subdirectory types to include in the client sync manifest.
 # Only these folders will be offered to clients for download.
 # Add new types here when you create new asset categories for the client.
-server.client.sync.types=sounds,graphics
+server.client.sync.types=sounds,graphics,client
 
 # MySQL / MariaDB connection
 db.host=192.168.1.153

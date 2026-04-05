@@ -26,8 +26,13 @@ git push && echo "[deploy.sh] Pushed to remote" || echo "[deploy.sh] Push failed
 # 3. Pull latest
 git pull --rebase && echo "[deploy.sh] Pulled latest code"
 
-# 4. Rebuild server JAR
-./gradlew :server:jar --quiet && echo "[deploy.sh] Build complete"
+# 4. Rebuild server and client JARs
+./gradlew :server:jar :client:jar --quiet && echo "[deploy.sh] Build complete"
+
+# 5. Copy client JAR to assets/client/ so the sync app can distribute it
+mkdir -p assets/client
+cp client/build/libs/game-client.jar assets/client/
+echo "[deploy.sh] Client JAR copied to assets/client/"
 
 echo "[deploy.sh] Deploy complete — signalling restart"
 # Exit code 42 is caught by restart.sh
