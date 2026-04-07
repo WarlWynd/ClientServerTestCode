@@ -82,8 +82,11 @@ public class GameScreen {
     private final Map<String, JsonNode> remotePlayers = new ConcurrentHashMap<>();
 
     /** Sprite animators — one per player (local + remotes). */
-    private final PlayerAnimator              localAnimator   = new PlayerAnimator();
-    private final Map<String, PlayerAnimator> remoteAnimators = new ConcurrentHashMap<>();
+    private final PlayerAnimator              localAnimator        = new PlayerAnimator();
+    private final Map<String, PlayerAnimator> remoteAnimators      = new ConcurrentHashMap<>();
+    /** Weapon renderers — paired 1-to-1 with each animator. */
+    private final WeaponRenderer              localWeaponRenderer  = new WeaponRenderer();
+    private final Map<String, WeaponRenderer> remoteWeaponRenderers = new ConcurrentHashMap<>();
     /** Previous remote positions for per-packet velocity estimation. */
     private final Map<String, float[]>        prevRemotePos   = new ConcurrentHashMap<>();
 
@@ -276,14 +279,23 @@ public class GameScreen {
             audioTab.setClosable(false);
             Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
             graphicsTab.setClosable(false);
+            Tab boardTab = new Tab("🗺 Board Dev", new BoardDevScreen(stage,
+                    () -> tabPane.getSelectionModel().select(gameTab)).build());
+            boardTab.setClosable(false);
             tabs.add(adminTab);
             tabs.add(gameSettingsTab);
             tabs.add(audioTab);
             tabs.add(graphicsTab);
+            tabs.add(boardTab);
         } else if (SessionStore.isGraphicsDev()) {
             Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
             graphicsTab.setClosable(false);
             tabs.add(graphicsTab);
+        } else if (SessionStore.isBoardDev()) {
+            Tab boardTab = new Tab("🗺 Board Dev", new BoardDevScreen(stage,
+                    () -> tabPane.getSelectionModel().select(gameTab)).build());
+            boardTab.setClosable(false);
+            tabs.add(boardTab);
         }
 
         tabPane = new TabPane(tabs.toArray(new Tab[0]));
@@ -314,7 +326,16 @@ public class GameScreen {
             }
         });
 
-        stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " - ");
+        // Update window title to reflect the active tab
+        tabPane.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n != null) {
+                String tabName = n.getText().replaceAll("[^\\p{ASCII}]", "").trim();
+                stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " — " + tabName);
+            }
+        });
+        String firstTab = tabPane.getSelectionModel().getSelectedItem().getText()
+                .replaceAll("[^\\p{ASCII}]", "").trim();
+        stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " — " + firstTab);
         stage.setScene(scene);
         stage.show();
 
@@ -356,22 +377,42 @@ public class GameScreen {
         boolean moved = false;
         float speed = AppSettings.getRunSpeed();
 
-        // ── Vertical physics ──────────────────────────────────────────────────
-        // Accumulate gravity each frame
-        velY -= AppSettings.getGravity();
-
-        // Jump: impulse on key-down (rising edge only, not held)
         KeyCode jumpKey = keyCodeOf(AppSettings.getKeyJump(), KeyCode.W);
-        boolean jumpHeld = heldKeys.contains(jumpKey) || heldKeys.contains(KeyCode.UP);
-        if (jumpHeld && !wasJumpHeld && localY <= PLAYER_RADIUS + 1f) {
-            velY = AppSettings.getJumpStrength(); // impulse overrides current velocity
-        }
-        wasJumpHeld = jumpHeld;
 
-        // Apply vertical velocity and clamp to world
-        localY += velY;
-        if (localY <= PLAYER_RADIUS) { localY = PLAYER_RADIUS; velY = 0f; }
-        if (localY >= FLOOR_Y_CANVAS - PLAYER_RADIUS) { localY = FLOOR_Y_CANVAS - PLAYER_RADIUS; velY = 0f; }
+        // ── Ladder detection ──────────────────────────────────────────────────
+        boolean onLadder = nearLadder();
+
+        if (onLadder) {
+            // Suspend gravity while on ladder; climbUp key/↑ climbs up, climbDown key/↓ climbs down.
+            velY        = 0f;
+            wasJumpHeld = false;   // reset so jump fires normally after leaving ladder
+            float   climbSpeed = speed * 0.75f;
+            KeyCode climbUp    = keyCodeOf(AppSettings.getKeyClimbUp(),   KeyCode.W);
+            KeyCode climbDown  = keyCodeOf(AppSettings.getKeyClimbDown(), KeyCode.S);
+            if (heldKeys.contains(climbUp)   || heldKeys.contains(KeyCode.UP)) {
+                localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + climbSpeed);
+                moved  = true;
+            }
+            if (heldKeys.contains(climbDown) || heldKeys.contains(KeyCode.DOWN)) {
+                localY = Math.max(PLAYER_RADIUS, localY - climbSpeed);
+                moved  = true;
+            }
+        } else {
+            // ── Normal vertical physics ───────────────────────────────────────
+            velY -= AppSettings.getGravity();
+
+            // Jump: impulse on key-down (rising edge only, not held)
+            boolean jumpHeld = heldKeys.contains(jumpKey) || heldKeys.contains(KeyCode.UP);
+            if (jumpHeld && !wasJumpHeld && localY <= PLAYER_RADIUS + 1f) {
+                velY = AppSettings.getJumpStrength(); // impulse overrides current velocity
+            }
+            wasJumpHeld = jumpHeld;
+
+            // Apply vertical velocity and clamp to world
+            localY += velY;
+            if (localY <= PLAYER_RADIUS) { localY = PLAYER_RADIUS; velY = 0f; }
+            if (localY >= FLOOR_Y_CANVAS - PLAYER_RADIUS) { localY = FLOOR_Y_CANVAS - PLAYER_RADIUS; velY = 0f; }
+        }
         moved = true;
 
         // ── Horizontal movement ───────────────────────────────────────────────
@@ -414,6 +455,42 @@ public class GameScreen {
         float playerCY = toCanvasY(localY);
         cameraX = Math.max(0, Math.min(WORLD_W - viewportW, localX - viewportW / 2f));
         cameraY = Math.max(0, Math.min(WORLD_H - viewportH, playerCY - viewportH / 2f));
+    }
+
+    /** Returns the board tile at the player's current centre position, or AIR if no board is loaded. */
+    private BoardTile tileAtPlayer() {
+        if (!BoardStore.isLoaded()) return BoardTile.AIR;
+        int    tCols  = BoardStore.getCols();
+        int    tRows  = BoardStore.getRows();
+        double tileW  = (double) WORLD_W / tCols;
+        double tileH  = (double) FLOOR_Y_CANVAS / tRows;
+        int    col    = (int)(localX / tileW);
+        int    row    = (int)(toCanvasY(localY) / tileH);
+        if (row < 0 || row >= tRows || col < 0 || col >= tCols) return BoardTile.AIR;
+        return BoardStore.getBoard()[row][col];
+    }
+
+    /**
+     * Returns true if a LADDER tile is within the player's reachable column range —
+     * from one tile below the feet up to one tile above the head. This lets the player
+     * grab a ladder from the floor without needing to jump first.
+     */
+    private boolean nearLadder() {
+        if (!BoardStore.isLoaded()) return false;
+        int           tCols  = BoardStore.getCols();
+        int           tRows  = BoardStore.getRows();
+        double        tileW  = (double) WORLD_W / tCols;
+        double        tileH  = (double) FLOOR_Y_CANVAS / tRows;
+        int           col    = (int)(localX / tileW);
+        if (col < 0 || col >= tCols) return false;
+        // canvas Y: head is higher on screen (lower value), feet are lower (higher value)
+        int rowHead = Math.max(0,         (int)(toCanvasY(localY + PLAYER_RADIUS) / tileH) - 1);
+        int rowFeet = Math.min(tRows - 1, (int)(toCanvasY(localY - PLAYER_RADIUS) / tileH) + 1);
+        BoardTile[][] board = BoardStore.getBoard();
+        for (int r = rowHead; r <= rowFeet; r++) {
+            if (board[r][col] == BoardTile.LADDER) return true;
+        }
+        return false;
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -498,6 +575,28 @@ public class GameScreen {
         gc.setFill(Color.color(0.48, 0.29, 0.13, 0.25));
         gc.fillRect(0, FLOOR_Y_CANVAS - 8, WORLD_W, 8);
 
+        // ── Board tiles ───────────────────────────────────────────────────────
+        if (BoardStore.isLoaded()) {
+            BoardTile[][] tiles  = BoardStore.getBoard();
+            int           tRows  = BoardStore.getRows();
+            int           tCols  = BoardStore.getCols();
+            double        tileW  = (double) WORLD_W / tCols;
+            double        tileH  = (double) FLOOR_Y_CANVAS / tRows;
+            for (int r = 0; r < tRows; r++) {
+                for (int c = 0; c < tCols; c++) {
+                    BoardTile t = tiles[r][c];
+                    if (t == BoardTile.AIR) continue;
+                    double tx = c * tileW;
+                    double ty = r * tileH;
+                    gc.setFill(t.fill);
+                    gc.fillRect(tx + 1, ty + 1, tileW - 2, tileH - 2);
+                    gc.setStroke(t.border);
+                    gc.setLineWidth(1);
+                    gc.strokeRect(tx + 1, ty + 1, tileW - 2, tileH - 2);
+                }
+            }
+        }
+
         // Remote players
         for (Map.Entry<String, JsonNode> entry : remotePlayers.entrySet()) {
             String   token = entry.getKey();
@@ -510,14 +609,19 @@ public class GameScreen {
             int    rs       = pNode.get("score").asInt();
             String dispName = pNode.has("characterName") ? pNode.get("characterName").asText() : username;
             PlayerAnimator anim = remoteAnimators.computeIfAbsent(token, k -> new PlayerAnimator());
+            WeaponRenderer rWep = remoteWeaponRenderers.computeIfAbsent(token, k -> new WeaponRenderer());
+            rWep.drawBehindBody(gc, anim, rx, toCanvasY(ry), colorFor(username));
             anim.draw(gc, rx, toCanvasY(ry), colorFor(username));
+            rWep.draw(gc, anim, rx, toCanvasY(ry), colorFor(username));
             drawNameLabel(gc, rx, toCanvasY(ry), dispName, rs);
         }
 
         // Local player (drawn on top)
         String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
+        localWeaponRenderer.drawBehindBody(gc, localAnimator, localX, toCanvasY(localY), Color.web("#e0e0ff"));
         localAnimator.draw(gc, localX, toCanvasY(localY), Color.web("#e0e0ff"));
+        localWeaponRenderer.draw(gc, localAnimator, localX, toCanvasY(localY), Color.web("#e0e0ff"));
         drawNameLabel(gc, localX, toCanvasY(localY), localName, localScore);
 
         gc.restore();
