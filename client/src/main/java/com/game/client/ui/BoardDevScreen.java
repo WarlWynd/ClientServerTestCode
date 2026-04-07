@@ -36,6 +36,7 @@ public class BoardDevScreen {
     private BoardTile[][] board = new BoardTile[rows][cols];
 
     private BoardTile selectedTile = BoardTile.PLATFORM;
+    private int        cursorRow   = -1;   // board row under the mouse (-1 = off-canvas)
 
     // Scroll/zoom
     private double offsetX = 0, offsetY = 0;
@@ -139,10 +140,13 @@ public class BoardDevScreen {
         clearBtn.setStyle("-fx-background-color: #442222; -fx-text-fill: #c8c8e8;");
         clearBtn.setOnAction(e -> { clearBoard(); drawBoard(canvas); });
 
-        Button fillFloorBtn = new Button("Fill Floor");
+        Button fillFloorBtn = new Button("Fill Level");
         fillFloorBtn.setMaxWidth(Double.MAX_VALUE);
         fillFloorBtn.setStyle("-fx-background-color: #224433; -fx-text-fill: #c8c8e8;");
-        fillFloorBtn.setOnAction(e -> { fillBottom(); drawBoard(canvas); });
+        fillFloorBtn.setOnAction(e -> { fillLevel(); drawBoard(canvas); });
+
+        Label fillRowLbl = new Label("row: —");
+        fillRowLbl.setStyle("-fx-text-fill: #ffff66; -fx-font-size: 10;");
 
         // ── File I/O ──────────────────────────────────────────────────────────
         Label fileLbl = new Label("FILE");
@@ -243,7 +247,7 @@ public class BoardDevScreen {
                 settingsLbl,
                 colsLbl, colsSpin,
                 rowsLbl, rowsSpin,
-                applyBtn, clearBtn, fillFloorBtn,
+                applyBtn, clearBtn, fillFloorBtn, fillRowLbl,
                 new Separator(),
                 fileLbl,
                 nameLbl, nameField,
@@ -262,9 +266,12 @@ public class BoardDevScreen {
         canvas.addEventHandler(MouseEvent.MOUSE_MOVED, e -> {
             int[] tc = canvasToTile(e.getX(), e.getY());
             if (tc != null) {
+                cursorRow = tc[0];
+                fillRowLbl.setText("row: " + cursorRow);
                 BoardTile t = board[tc[0]][tc[1]];
                 statusBar.setText(String.format("  row %d  col %d  →  %s     LMB=paint  RMB=erase",
                         tc[0], tc[1], t.label));
+                drawBoard(canvas);
             } else {
                 statusBar.setText("  —");
             }
@@ -331,6 +338,16 @@ public class BoardDevScreen {
         gc.setStroke(Color.web("#334466"));
         gc.setLineWidth(2);
         gc.strokeRect(-offsetX, -offsetY, cols * ts, rows * ts);
+
+        // Highlight the current fill-level row
+        if (cursorRow >= 0 && cursorRow < rows) {
+            double ry = cursorRow * ts - offsetY;
+            gc.setFill(Color.color(1, 1, 0, 0.15));
+            gc.fillRect(-offsetX, ry, cols * ts, ts);
+            gc.setStroke(Color.color(1, 1, 0, 0.6));
+            gc.setLineWidth(1.5);
+            gc.strokeRect(-offsetX, ry, cols * ts, ts);
+        }
     }
 
     private void drawTileDetail(GraphicsContext gc, BoardTile t, double x, double y, double ts) {
@@ -428,9 +445,10 @@ public class BoardDevScreen {
                 board[r][c] = BoardTile.AIR;
     }
 
-    private void fillBottom() {
+    private void fillLevel() {
+        int row = (cursorRow >= 0 && cursorRow < rows) ? cursorRow : rows - 1;
         for (int c = 0; c < cols; c++)
-            board[rows - 1][c] = BoardTile.PLATFORM;
+            board[row][c] = selectedTile;
     }
 
     private void resizeBoard(int newRows, int newCols) {

@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Graphics Developer Tab.
@@ -59,10 +60,12 @@ public class GraphicsDevScreen {
     public Node build() {
         Tab filesTab   = new Tab("📁 Files",          buildFilesView());
         Tab spritesTab = new Tab("🕹 Sprite Preview", buildSpritePreview());
+        Tab editorTab  = new Tab("✏ Pose Editor",     new SpriteEditorPanel().build());
         filesTab.setClosable(false);
         spritesTab.setClosable(false);
+        editorTab.setClosable(false);
 
-        TabPane inner = new TabPane(filesTab, spritesTab);
+        TabPane inner = new TabPane(filesTab, spritesTab, editorTab);
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;
@@ -96,21 +99,59 @@ public class GraphicsDevScreen {
     private Node buildSpritePreview() {
         PlayerAnimator.State[] states = PlayerAnimator.State.values();
 
-        // One animator per state, pinned to that state
-        PlayerAnimator[] animators = new PlayerAnimator[states.length];
+        // One animator + weapon renderer per state, pinned to that state
+        PlayerAnimator[] animators       = new PlayerAnimator[states.length];
+        WeaponRenderer[] weaponRenderers = new WeaponRenderer[states.length];
         for (int i = 0; i < states.length; i++) {
             animators[i] = new PlayerAnimator();
             animators[i].forceState(states[i]);
+            weaponRenderers[i] = new WeaponRenderer();
+            if (states[i] == PlayerAnimator.State.STAFF_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.WOODEN_STAFF);
+            } else if (states[i] == PlayerAnimator.State.SWORD_2H_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_SWORD);
+            } else if (states[i] == PlayerAnimator.State.AXE_2H_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_AXE);
+            } else if (states[i] == PlayerAnimator.State.DAGGER_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_DAGGER);
+            } else if (states[i] == PlayerAnimator.State.MORNING_STAR_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.MAIN_HAND, Weapon.MORNING_STAR);
+            } else if (states[i] == PlayerAnimator.State.BOW_IDLE) {
+                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.LONG_BOW);
+            }
         }
 
-        // Palette — one colour per state
+        // Palette — one colour per state (wraps if new states added)
         Color[] palette = {
-            Color.web("#e0e0ff"),  // IDLE      — soft white-blue (local player colour)
-            Color.web("#53c0f0"),  // RUN       — info blue
-            Color.web("#50c050"),  // JUMP      — success green
-            Color.web("#f0a030"),  // FALL      — warning amber
-            Color.web("#e94560"),  // HIT       — accent red
-            Color.web("#bd10e0")   // KNOCKED   — purple
+            Color.web("#e0e0ff"),  // IDLE       — soft white-blue
+            Color.web("#53c0f0"),  // RUN        — info blue
+            Color.web("#50c050"),  // JUMP       — success green
+            Color.web("#f0a030"),  // FALL       — warning amber
+            Color.web("#e94560"),  // GOTHIT01   — accent red
+            Color.web("#c8a020"),  // STAFF_IDLE    — gold
+            Color.web("#c0d8ff"),  // SWORD_2H_IDLE — steel blue
+            Color.web("#c08030"),  // AXE_2H_IDLE   — iron amber
+            Color.web("#88aacc"),  // DAGGER_IDLE        — steel grey-blue
+            Color.web("#aaaaaa"),  // MORNING_STAR_IDLE  — iron grey
+            Color.web("#44bb88"),  // BOW_IDLE           — forest green
+            Color.web("#bd10e0"),  // KNOCKED            — purple
+            Color.web("#e0e0e0"),  // CROUCH             — light grey
+            Color.web("#70b0d0"),  // SNEAK              — muted teal
+            Color.web("#d0a060"),  // CLIMB              — sandy brown
+            Color.web("#a06040"),  // PRONE              — earth brown
+            Color.web("#ff8844"),  // ROLL               — orange
+            Color.web("#4488ff"),  // SWIM               — ocean blue
+            Color.web("#ff4488"),  // PUNCH              — hot pink
+            Color.web("#ff2266"),  // CROSS              — deep rose
+            Color.web("#ff66aa"),  // HOOK               — coral pink
+            Color.web("#ffaacc"),  // UPPERCUT           — light pink
+            Color.web("#cc0044"),  // HAYMAKER           — crimson
+            Color.web("#ff6600"),  // HEAD_KICK          — bright orange
+            Color.web("#ffaa00"),  // LOW_KICK           — golden orange
+            Color.web("#ff8800"),  // BODY_KICK          — amber orange
+            Color.web("#dd4400"),  // SPINNING_BACK_KICK — burnt orange
+            Color.web("#ff9955"),  // SIDE_KICK          — peach
+            Color.web("#88ff44")   // SHOOT              — lime green
         };
 
         // Canvas: 6 figures spread across, enough height for label
@@ -155,11 +196,14 @@ public class GraphicsDevScreen {
                     gc.setFill(Color.color(0, 0, 0, 0.3));
                     gc.fillOval(cx - 16, feetY - 4, 32, 8);
 
-                    // Sprite
-                    animators[i].draw(gc, cx, feetY, palette[i % palette.length]);
+                    // Sprite + weapon (two-pass for correct depth)
+                    Color c = palette[i % palette.length];
+                    weaponRenderers[i].drawBehindBody(gc, animators[i], cx, feetY, c);
+                    animators[i].draw(gc, cx, feetY, c);
+                    weaponRenderers[i].draw(gc, animators[i], cx, feetY, c);
 
                     // State name label
-                    gc.setFill(palette[i % palette.length].deriveColor(0, 1, 1.3, 1));
+                    gc.setFill(c.deriveColor(0, 1, 1.3, 1));
                     gc.setFont(javafx.scene.text.Font.font("System",
                             javafx.scene.text.FontWeight.BOLD, 11));
                     String name = states[i].name();
@@ -170,16 +214,71 @@ public class GraphicsDevScreen {
         timer.start();
 
         // Keep the canvas at a fixed size inside a scroll pane
-        ScrollPane scroll = new ScrollPane(canvas);
+        StackPane canvasWrap = new StackPane(canvas);
+        canvasWrap.setStyle("-fx-background-color: #0f0f1e;");
+        canvasWrap.setAlignment(javafx.geometry.Pos.TOP_LEFT);
+
+        ScrollPane scroll = new ScrollPane(canvasWrap);
         scroll.setFitToWidth(false);
         scroll.setFitToHeight(false);
-        scroll.setStyle("-fx-background-color: #0f0f1e;");
+        scroll.setStyle("-fx-background: #0f0f1e; -fx-background-color: #0f0f1e;");
         scroll.setPrefViewportHeight(canvasH + 20);
 
-        VBox root = new VBox(12, scroll, desc, legend);
+        // ── Export button ─────────────────────────────────────────────────────
+        Path outDir = Paths.get("client/src/main/resources/graphics/sprites");
+
+        Button exportBtn = new Button("⬇ Export 128×128 PNGs");
+        exportBtn.setStyle(
+                "-fx-background-color: #1e8449; -fx-text-fill: white;" +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 16 6 16;");
+        Label exportStatus = new Label();
+        exportStatus.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+
+        exportBtn.setOnAction(e -> runExport(outDir, exportBtn, exportStatus));
+
+        HBox exportRow = new HBox(12, exportBtn, exportStatus);
+        exportRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Auto-export on first load if sprites don't exist yet
+        Platform.runLater(() -> {
+            File spritesDir = outDir.toFile();
+            boolean hasFiles = spritesDir.exists()
+                    && spritesDir.listFiles(f -> f.getName().endsWith(".png")) != null
+                    && spritesDir.listFiles(f -> f.getName().endsWith(".png")).length > 0;
+            if (!hasFiles) {
+                exportStatus.setText("Auto-exporting sprites…");
+                runExport(outDir, exportBtn, exportStatus);
+            } else {
+                exportStatus.setText("Sprites already exported — click to regenerate.");
+            }
+        });
+
+        VBox root = new VBox(12, scroll, desc, legend, exportRow);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-background-color: #1a1a2e;");
         return root;
+    }
+
+    private void runExport(Path outDir, Button exportBtn, Label exportStatus) {
+        exportBtn.setDisable(true);
+        exportStatus.setText("Exporting…");
+        exportStatus.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+        int[] count = { 0 };
+        Exception[] err = { null };
+        try {
+            count[0] = SpriteExporter.exportAll(outDir);
+        } catch (Exception ex) {
+            err[0] = ex;
+        }
+        exportBtn.setDisable(false);
+        if (err[0] != null) {
+            exportStatus.setText("✗ Export failed: " + err[0].getMessage());
+            exportStatus.setStyle("-fx-text-fill: #e94560; -fx-font-size: 11;");
+        } else {
+            exportStatus.setText("✓ Exported " + count[0] + " files → " + outDir.toAbsolutePath());
+            exportStatus.setStyle("-fx-text-fill: #50c050; -fx-font-size: 11;");
+            refreshList();
+        }
     }
 
     // ── File Browser ─────────────────────────────────────────────────────────
@@ -196,14 +295,19 @@ public class GraphicsDevScreen {
         bgBtn.setToggleGroup(categoryToggle);
         uiBtn.setToggleGroup(categoryToggle);
         spritesBtn.setSelected(true);
-        styleToggleButton(spritesBtn);
-        styleToggleButton(bgBtn);
-        styleToggleButton(uiBtn);
+
+        ToggleButton[] toggleBtns = { spritesBtn, bgBtn, uiBtn };
+        applyToggleStyle(spritesBtn, true);
+        applyToggleStyle(bgBtn,      false);
+        applyToggleStyle(uiBtn,      false);
 
         HBox toggleBar = new HBox(4, spritesBtn, bgBtn, uiBtn);
 
         categoryToggle.selectedToggleProperty().addListener((obs, o, n) -> {
-            if (n != null) refreshList();
+            // Prevent deselection — if user clicks the already-selected button, re-select it
+            if (n == null) { categoryToggle.selectToggle(o); return; }
+            for (ToggleButton b : toggleBtns) applyToggleStyle(b, b == n);
+            refreshList();
         });
 
         // File list
@@ -246,7 +350,7 @@ public class GraphicsDevScreen {
         previewNameLabel.setWrapText(true);
 
         previewSizeLabel = new Label();
-        previewSizeLabel.setStyle("-fx-text-fill: #606080; -fx-font-size: 11;");
+        previewSizeLabel.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
 
         previewImage = new ImageView();
         previewImage.setPreserveRatio(true);
@@ -254,8 +358,13 @@ public class GraphicsDevScreen {
         previewImage.setFitHeight(350);
         previewImage.setStyle("-fx-background-color: #0f0f1e;");
 
+        Label spriteNote = new Label(
+                "Sprites are white on transparent — the player colour and username are applied at runtime in-game.");
+        spriteNote.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 10;");
+        spriteNote.setWrapText(true);
+
         StackPane imagePane = new StackPane(previewImage);
-        imagePane.setStyle("-fx-background-color: #0f0f1e; -fx-border-color: #3a3a6a; -fx-border-radius: 4;");
+        imagePane.setStyle("-fx-background-color: #2a2a4a; -fx-border-color: #3a3a6a; -fx-border-radius: 4;");
         imagePane.setPadding(new Insets(8));
         VBox.setVgrow(imagePane, Priority.ALWAYS);
 
@@ -271,6 +380,7 @@ public class GraphicsDevScreen {
                 title,
                 previewNameLabel,
                 previewSizeLabel,
+                spriteNote,
                 imagePane,
                 sep,
                 dirTitle, spritesDir, bgDir, uiDir
@@ -405,7 +515,7 @@ public class GraphicsDevScreen {
 
     private Label dirLabel(String text) {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+        l.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 10;");
         l.setWrapText(true);
         return l;
     }
@@ -422,11 +532,10 @@ public class GraphicsDevScreen {
         return b;
     }
 
-    private void styleToggleButton(ToggleButton b) {
-        b.setStyle("-fx-background-color: #0f3460;" +
-                   "-fx-text-fill: white;" +
-                   "-fx-background-radius: 4;" +
-                   "-fx-font-size: 11;");
+    private void applyToggleStyle(ToggleButton b, boolean selected) {
+        b.setStyle(selected
+                ? "-fx-background-color: #e94560; -fx-text-fill: white; -fx-background-radius: 4; -fx-font-size: 11; -fx-font-weight: bold;"
+                : "-fx-background-color: #0f3460; -fx-text-fill: #c8c8e0; -fx-background-radius: 4; -fx-font-size: 11;");
         b.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(b, Priority.ALWAYS);
     }

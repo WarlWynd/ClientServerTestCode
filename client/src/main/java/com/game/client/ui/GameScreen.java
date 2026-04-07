@@ -390,8 +390,11 @@ public class GameScreen {
             KeyCode climbUp    = keyCodeOf(AppSettings.getKeyClimbUp(),   KeyCode.W);
             KeyCode climbDown  = keyCodeOf(AppSettings.getKeyClimbDown(), KeyCode.S);
             if (heldKeys.contains(climbUp)   || heldKeys.contains(KeyCode.UP)) {
-                localY = Math.min(FLOOR_Y_CANVAS - PLAYER_RADIUS, localY + climbSpeed);
-                moved  = true;
+                float ladderTop = topOfLadder();
+                if (ladderTop >= 0 && localY - PLAYER_RADIUS < ladderTop) {
+                    localY = Math.min(ladderTop + PLAYER_RADIUS, localY + climbSpeed);
+                    moved  = true;
+                }
             }
             if (heldKeys.contains(climbDown) || heldKeys.contains(KeyCode.DOWN)) {
                 localY = Math.max(PLAYER_RADIUS, localY - climbSpeed);
@@ -399,11 +402,15 @@ public class GameScreen {
             }
         } else {
             // ── Normal vertical physics ───────────────────────────────────────
+
+            // Ground check BEFORE applying this frame's gravity/velocity
+            boolean onGround = localY <= PLAYER_RADIUS + 2f || isStandingOnSolid();
+
             velY -= AppSettings.getGravity();
 
             // Jump: impulse on key-down (rising edge only, not held)
             boolean jumpHeld = heldKeys.contains(jumpKey) || heldKeys.contains(KeyCode.UP);
-            if (jumpHeld && !wasJumpHeld && localY <= PLAYER_RADIUS + 1f) {
+            if (jumpHeld && !wasJumpHeld && onGround) {
                 velY = AppSettings.getJumpStrength(); // impulse overrides current velocity
             }
             wasJumpHeld = jumpHeld;
@@ -412,6 +419,20 @@ public class GameScreen {
             localY += velY;
             if (localY <= PLAYER_RADIUS) { localY = PLAYER_RADIUS; velY = 0f; }
             if (localY >= FLOOR_Y_CANVAS - PLAYER_RADIUS) { localY = FLOOR_Y_CANVAS - PLAYER_RADIUS; velY = 0f; }
+
+            // Solid tile floor collision — snap feet to top of any solid tile entered from above
+            if (velY <= 0) {
+                int solidRow = solidRowUnderFeet();
+                if (solidRow >= 0) {
+                    double tileH       = (double) FLOOR_Y_CANVAS / BoardStore.getRows();
+                    float  tileTopGameY = (float)(FLOOR_Y_CANVAS - solidRow * tileH);
+                    // Only snap if player centre is above the tile top (fell from above, not walked in sideways)
+                    if (localY >= tileTopGameY) {
+                        localY = tileTopGameY + PLAYER_RADIUS;
+                        velY   = 0f;
+                    }
+                }
+            }
         }
         moved = true;
 
@@ -432,7 +453,7 @@ public class GameScreen {
             moved     = true;
         }
 
-        localAnimator.update(localVelX, velY, localY <= PLAYER_RADIUS + 2f);
+        localAnimator.update(localVelX, velY, localY <= PLAYER_RADIUS + 2f || isStandingOnSolid());
         updateCamera();
 
         long now = System.currentTimeMillis();
@@ -484,11 +505,71 @@ public class GameScreen {
         int           col    = (int)(localX / tileW);
         if (col < 0 || col >= tCols) return false;
         // canvas Y: head is higher on screen (lower value), feet are lower (higher value)
-        int rowHead = Math.max(0,         (int)(toCanvasY(localY + PLAYER_RADIUS) / tileH) - 1);
+        int rowHead = Math.max(0,         (int)(toCanvasY(localY + PLAYER_RADIUS) / tileH));
         int rowFeet = Math.min(tRows - 1, (int)(toCanvasY(localY - PLAYER_RADIUS) / tileH) + 1);
         BoardTile[][] board = BoardStore.getBoard();
         for (int r = rowHead; r <= rowFeet; r++) {
             if (board[r][col] == BoardTile.LADDER) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Returns the game-Y of the top edge of the topmost LADDER tile in the player's column,
+     * or -1 if no ladder is present. This is the highest position the player's feet can reach.
+     */
+    private float topOfLadder() {
+        if (!BoardStore.isLoaded()) return -1;
+        int    tCols  = BoardStore.getCols();
+        int    tRows  = BoardStore.getRows();
+        double tileW  = (double) WORLD_W / tCols;
+        double tileH  = (double) FLOOR_Y_CANVAS / tRows;
+        int    col    = (int)(localX / tileW);
+        if (col < 0 || col >= tCols) return -1;
+        BoardTile[][] board = BoardStore.getBoard();
+        // Scan from top row downward to find the first (topmost) ladder tile
+        for (int r = 0; r < tRows; r++) {
+            if (board[r][col] == BoardTile.LADDER) {
+                // Top edge of this tile in game coords
+                return (float)(FLOOR_Y_CANVAS - r * tileH);
+            }
+        }
+        return -1;
+    }
+
+    /** Returns the board row of the first solid tile at or just below the player's feet, or -1. */
+    private int solidRowUnderFeet() {
+        if (!BoardStore.isLoaded()) return -1;
+        int    tCols  = BoardStore.getCols();
+        int    tRows  = BoardStore.getRows();
+        double tileW  = (double) WORLD_W / tCols;
+        double tileH  = (double) FLOOR_Y_CANVAS / tRows;
+        float  feetCY = toCanvasY(localY - PLAYER_RADIUS);
+        int    row    = (int)(feetCY / tileH);
+        int    cLeft  = (int)((localX - PLAYER_RADIUS * 0.5f) / tileW);
+        int    cRight = (int)((localX + PLAYER_RADIUS * 0.5f) / tileW);
+        BoardTile[][] board = BoardStore.getBoard();
+        for (int c = Math.max(0, cLeft); c <= Math.min(tCols - 1, cRight); c++) {
+            if (row >= 0 && row < tRows && board[row][c].solid) return row;
+        }
+        return -1;
+    }
+
+    /** True when the player's feet are resting on a solid tile surface. */
+    private boolean isStandingOnSolid() {
+        if (!BoardStore.isLoaded()) return false;
+        int    tCols  = BoardStore.getCols();
+        int    tRows  = BoardStore.getRows();
+        double tileW  = (double) WORLD_W / tCols;
+        double tileH  = (double) FLOOR_Y_CANVAS / tRows;
+        // Check 1 canvas-pixel below current feet so we detect "resting on" vs "inside"
+        float  feetCY = toCanvasY(localY - PLAYER_RADIUS) + 1f;
+        int    row    = (int)(feetCY / tileH);
+        int    cLeft  = (int)((localX - PLAYER_RADIUS * 0.5f) / tileW);
+        int    cRight = (int)((localX + PLAYER_RADIUS * 0.5f) / tileW);
+        BoardTile[][] board = BoardStore.getBoard();
+        for (int c = Math.max(0, cLeft); c <= Math.min(tCols - 1, cRight); c++) {
+            if (row >= 0 && row < tRows && board[row][c].solid) return true;
         }
         return false;
     }
