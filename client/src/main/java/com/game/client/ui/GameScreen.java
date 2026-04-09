@@ -1028,14 +1028,21 @@ public class GameScreen {
 
     // ── Test Fight Board ──────────────────────────────────────────────────────
 
-    /** Creates ~/.game/boards/test_fight_board.csv (24×40, bottom row PLATFORM) if absent. */
+    /** Creates/recreates ~/.game/boards/test_fight_board.csv (44×58, bottom row PLATFORM). */
     private static void ensureTestFightBoard() {
         try {
             java.io.File dir = new java.io.File(System.getProperty("user.home"), ".game/boards");
             dir.mkdirs();
             java.io.File f = new java.io.File(dir, TEST_FIGHT_BOARD + ".csv");
-            if (f.exists()) return;
-            int rows = 24, cols = 40;
+            // Regenerate if the file is stale (wrong dimensions)
+            if (f.exists()) {
+                try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(f))) {
+                    String header = br.readLine();
+                    if (header != null && header.startsWith("44,58")) return;
+                } catch (Exception ignored) {}
+                f.delete();
+            }
+            int rows = 44, cols = 58;
             try (java.io.PrintWriter pw = new java.io.PrintWriter(f)) {
                 pw.println(rows + "," + cols);
                 for (int r = 0; r < rows; r++) {

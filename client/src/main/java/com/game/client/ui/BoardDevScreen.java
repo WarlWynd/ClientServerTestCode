@@ -27,8 +27,8 @@ import java.time.LocalDate;
 public class BoardDevScreen {
 
     // ── Board state ───────────────────────────────────────────────────────────
-    private static final int DEFAULT_COLS = 40;
-    private static final int DEFAULT_ROWS = 24;
+    private static final int DEFAULT_COLS = 58;  // 3200/58 ≈ 55 world units ≈ sprite height
+    private static final int DEFAULT_ROWS = 44;  // 2400/44 ≈ 55 world units
     private static final int TILE_PX      = 24;   // default tile size in canvas pixels
 
     private int           cols  = DEFAULT_COLS;
@@ -61,24 +61,69 @@ public class BoardDevScreen {
         Canvas canvas = new Canvas(900, 600);
         drawBoard(canvas);
 
+        // ── Scrollbars ────────────────────────────────────────────────────────
+        ScrollBar hBar = new ScrollBar();
+        hBar.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
+        hBar.setMin(0);
+        hBar.setMaxHeight(14);
+        hBar.setPrefHeight(14);
+        hBar.setStyle("-fx-background-color: #12122a;");
+
+        ScrollBar vBar = new ScrollBar();
+        vBar.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        vBar.setMin(0);
+        vBar.setMaxWidth(14);
+        vBar.setPrefWidth(14);
+        vBar.setStyle("-fx-background-color: #12122a;");
+
+        // Update scrollbar ranges (call after zoom or board-size changes).
+        // JavaFX thumb draggable range = [min, max - visibleAmount], so set
+        // max = totalBoardSize and visibleAmount = viewportSize so the thumb
+        // stops exactly at boardSize - viewportSize (= the correct max offset).
+        Runnable syncBars = () -> {
+            double ts   = TILE_PX * zoom;
+            double bw   = cols * ts;
+            double bh   = rows * ts;
+            double cw   = Math.max(1, canvas.getWidth());
+            double ch   = Math.max(1, canvas.getHeight());
+            double maxX = Math.max(0, bw - cw);
+            double maxY = Math.max(0, bh - ch);
+            offsetX = Math.max(0, Math.min(offsetX, maxX));
+            offsetY = Math.max(0, Math.min(offsetY, maxY));
+            hBar.setMax(bw);
+            hBar.setVisibleAmount(Math.min(cw, bw));
+            vBar.setMax(bh);
+            vBar.setVisibleAmount(Math.min(ch, bh));
+            hBar.setValue(offsetX);
+            vBar.setValue(offsetY);
+        };
+
+        // Scrollbar → offset (user drags thumb)
+        hBar.valueProperty().addListener((obs, o, n) -> { offsetX = n.doubleValue(); drawBoard(canvas); });
+        vBar.valueProperty().addListener((obs, o, n) -> { offsetY = n.doubleValue(); drawBoard(canvas); });
+
         // Mouse paint
         canvas.addEventHandler(MouseEvent.MOUSE_PRESSED,  e -> handleMouse(e, canvas));
         canvas.addEventHandler(MouseEvent.MOUSE_DRAGGED,  e -> handleMouse(e, canvas));
 
-        // Scroll to pan
+        // Scroll to pan (vertical) or zoom (Ctrl)
         canvas.addEventHandler(ScrollEvent.SCROLL, e -> {
             if (e.isControlDown()) {
                 zoom = Math.max(0.25, Math.min(4.0, zoom + e.getDeltaY() * 0.002));
             } else {
-                offsetX -= e.getDeltaX();
-                // no vertical pan on plain scroll — use Ctrl+scroll to zoom instead
+                double ts   = TILE_PX * zoom;
+                double maxX = Math.max(0, cols * ts - canvas.getWidth());
+                double maxY = Math.max(0, rows * ts - canvas.getHeight());
+                offsetX = Math.max(0, Math.min(maxX, offsetX - e.getDeltaX()));
+                offsetY = Math.max(0, Math.min(maxY, offsetY - e.getDeltaY()));
             }
+            syncBars.run();
             drawBoard(canvas);
         });
 
-        // Resize canvas with window
-        canvas.widthProperty().addListener(o -> drawBoard(canvas));
-        canvas.heightProperty().addListener(o -> drawBoard(canvas));
+        // Resize canvas with window — re-sync scrollbars
+        canvas.widthProperty().addListener(o  -> { syncBars.run(); drawBoard(canvas); });
+        canvas.heightProperty().addListener(o -> { syncBars.run(); drawBoard(canvas); });
 
         // ── Tile palette ──────────────────────────────────────────────────────
         VBox palette = new VBox(6);
@@ -130,15 +175,9 @@ public class BoardDevScreen {
         Button applyBtn = new Button("Apply Size");
         applyBtn.setMaxWidth(Double.MAX_VALUE);
         applyBtn.setStyle("-fx-background-color: #224488; -fx-text-fill: #c8c8e8;");
-        applyBtn.setOnAction(e -> {
-            resizeBoard(rowsSpin.getValue(), colsSpin.getValue());
-            drawBoard(canvas);
-        });
-
         Button clearBtn = new Button("Clear Board");
         clearBtn.setMaxWidth(Double.MAX_VALUE);
         clearBtn.setStyle("-fx-background-color: #442222; -fx-text-fill: #c8c8e8;");
-        clearBtn.setOnAction(e -> { clearBoard(); drawBoard(canvas); });
 
         Button fillFloorBtn = new Button("Fill Level");
         fillFloorBtn.setMaxWidth(Double.MAX_VALUE);
@@ -282,17 +321,34 @@ public class BoardDevScreen {
         canvasPane.setStyle("-fx-background-color: #0a0a1a;");
         canvas.widthProperty().bind(canvasPane.widthProperty());
         canvas.heightProperty().bind(canvasPane.heightProperty());
-        HBox.setHgrow(canvasPane, Priority.ALWAYS);
 
-        HBox main = new HBox(palette, canvasPane);
+        // Row 1: canvas + vBar side by side
+        HBox canvasRow = new HBox(canvasPane, vBar);
+        HBox.setHgrow(canvasPane, Priority.ALWAYS);
+        VBox.setVgrow(canvasRow, Priority.ALWAYS);
+
+        // Col: canvasRow on top, hBar below — VBox.fillWidth=true stretches hBar to full width
+        hBar.setMaxWidth(Double.MAX_VALUE);
+        VBox canvasArea = new VBox(canvasRow, hBar);
+        HBox.setHgrow(canvasArea, Priority.ALWAYS);
+
+        // Sync bars once the layout is applied
+        canvasPane.widthProperty().addListener(o  -> syncBars.run());
+        canvasPane.heightProperty().addListener(o -> syncBars.run());
+
+        // Sync when apply/clear changes board dimensions
+        applyBtn.setOnAction(e -> { resizeBoard(rowsSpin.getValue(), colsSpin.getValue()); syncBars.run(); drawBoard(canvas); });
+        clearBtn.setOnAction(e -> { clearBoard(); syncBars.run(); drawBoard(canvas); });
+
+        HBox main = new HBox(palette, canvasArea);
         main.setStyle("-fx-background-color: #0f0f1e;");
-        HBox.setHgrow(canvasPane, Priority.ALWAYS);
+        VBox.setVgrow(main, Priority.ALWAYS);
 
-        BorderPane root = new BorderPane(main);
-        root.setBottom(statusBar);
-        root.setStyle("-fx-background-color: #0f0f1e;");
+        VBox rootVBox = new VBox(main, statusBar);
+        VBox.setVgrow(main, Priority.ALWAYS);
+        rootVBox.setStyle("-fx-background-color: #0f0f1e;");
 
-        return root;
+        return rootVBox;
     }
 
     // ── Drawing ───────────────────────────────────────────────────────────────
