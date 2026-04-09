@@ -33,8 +33,11 @@ public final class AppSettings {
     private static volatile boolean   keepScreenAwake = true;
     private static volatile double    hudOpacity      = 1.0;
     private static volatile String    clientVersion    = GameVersion.VERSION;
-    private static volatile String    lastUsername     = "";
-    private static volatile boolean   rememberUsername = false;
+    private static volatile String    lastUsername          = "";
+    private static volatile boolean   rememberUsername      = false;
+    private static volatile boolean   allowRememberPassword = false;
+    private static volatile boolean   rememberPassword      = false;
+    private static volatile String    lastPassword          = "";
     private static volatile String    assetUrl         = "http://localhost:9877";
     private static volatile String    uploadKey        = "";
     private static volatile String    tabSide          = "LEFT";
@@ -84,8 +87,11 @@ public final class AppSettings {
                           merged.getProperty("sound.enabled", soundMode.name())));
         keepScreenAwake = boolOf(merged, "display.keepScreenAwake", keepScreenAwake);
         hudOpacity      = doubleOf(merged, "display.hudOpacity", hudOpacity);
-        lastUsername      = merged.getProperty("client.lastUsername", lastUsername);
-        rememberUsername  = boolOf(merged, "client.rememberUsername", rememberUsername);
+        lastUsername          = merged.getProperty("client.lastUsername",          lastUsername);
+        rememberUsername      = boolOf(merged, "client.rememberUsername",          rememberUsername);
+        allowRememberPassword = boolOf(merged, "client.allowRememberPassword",     allowRememberPassword);
+        rememberPassword      = boolOf(merged, "client.rememberPassword",          rememberPassword);
+        lastPassword          = merged.getProperty("client.lastPassword",          lastPassword);
         assetUrl          = merged.getProperty("asset.url",       assetUrl);
         uploadKey         = merged.getProperty("upload.key",     uploadKey);
         tabSide           = merged.getProperty("display.tabSide", tabSide);
@@ -121,8 +127,11 @@ public final class AppSettings {
         p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
         p.setProperty("display.hudOpacity",        String.valueOf(hudOpacity));
         p.setProperty("client.version",            GameVersion.VERSION);
-        p.setProperty("client.lastUsername",       lastUsername);
-        p.setProperty("client.rememberUsername",   String.valueOf(rememberUsername));
+        p.setProperty("client.lastUsername",          lastUsername);
+        p.setProperty("client.rememberUsername",      String.valueOf(rememberUsername));
+        p.setProperty("client.allowRememberPassword", String.valueOf(allowRememberPassword));
+        p.setProperty("client.rememberPassword",      String.valueOf(rememberPassword));
+        p.setProperty("client.lastPassword",          lastPassword);
         p.setProperty("display.tabSide",           tabSide);
         p.setProperty("display.theme",             theme);
         p.setProperty("game.gravity",              String.valueOf(gravity));
@@ -161,8 +170,14 @@ public final class AppSettings {
     public static boolean   isKeepScreenAwake()          { return keepScreenAwake; }
     public static double    getHudOpacity()              { return hudOpacity; }
     public static String    getClientVersion()           { return clientVersion; }
-    public static String    getLastUsername()            { return lastUsername; }
-    public static boolean   isRememberUsername()         { return rememberUsername; }
+    public static String    getLastUsername()                  { return lastUsername; }
+    public static boolean   isRememberUsername()               { return rememberUsername; }
+    public static boolean   isAllowRememberPassword()          { return allowRememberPassword; }
+    public static void      setAllowRememberPassword(boolean v){ allowRememberPassword = v; }
+    public static boolean   isRememberPassword()               { return rememberPassword; }
+    public static void      setRememberPassword(boolean v)     { rememberPassword = v; }
+    public static String    getLastPassword()                  { return lastPassword; }
+    public static void      setLastPassword(String v)          { lastPassword = v; }
     public static String    getAssetUrl()               { return assetUrl; }
     public static String    getUploadKey()              { return uploadKey; }
     public static String    getTabSide()               { return tabSide; }

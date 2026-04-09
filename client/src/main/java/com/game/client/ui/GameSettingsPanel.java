@@ -89,6 +89,28 @@ public class GameSettingsPanel {
 
         VBox speedSection = section("Run Speed", speedDesc, speedRow);
 
+        // ── Remember Password ─────────────────────────────────────────────────
+        Label rememberPassDesc = new Label(
+                "When enabled, users will see a \"Remember password\" checkbox on the\n" +
+                "login screen and can opt in to have their password saved locally.");
+        rememberPassDesc.getStyleClass().addAll("text-muted", "font-11");
+        rememberPassDesc.setWrapText(true);
+
+        CheckBox allowRememberPassBox = new CheckBox("Allow users to save their password");
+        allowRememberPassBox.setSelected(AppSettings.isAllowRememberPassword());
+        allowRememberPassBox.getStyleClass().add("check-secondary");
+        allowRememberPassBox.setOnAction(e -> {
+            AppSettings.setAllowRememberPassword(allowRememberPassBox.isSelected());
+            if (!allowRememberPassBox.isSelected()) {
+                // clear any saved passwords when feature is disabled
+                AppSettings.setRememberPassword(false);
+                AppSettings.setLastPassword("");
+            }
+            AppSettings.save();
+        });
+
+        VBox rememberPassSection = section("Login — Remember Password", rememberPassDesc, allowRememberPassBox);
+
         // ── Save / status ─────────────────────────────────────────────────────
         Label statusLabel = new Label();
         statusLabel.getStyleClass().add("font-11");
@@ -131,7 +153,7 @@ public class GameSettingsPanel {
         buttons.setAlignment(Pos.CENTER_LEFT);
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
-        VBox content = new VBox(gravitySection, jumpSection, speedSection, buttons);
+        VBox content = new VBox(gravitySection, jumpSection, speedSection, rememberPassSection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
