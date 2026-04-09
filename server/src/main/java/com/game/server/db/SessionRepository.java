@@ -4,6 +4,8 @@ import com.game.server.model.Session;
 
 import java.sql.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -68,6 +70,31 @@ public class SessionRepository {
             throw new RuntimeException("validate() failed", e);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Deletes all sessions for a given user and returns the evicted tokens.
+     * Used to enforce single-session login.
+     */
+    public List<String> invalidateByUserId(long userId) {
+        List<String> tokens = new ArrayList<>();
+        try (Connection conn = db.getConnection()) {
+            try (PreparedStatement sel = conn.prepareStatement(
+                    "SELECT token FROM sessions WHERE user_id = ?")) {
+                sel.setLong(1, userId);
+                try (ResultSet rs = sel.executeQuery()) {
+                    while (rs.next()) tokens.add(rs.getString("token"));
+                }
+            }
+            try (PreparedStatement del = conn.prepareStatement(
+                    "DELETE FROM sessions WHERE user_id = ?")) {
+                del.setLong(1, userId);
+                del.executeUpdate();
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("invalidateByUserId() failed", e);
+        }
+        return tokens;
     }
 
     /**

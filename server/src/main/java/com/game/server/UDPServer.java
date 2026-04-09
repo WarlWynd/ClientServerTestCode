@@ -50,6 +50,7 @@ public class UDPServer {
 
     public UDPServer(int port) {
         this.port = port;
+        authHandler.setGameHandler(gameHandler);
     }
 
     public AuthHandler getAuthHandler() { return authHandler; }

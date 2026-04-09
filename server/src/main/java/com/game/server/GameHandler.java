@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -112,6 +113,34 @@ public class GameHandler {
     }
 
     // ── Called externally on timeout / logout ────────────────────────────────
+
+    /**
+     * Sends FORCE_LOGOUT to any active game clients whose session tokens are in the list,
+     * then removes them from the game. Used to kick existing sessions on new login.
+     */
+    public void forceLogoutTokens(List<String> tokens, DatagramSocket socket) {
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("message", "You have been logged out because your account signed in from another location.");
+        byte[] data;
+        try {
+            data = PacketSerializer.serialize(new Packet(PacketType.FORCE_LOGOUT, null, payload));
+        } catch (Exception e) {
+            log.error("Failed to serialize FORCE_LOGOUT: {}", e.getMessage());
+            return;
+        }
+        for (String token : tokens) {
+            ClientAddr ca = clients.get(token);
+            if (ca != null) {
+                try {
+                    socket.send(new DatagramPacket(data, data.length, ca.address(), ca.port()));
+                    log.info("FORCE_LOGOUT sent to token={}", token);
+                } catch (Exception e) {
+                    log.warn("Could not send FORCE_LOGOUT to {}: {}", token, e.getMessage());
+                }
+            }
+            removePlayer(token, socket);
+        }
+    }
 
     public void removePlayer(String sessionToken, DatagramSocket socket) {
         PlayerState p = players.remove(sessionToken);

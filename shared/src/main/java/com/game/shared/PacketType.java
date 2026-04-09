@@ -21,6 +21,7 @@ public enum PacketType {
     PING,
     PONG,
     ERROR,
+    FORCE_LOGOUT,
 
     // ── Character ────────────────────────────────────────────────
     CHARACTER_CREATE_REQUEST,

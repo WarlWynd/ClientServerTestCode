@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,6 +30,13 @@ public class AuthHandler {
     private final SessionRepository sessionRepo = new SessionRepository();
     private final CharacterRepository charRepo  = new CharacterRepository();
 
+    private GameHandler gameHandler;
+
+    /** Wire in the GameHandler so login can force-logout existing sessions. */
+    public void setGameHandler(GameHandler gameHandler) {
+        this.gameHandler = gameHandler;
+    }
+
     // ── Packet handlers ──────────────────────────────────────────────────────
 
     public void handleLogin(DatagramSocket socket, Packet in,
@@ -40,6 +48,14 @@ public class AuthHandler {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
 
         if (user.isPresent()) {
+            // Enforce single-session: evict any existing sessions for this user
+            List<String> evicted = sessionRepo.invalidateByUserId(user.get().id());
+            if (!evicted.isEmpty()) {
+                log.info("LOGIN  evicting {} existing session(s) for user='{}'",
+                        evicted.size(), user.get().username());
+                if (gameHandler != null) gameHandler.forceLogoutTokens(evicted, socket);
+            }
+
             Session session = sessionRepo.create(user.get().id(), user.get().username());
             out.put("success",      true);
             out.put("sessionToken", session.token());

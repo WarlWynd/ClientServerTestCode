@@ -882,6 +882,23 @@ public class GameScreen {
                 AppSettings.setRunSpeed(rs);
                 AppSettings.save();
             }
+            case FORCE_LOGOUT -> {
+                String msg = packet.payload.has("message")
+                        ? packet.payload.get("message").asText()
+                        : "You have been logged out because your account signed in from another location.";
+                Platform.runLater(() -> {
+                    if (gameLoop != null) gameLoop.stop();
+                    SessionStore.clear();
+                    new LoginScreen(stage, client).show();
+                    // Brief alert so the user knows why they were kicked
+                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.WARNING);
+                    alert.setTitle("Logged Out");
+                    alert.setHeaderText("Session ended");
+                    alert.setContentText(msg);
+                    alert.show();
+                });
+            }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
                 Platform.runLater(() -> {
