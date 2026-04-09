@@ -41,6 +41,7 @@ public final class AppSettings {
     private static volatile String    assetUrl         = "http://localhost:9877";
     private static volatile String    uploadKey        = "";
     private static volatile String    tabSide          = "LEFT";
+    private static volatile boolean   tabIconOnly      = false;
     private static volatile String    theme            = "DARK";
     private static volatile float     gravity          = 0.5f;
     private static volatile float     jumpStrength     = 8.0f;
@@ -94,8 +95,9 @@ public final class AppSettings {
         lastPassword          = merged.getProperty("client.lastPassword",          lastPassword);
         assetUrl          = merged.getProperty("asset.url",       assetUrl);
         uploadKey         = merged.getProperty("upload.key",     uploadKey);
-        tabSide           = merged.getProperty("display.tabSide", tabSide);
-        theme             = merged.getProperty("display.theme",   theme);
+        tabSide           = merged.getProperty("display.tabSide",     tabSide);
+        tabIconOnly       = boolOf(merged, "display.tabIconOnly",   tabIconOnly);
+        theme             = merged.getProperty("display.theme",      theme);
         gravity           = floatOf(merged, "game.gravity",       gravity);
         jumpStrength      = floatOf(merged, "game.jumpStrength",  jumpStrength);
         runSpeed          = floatOf(merged, "game.runSpeed",      runSpeed);
@@ -133,6 +135,7 @@ public final class AppSettings {
         p.setProperty("client.rememberPassword",      String.valueOf(rememberPassword));
         p.setProperty("client.lastPassword",          lastPassword);
         p.setProperty("display.tabSide",           tabSide);
+        p.setProperty("display.tabIconOnly",       String.valueOf(tabIconOnly));
         p.setProperty("display.theme",             theme);
         p.setProperty("game.gravity",              String.valueOf(gravity));
         p.setProperty("game.jumpStrength",         String.valueOf(jumpStrength));
@@ -182,6 +185,8 @@ public final class AppSettings {
     public static String    getUploadKey()              { return uploadKey; }
     public static String    getTabSide()               { return tabSide; }
     public static void      setTabSide(String v)       { tabSide = v; }
+    public static boolean   isTabIconOnly()            { return tabIconOnly; }
+    public static void      setTabIconOnly(boolean v)  { tabIconOnly = v; }
     public static String    getTheme()                 { return theme; }
     public static void      setTheme(String v)         { theme = v; }
     public static float     getGravity()               { return gravity; }

@@ -28,14 +28,17 @@ import java.util.function.Consumer;
  */
 public class SettingsPanel {
 
-    private final Runnable        onRestartClient;
-    private final Consumer<Side>  onTabSideChange;
-    private final Runnable        onLogout;
+    private final Runnable           onRestartClient;
+    private final Consumer<Side>     onTabSideChange;
+    private final Consumer<Boolean>  onTabLabelChange;
+    private final Runnable           onLogout;
 
-    public SettingsPanel(Runnable onRestartClient, Consumer<Side> onTabSideChange, Runnable onLogout) {
-        this.onRestartClient = onRestartClient;
-        this.onTabSideChange = onTabSideChange;
-        this.onLogout        = onLogout;
+    public SettingsPanel(Runnable onRestartClient, Consumer<Side> onTabSideChange,
+                         Consumer<Boolean> onTabLabelChange, Runnable onLogout) {
+        this.onRestartClient  = onRestartClient;
+        this.onTabSideChange  = onTabSideChange;
+        this.onTabLabelChange = onTabLabelChange;
+        this.onLogout         = onLogout;
     }
 
     // ── Build ─────────────────────────────────────────────────────────────────
@@ -135,6 +138,29 @@ public class SettingsPanel {
         HBox tabSideRow = new HBox(16, tabTop, tabLeft);
         tabSideRow.setAlignment(Pos.CENTER_LEFT);
 
+        // ── Tab Labels ────────────────────────────────────────────────────────
+        ToggleGroup tabLabelGroup = new ToggleGroup();
+        RadioButton tabIconText = new RadioButton("Emoji Text");
+        RadioButton tabIconOnly = new RadioButton("Emoji Only");
+        tabIconText.setToggleGroup(tabLabelGroup);
+        tabIconOnly.setToggleGroup(tabLabelGroup);
+        tabIconText.setUserData(false);
+        tabIconOnly.setUserData(true);
+        tabIconText.getStyleClass().add("radio-secondary");
+        tabIconOnly.getStyleClass().add("radio-secondary");
+        tabIconText.setSelected(!AppSettings.isTabIconOnly());
+        tabIconOnly.setSelected(AppSettings.isTabIconOnly());
+
+        tabLabelGroup.selectedToggleProperty().addListener((obs, old, val) -> {
+            if (val == null) return;
+            boolean iconOnly = (boolean) val.getUserData();
+            AppSettings.setTabIconOnly(iconOnly);
+            if (onTabLabelChange != null) onTabLabelChange.accept(iconOnly);
+        });
+
+        HBox tabLabelRow = new HBox(16, tabIconText, tabIconOnly);
+        tabLabelRow.setAlignment(Pos.CENTER_LEFT);
+
         // ── Theme ─────────────────────────────────────────────────────────────
         ToggleGroup themeGroup = new ToggleGroup();
         RadioButton darkRb  = new RadioButton("Dark");
@@ -162,8 +188,9 @@ public class SettingsPanel {
                 row(resLabel),
                 row(resCol),
                 row(resNote),
-                row("Tabs:",  tabSideRow),
-                row("Theme:", themeRow));
+                row("Tabs:",        tabSideRow),
+                row("Tab Emoji:", tabLabelRow),
+                row("Theme:",      themeRow));
 
         // ── Controls (key bindings) ───────────────────────────────────────────
         HBox jumpRow       = keyBindRow("Jump:",        AppSettings.getKeyJump(),       AppSettings::setKeyJump);

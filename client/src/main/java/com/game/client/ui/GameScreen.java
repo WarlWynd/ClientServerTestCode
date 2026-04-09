@@ -303,8 +303,8 @@ public class GameScreen {
         systemMsgBar.setAlignment(Pos.CENTER_LEFT);
         systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
         systemMsgBar.getStyleClass().add("system-msg-bar");
-        systemMsgBar.setVisible(true);
-        systemMsgBar.setManaged(true);
+        systemMsgBar.setVisible(false);
+        systemMsgBar.setManaged(false);
 
         // ── Game tab content (sidebar + canvas side by side) ─────────────────
         HBox gameContent = new HBox(sidebar, canvasPane);
@@ -320,7 +320,9 @@ public class GameScreen {
 
         // ── Settings tab (all users) ──────────────────────────────────────────
         Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart,
-                side -> tabPane.setSide(side), this::doLogout).buildView());
+                side -> tabPane.setSide(side),
+                iconOnly -> applyTabLabels(iconOnly),
+                this::doLogout).buildView());
         settingsTab.setClosable(false);
 
         // ── Role-gated tabs ───────────────────────────────────────────────────
@@ -333,7 +335,7 @@ public class GameScreen {
             adminPanel.setRestartCallback(this::startReconnectCountdown);
             Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
             adminTab.setClosable(false);
-            Tab gameSettingsTab = new Tab("⚙ Game Settings", new GameSettingsPanel(client).buildView());
+            Tab gameSettingsTab = new Tab("🎛 Game Settings", new GameSettingsPanel(client).buildView());
             gameSettingsTab.setClosable(false);
             Tab audioTab = new Tab("🎵 Audio Dev", new AudioDevScreen(stage).build());
             audioTab.setClosable(false);
@@ -360,12 +362,14 @@ public class GameScreen {
 
         tabPane = new TabPane(tabs.toArray(new Tab[0]));
 
+        // Store full labels so we can toggle icon-only mode without data loss
+        for (Tab t : tabPane.getTabs()) t.getProperties().put("fullText", t.getText());
+        applyTabLabels(AppSettings.isTabIconOnly());
 
         // ── Tab pane ─────────────────────────────────────────────────────────
         tabPane.setSide("LEFT".equalsIgnoreCase(AppSettings.getTabSide())
                 ? javafx.geometry.Side.LEFT : javafx.geometry.Side.TOP);
         tabPane.getStyleClass().add("tab-pane-dark");
-        tabPane.setStyle("-fx-tab-min-width: 120;");
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         VBox root = new VBox(tabPane);
@@ -388,14 +392,11 @@ public class GameScreen {
 
         // Update window title to reflect the active tab
         tabPane.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
-            if (n != null) {
-                String tabName = n.getText().replaceAll("[^\\p{ASCII}]", "").trim();
-                stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " — " + tabName);
-            }
+            if (n != null) stage.setTitle(AppSettings.getProgramName()
+                    + " v" + com.game.shared.GameVersion.VERSION + " — " + tabFullName(n));
         });
-        String firstTab = tabPane.getSelectionModel().getSelectedItem().getText()
-                .replaceAll("[^\\p{ASCII}]", "").trim();
-        stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION + " — " + firstTab);
+        stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION
+                + " — " + tabFullName(tabPane.getSelectionModel().getSelectedItem()));
         stage.setScene(scene);
         stage.show();
 
@@ -941,6 +942,8 @@ public class GameScreen {
         if (sysMsgTimer != null) { sysMsgTimer.stop(); sysMsgTimer = null; }
         systemMsgText.setText("");
         systemMsgCountdown.setText("");
+        systemMsgBar.setVisible(false);
+        systemMsgBar.setManaged(false);
     }
 
     // ── Reconnect overlay ────────────────────────────────────────────────────
@@ -1015,6 +1018,24 @@ public class GameScreen {
     }
 
     // ── Logout ───────────────────────────────────────────────────────────────
+
+    private void applyTabLabels(boolean iconOnly) {
+        for (Tab t : tabPane.getTabs()) {
+            String full = (String) t.getProperties().get("fullText");
+            if (full == null) continue;
+            t.setText(iconOnly ? full.split(" ", 2)[0] : full);
+            t.setTooltip(iconOnly ? new Tooltip(full) : null);
+            t.setStyle("");
+        }
+        tabPane.setStyle("");
+    }
+
+    /** Returns the full (icon + text) label for a tab, used in the window title. */
+    private static String tabFullName(Tab t) {
+        String full = (String) t.getProperties().get("fullText");
+        String label = full != null ? full : t.getText();
+        return label.replaceAll("[^\\p{ASCII}]", "").trim();
+    }
 
     private void doLogout() {
         if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
