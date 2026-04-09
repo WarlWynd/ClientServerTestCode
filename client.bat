@@ -1,2 +1,2 @@
 @echo off
-"%~dp0gradlew.bat" :client:run
+wscript.exe "%~dp0client-silent.vbs"

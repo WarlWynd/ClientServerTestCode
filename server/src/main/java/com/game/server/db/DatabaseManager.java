@@ -26,7 +26,8 @@ public final class DatabaseManager {
                 created_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
                 last_login      TIMESTAMP    NULL,
                 is_admin        TINYINT(1)   NOT NULL DEFAULT 0,
-                is_graphics_dev TINYINT(1)   NOT NULL DEFAULT 0
+                is_graphics_dev TINYINT(1)   NOT NULL DEFAULT 0,
+                is_board_dev    TINYINT(1)   NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
@@ -61,6 +62,42 @@ public final class DatabaseManager {
                 CONSTRAINT fk_char_user
                     FOREIGN KEY (user_id) REFERENCES users(id)
                     ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
+    private static final String DDL_BOARDS = """
+            CREATE TABLE IF NOT EXISTS boards (
+                id          BIGINT        AUTO_INCREMENT PRIMARY KEY,
+                user_id     BIGINT        NOT NULL,
+                name        VARCHAR(100)  NOT NULL,
+                rows        INT           NOT NULL,
+                cols        INT           NOT NULL,
+                csv_data    MEDIUMTEXT    NOT NULL,
+                created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+                updated_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+                                          ON UPDATE CURRENT_TIMESTAMP,
+                CONSTRAINT fk_board_user
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
+    private static final String DDL_BOARD_PROGRESS = """
+            CREATE TABLE IF NOT EXISTS user_board_progress (
+                id          BIGINT       AUTO_INCREMENT PRIMARY KEY,
+                user_id     BIGINT       NOT NULL,
+                board_id    BIGINT       NOT NULL,
+                status      ENUM('assigned','in_progress','completed')
+                                         NOT NULL DEFAULT 'assigned',
+                score       INT          NOT NULL DEFAULT 0,
+                attempts    INT          NOT NULL DEFAULT 0,
+                assigned_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP   NULL,
+                UNIQUE KEY uq_user_board (user_id, board_id),
+                CONSTRAINT fk_prog_user
+                    FOREIGN KEY (user_id)  REFERENCES users(id)  ON DELETE CASCADE,
+                CONSTRAINT fk_prog_board
+                    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
@@ -123,11 +160,14 @@ public final class DatabaseManager {
             stmt.execute(DDL_SESSIONS);
             addColumnIfMissing(conn, "users", "is_admin",        "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "is_graphics_dev", "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_board_dev",    "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "emailaddress",    "VARCHAR(255) NOT NULL DEFAULT ''");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
             stmt.execute(DDL_CHARACTERS);
             stmt.execute(DDL_SERVER_SETTINGS);
+            stmt.execute(DDL_BOARDS);
+            stmt.execute(DDL_BOARD_PROGRESS);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }

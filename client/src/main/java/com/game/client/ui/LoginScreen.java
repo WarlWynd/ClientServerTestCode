@@ -132,7 +132,8 @@ public class LoginScreen {
                         String  username = packet.payload.get("username").asText();
                         boolean isAdmin       = packet.payload.has("isAdmin")       && packet.payload.get("isAdmin").asBoolean();
                         boolean isGraphicsDev = packet.payload.has("isGraphicsDev") && packet.payload.get("isGraphicsDev").asBoolean();
-                        SessionStore.set(token, username, isAdmin, isGraphicsDev);
+                        boolean isBoardDev    = packet.payload.has("isBoardDev")    && packet.payload.get("isBoardDev").asBoolean();
+                        SessionStore.set(token, username, isAdmin, isGraphicsDev, isBoardDev);
                         AppSettings.setRememberUsername(pendingRemember);
                         AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
                         AppSettings.save();

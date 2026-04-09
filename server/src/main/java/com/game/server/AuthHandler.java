@@ -46,11 +46,12 @@ public class AuthHandler {
             out.put("username",     session.username());
             out.put("isAdmin",       user.get().isAdmin());
             out.put("isGraphicsDev", user.get().isGraphicsDev());
+            out.put("isBoardDev",    user.get().isBoardDev());
             String charName = charRepo.getCharacterName(user.get().id());
             out.put("hasCharacter",   charName != null);
             if (charName != null) out.put("characterName", charName);
-            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} from {}:{}",
-                    user.get().username(), user.get().isAdmin(), user.get().isGraphicsDev(),
+            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} boardDev={} from {}:{}",
+                    user.get().username(), user.get().isAdmin(), user.get().isGraphicsDev(), user.get().isBoardDev(),
                     addr.getHostAddress(), port);
         } else {
             out.put("success", false);

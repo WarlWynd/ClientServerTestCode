@@ -45,6 +45,14 @@ public final class AppSettings {
     private static volatile String    keyJump          = "W";
     private static volatile String    keySprint        = "SHIFT";
     private static volatile String    keyFire          = "F";
+    private static volatile String    keyClimbUp       = "W";
+    private static volatile String    keyClimbDown     = "S";
+    private static volatile String    keyKick          = "K";
+    private static volatile String    keyPunch         = "J";
+    private static volatile String    keyAttack        = "E";
+    private static volatile boolean   showTestNpc      = true;
+    private static volatile float     testNpcX         = 500f;
+    private static volatile float     testNpcY         = 14f;
 
     static { load(); }
 
@@ -88,6 +96,14 @@ public final class AppSettings {
         keyJump           = merged.getProperty("key.jump",        keyJump);
         keySprint         = merged.getProperty("key.sprint",      keySprint);
         keyFire           = merged.getProperty("key.fire",        keyFire);
+        keyClimbUp        = merged.getProperty("key.climbUp",     keyClimbUp);
+        keyClimbDown      = merged.getProperty("key.climbDown",   keyClimbDown);
+        keyKick           = merged.getProperty("key.kick",        keyKick);
+        keyPunch          = merged.getProperty("key.punch",       keyPunch);
+        keyAttack         = merged.getProperty("key.attack",      keyAttack);
+        showTestNpc       = boolOf(merged, "gameplay.showTestNpc", showTestNpc);
+        testNpcX          = floatOf(merged, "gameplay.testNpcX",   testNpcX);
+        testNpcY          = floatOf(merged, "gameplay.testNpcY",   testNpcY);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -115,6 +131,14 @@ public final class AppSettings {
         p.setProperty("key.jump",                  keyJump);
         p.setProperty("key.sprint",               keySprint);
         p.setProperty("key.fire",                  keyFire);
+        p.setProperty("key.climbUp",               keyClimbUp);
+        p.setProperty("key.climbDown",             keyClimbDown);
+        p.setProperty("key.kick",                  keyKick);
+        p.setProperty("key.punch",                 keyPunch);
+        p.setProperty("key.attack",                keyAttack);
+        p.setProperty("gameplay.showTestNpc",      String.valueOf(showTestNpc));
+        p.setProperty("gameplay.testNpcX",         String.valueOf(testNpcX));
+        p.setProperty("gameplay.testNpcY",         String.valueOf(testNpcY));
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -157,6 +181,22 @@ public final class AppSettings {
     public static void      setKeySprint(String v)     { keySprint = v; }
     public static String    getKeyFire()               { return keyFire; }
     public static void      setKeyFire(String v)       { keyFire = v; }
+    public static String    getKeyClimbUp()            { return keyClimbUp; }
+    public static void      setKeyClimbUp(String v)    { keyClimbUp = v; }
+    public static String    getKeyClimbDown()          { return keyClimbDown; }
+    public static void      setKeyClimbDown(String v)  { keyClimbDown = v; }
+    public static String    getKeyKick()               { return keyKick; }
+    public static void      setKeyKick(String v)       { keyKick = v; }
+    public static String    getKeyPunch()              { return keyPunch; }
+    public static void      setKeyPunch(String v)      { keyPunch = v; }
+    public static String    getKeyAttack()             { return keyAttack; }
+    public static void      setKeyAttack(String v)     { keyAttack = v; }
+    public static boolean   isShowTestNpc()            { return showTestNpc; }
+    public static void      setShowTestNpc(boolean v)  { showTestNpc = v; }
+    public static float     getTestNpcX()              { return testNpcX; }
+    public static void      setTestNpcX(float v)       { testNpcX = v; }
+    public static float     getTestNpcY()              { return testNpcY; }
+    public static void      setTestNpcY(float v)       { testNpcY = v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void setServerHost(String v)           { serverHost      = v; }

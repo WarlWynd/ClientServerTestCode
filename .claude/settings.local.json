@@ -63,7 +63,10 @@
       "Bash(./gradlew :client:compileJava :server:compileJava)",
       "Bash(./gradlew :syncapp:run:*)",
       "Bash(./gradlew :syncapp:compileJava)",
-      "Bash(./gradlew :client:jar)"
+      "Bash(./gradlew :client:jar)",
+      "Bash(cmd.exe /c \"cd /d E:\\\\multiplayer-game && mvnw.cmd -pl client compile > E:\\\\multiplayer-game\\\\build_output.txt 2>&1 & exit\")",
+      "Bash(powershell.exe:*)",
+      "Bash(echo \"PID $!\")"
     ]
   }
 }

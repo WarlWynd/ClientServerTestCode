@@ -93,9 +93,52 @@ public class GameScreen {
     private final Set<KeyCode> heldKeys = ConcurrentHashMap.newKeySet();
     private long lastSendTime = 0;
 
+    // ── Test Fight Board / Enemy NPC ──────────────────────────────────────────
+    private static final String TEST_FIGHT_BOARD = "test_fight_board";
+    private float    npcX             = 500f;
+    private float    npcY             = 14f;   // PLAYER_RADIUS — stands on floor
+    private final PlayerAnimator npcAnimator       = new PlayerAnimator();
+    private final WeaponRenderer npcWeaponRenderer = new WeaponRenderer();
+    private long     npcLastAttackMs  = 0;
+    private boolean  npcHitPending    = false;
+    private long     npcHitTimeMs     = 0;
+    private PlayerAnimator.State npcCurrentAttack = PlayerAnimator.State.PUNCH;
+    private boolean  npcActive        = false;
+    private static final long  NPC_ATTACK_INTERVAL_MS = 2_500;
+    private static final long  NPC_HIT_DELAY_MS       = 500;
+    private static final float NPC_HIT_RANGE          = 70f;
+    private static final PlayerAnimator.State[] NPC_ATTACKS = {
+        PlayerAnimator.State.PUNCH,     PlayerAnimator.State.CROSS,
+        PlayerAnimator.State.HOOK,      PlayerAnimator.State.BODY_KICK,
+        PlayerAnimator.State.SIDE_KICK, PlayerAnimator.State.SHOOT
+    };
+    private final List<DamageText> damageTexts = new ArrayList<>();
+    private final Random rng = new Random();
+
+    private static class DamageText {
+        final float  worldX;
+        final float  worldY;
+        final String text;
+        final long   birthMs;
+        static final long LIFE_MS = 1_500;
+        DamageText(float wx, float wy, String text) {
+            this.worldX  = wx;
+            this.worldY  = wy;
+            this.text    = text;
+            this.birthMs = System.currentTimeMillis();
+        }
+        double alpha()  { return Math.max(0.0, 1.0 - (System.currentTimeMillis() - birthMs) / (double) LIFE_MS); }
+        float  riseY()  { return (float)((System.currentTimeMillis() - birthMs) / (double) LIFE_MS) * 50f; }
+        boolean expired(){ return System.currentTimeMillis() - birthMs > LIFE_MS; }
+    }
+
     private Label pingLabel;
     private Label playerCountLabel;
     private Label posLabel;
+    private Label damageLastLabel;
+    private Label damageTotalLabel;
+    private Label hitStatusLabel;
+    private int   totalDamageTaken = 0;
     private Canvas canvas;
     private AnimationTimer gameLoop;
     private TabPane tabPane;
@@ -130,6 +173,7 @@ public class GameScreen {
         this.viewportH = res.height;
         this.localX    = 260f;
         this.localY    = 20f;
+        ensureTestFightBoard();
     }
 
     // ── Build & show ─────────────────────────────────────────────────────────
@@ -187,6 +231,17 @@ public class GameScreen {
         posLabel = new Label("0, 0");
         posLabel.getStyleClass().addAll("text-primary", "font-11");
 
+        Separator sep6 = new Separator();
+        sep6.getStyleClass().add("sep");
+
+        Label damageLbl = new Label("DAMAGE TAKEN");
+        damageLbl.getStyleClass().addAll("text-muted", "font-10");
+        damageLastLabel = new Label("Last hit: —");
+        damageLastLabel.setStyle("-fx-text-fill: #ffff00; -fx-font-weight: bold; -fx-font-size: 12;");
+        damageLastLabel.setWrapText(true);
+        damageTotalLabel = new Label("Total: 0");
+        damageTotalLabel.setStyle("-fx-text-fill: #ff8888; -fx-font-weight: bold; -fx-font-size: 11;");
+
         VBox sidebar = new VBox(10,
                 gameTitle,
                 sep1,
@@ -198,7 +253,9 @@ public class GameScreen {
                 sep4,
                 controlsLbl, controls,
                 sep5,
-                posLbl, posLabel);
+                posLbl, posLabel,
+                sep6,
+                damageLbl, damageLastLabel, damageTotalLabel);
         sidebar.setPadding(new Insets(16, 12, 16, 12));
         sidebar.setPrefWidth(160);
         sidebar.setMinWidth(160);
@@ -236,10 +293,13 @@ public class GameScreen {
         systemMsgCountdown = new Label();
         systemMsgCountdown.getStyleClass().add("system-msg-countdown");
 
+        hitStatusLabel = new Label();
+        hitStatusLabel.setStyle("-fx-text-fill: #ff4444; -fx-font-weight: bold; -fx-font-size: 12;");
+
         Region msgSpacer = new Region();
         HBox.setHgrow(msgSpacer, Priority.ALWAYS);
 
-        systemMsgBar = new HBox(12, statusLabel, systemMsgText, msgSpacer, systemMsgCountdown);
+        systemMsgBar = new HBox(12, statusLabel, systemMsgText, msgSpacer, hitStatusLabel, systemMsgCountdown);
         systemMsgBar.setAlignment(Pos.CENTER_LEFT);
         systemMsgBar.setPadding(new Insets(5, 14, 5, 14));
         systemMsgBar.getStyleClass().add("system-msg-bar");
@@ -346,6 +406,7 @@ public class GameScreen {
         gameLoop = new AnimationTimer() {
             @Override public void handle(long now) {
                 processInput();
+                updateNpc();
                 render();
             }
         };
@@ -390,7 +451,7 @@ public class GameScreen {
             KeyCode climbUp    = keyCodeOf(AppSettings.getKeyClimbUp(),   KeyCode.W);
             KeyCode climbDown  = keyCodeOf(AppSettings.getKeyClimbDown(), KeyCode.S);
             if (heldKeys.contains(climbUp)   || heldKeys.contains(KeyCode.UP)) {
-                float ladderTop = topOfLadder();
+                float ladderTop = topOfLadder() - 3f;
                 if (ladderTop >= 0 && localY - PLAYER_RADIUS < ladderTop) {
                     localY = Math.min(ladderTop + PLAYER_RADIUS, localY + climbSpeed);
                     moved  = true;
@@ -691,19 +752,42 @@ public class GameScreen {
             String dispName = pNode.has("characterName") ? pNode.get("characterName").asText() : username;
             PlayerAnimator anim = remoteAnimators.computeIfAbsent(token, k -> new PlayerAnimator());
             WeaponRenderer rWep = remoteWeaponRenderers.computeIfAbsent(token, k -> new WeaponRenderer());
-            rWep.drawBehindBody(gc, anim, rx, toCanvasY(ry), colorFor(username));
-            anim.draw(gc, rx, toCanvasY(ry), colorFor(username));
-            rWep.draw(gc, anim, rx, toCanvasY(ry), colorFor(username));
-            drawNameLabel(gc, rx, toCanvasY(ry), dispName, rs);
+            float rFeetY = toCanvasY(ry - PLAYER_RADIUS);
+            rWep.drawBehindBody(gc, anim, rx, rFeetY, colorFor(username));
+            anim.draw(gc, rx, rFeetY, colorFor(username));
+            rWep.draw(gc, anim, rx, rFeetY, colorFor(username));
+            drawNameLabel(gc, rx, rFeetY, dispName, rs);
+        }
+
+        // Enemy NPC (Test Fight Board)
+        if (npcActive) {
+            Color npcColor  = Color.web("#ff4444");
+            float npcFeetY  = toCanvasY(npcY - PLAYER_RADIUS);
+            npcWeaponRenderer.drawBehindBody(gc, npcAnimator, npcX, npcFeetY, npcColor);
+            npcAnimator.draw(gc, npcX, npcFeetY, npcColor);
+            npcWeaponRenderer.draw(gc, npcAnimator, npcX, npcFeetY, npcColor);
+            drawNameLabel(gc, npcX, npcFeetY, "ENEMY", 0);
         }
 
         // Local player (drawn on top)
-        String localName = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
+        String localName  = SessionStore.getCharacterName() != null && !SessionStore.getCharacterName().isBlank()
                 ? SessionStore.getCharacterName() : SessionStore.getUsername();
-        localWeaponRenderer.drawBehindBody(gc, localAnimator, localX, toCanvasY(localY), Color.web("#e0e0ff"));
-        localAnimator.draw(gc, localX, toCanvasY(localY), Color.web("#e0e0ff"));
-        localWeaponRenderer.draw(gc, localAnimator, localX, toCanvasY(localY), Color.web("#e0e0ff"));
-        drawNameLabel(gc, localX, toCanvasY(localY), localName, localScore);
+        float localFeetY  = toCanvasY(localY - PLAYER_RADIUS);
+        localWeaponRenderer.drawBehindBody(gc, localAnimator, localX, localFeetY, Color.web("#e0e0ff"));
+        localAnimator.draw(gc, localX, localFeetY, Color.web("#e0e0ff"));
+        localWeaponRenderer.draw(gc, localAnimator, localX, localFeetY, Color.web("#e0e0ff"));
+        drawNameLabel(gc, localX, localFeetY, localName, localScore);
+
+        // Damage texts — floating bold yellow numbers
+        if (!damageTexts.isEmpty()) {
+            gc.setFont(Font.font("System", FontWeight.BOLD, 18));
+            for (DamageText dt : damageTexts) {
+                double alpha = dt.alpha();
+                if (alpha <= 0) continue;
+                gc.setFill(Color.color(1.0, 1.0, 0.0, alpha));
+                gc.fillText(dt.text, dt.worldX - 10, toCanvasY(dt.worldY) - dt.riseY());
+            }
+        }
 
         gc.restore();
 
@@ -940,6 +1024,105 @@ public class GameScreen {
         sendPacket(PacketType.LOGOUT_REQUEST,  PacketSerializer.emptyPayload());
         SessionStore.clear();
         new LoginScreen(stage, client).show();
+    }
+
+    // ── Test Fight Board ──────────────────────────────────────────────────────
+
+    /** Creates ~/.game/boards/test_fight_board.csv (24×40, bottom row PLATFORM) if absent. */
+    private static void ensureTestFightBoard() {
+        try {
+            java.io.File dir = new java.io.File(System.getProperty("user.home"), ".game/boards");
+            dir.mkdirs();
+            java.io.File f = new java.io.File(dir, TEST_FIGHT_BOARD + ".csv");
+            if (f.exists()) return;
+            int rows = 24, cols = 40;
+            try (java.io.PrintWriter pw = new java.io.PrintWriter(f)) {
+                pw.println(rows + "," + cols);
+                for (int r = 0; r < rows; r++) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int c = 0; c < cols; c++) {
+                        if (c > 0) sb.append(',');
+                        sb.append(r == rows - 1 ? "PLATFORM" : "AIR");
+                    }
+                    pw.println(sb);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void updateNpc() {
+        if (!AppSettings.isShowTestNpc()) {
+            npcActive = false;
+            damageTexts.clear();
+            return;
+        }
+        npcActive = true;
+        npcX      = AppSettings.getTestNpcX();
+        npcY      = AppSettings.getTestNpcY();
+
+        // Face toward player
+        float npcVelX = npcX > localX ? -0.4f : 0.4f;
+        npcAnimator.update(npcVelX, 0f, true);
+
+        long now = System.currentTimeMillis();
+
+        // Launch new attack on interval
+        if (now - npcLastAttackMs > NPC_ATTACK_INTERVAL_MS) {
+            npcLastAttackMs  = now;
+            npcCurrentAttack = NPC_ATTACKS[rng.nextInt(NPC_ATTACKS.length)];
+            npcAnimator.forceState(npcCurrentAttack);
+            // Schedule hit check at impact timing
+            npcHitPending = true;
+            npcHitTimeMs  = now + NPC_HIT_DELAY_MS;
+        }
+
+        // Process pending hit
+        if (npcHitPending && now >= npcHitTimeMs) {
+            npcHitPending = false;
+            if (Math.abs(npcX - localX) <= NPC_HIT_RANGE) {
+                spawnDamageText(npcCurrentAttack);
+            }
+        }
+
+        damageTexts.removeIf(DamageText::expired);
+    }
+
+    private static final String[] DAMAGE_LABELS = { "5", "8", "10", "12", "15", "18", "20", "25" };
+
+    private static String attackLabel(PlayerAnimator.State s) {
+        return switch (s) {
+            case PUNCH     -> "Jab";
+            case CROSS     -> "Cross";
+            case HOOK      -> "Hook";
+            case UPPERCUT  -> "Uppercut";
+            case HAYMAKER  -> "Haymaker";
+            case HEAD_KICK -> "Head Kick";
+            case LOW_KICK  -> "Low Kick";
+            case BODY_KICK -> "Body Kick";
+            case SPINNING_BACK_KICK -> "Spinning Back Kick";
+            case SIDE_KICK -> "Side Kick";
+            case SHOOT     -> "Shot";
+            default        -> s.name();
+        };
+    }
+
+    private void spawnDamageText(PlayerAnimator.State attack) {
+        String dmg    = DAMAGE_LABELS[rng.nextInt(DAMAGE_LABELS.length)];
+        String label  = attackLabel(attack);
+        float wx = localX + (rng.nextFloat() - 0.5f) * 20f;
+        float wy = localY + PLAYER_RADIUS + 10f;
+        damageTexts.add(new DamageText(wx, wy, "-" + dmg));
+        int amount = Integer.parseInt(dmg);
+        totalDamageTaken += amount;
+        Platform.runLater(() -> {
+            damageLastLabel.setText(label + "  -" + dmg + " hp");
+            damageTotalLabel.setText("Total: " + totalDamageTaken + " hp");
+            hitStatusLabel.setText("Hit by " + label + "  \u2212" + dmg + " hp  (total: " + totalDamageTaken + ")");
+        });
+        new Thread(() -> {
+            try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
+            Platform.runLater(() -> hitStatusLabel.setText(""));
+        }, "hit-clear").start();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

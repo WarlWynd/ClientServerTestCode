@@ -21,7 +21,7 @@ processResources {
 
 javafx {
     version = "26"
-    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media']
+    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media', 'javafx.swing']
 }
 
 dependencies {
@@ -34,10 +34,17 @@ application {
     mainClass = 'com.game.client.ClientMain'
     applicationDefaultJvmArgs = [
         '--enable-preview',
-        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
+        '--enable-native-access=ALL-UNNAMED'
     ]
     // Pass --synced when running via Gradle so the sync redirect is skipped in dev
     run.args '--synced'
+}
+
+// Always run from the repo root so relative paths like
+// "client/src/main/resources/..." resolve correctly.
+tasks.named('run') {
+    workingDir = rootProject.projectDir
 }
 
 jar {

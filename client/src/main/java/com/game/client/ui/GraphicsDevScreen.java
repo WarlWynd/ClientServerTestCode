@@ -221,6 +221,8 @@ public class GraphicsDevScreen {
         ScrollPane scroll = new ScrollPane(canvasWrap);
         scroll.setFitToWidth(false);
         scroll.setFitToHeight(false);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setStyle("-fx-background: #0f0f1e; -fx-background-color: #0f0f1e;");
         scroll.setPrefViewportHeight(canvasH + 20);
 

@@ -11,14 +11,16 @@ public final class SessionStore {
     private static volatile String  characterName;
     private static volatile boolean admin;
     private static volatile boolean graphicsDev;
+    private static volatile boolean boardDev;
 
     private SessionStore() {}
 
-    public static void set(String sessionToken, String user, boolean isAdmin, boolean isGraphicsDev) {
+    public static void set(String sessionToken, String user, boolean isAdmin, boolean isGraphicsDev, boolean isBoardDev) {
         token       = sessionToken;
         username    = user;
         admin       = isAdmin;
         graphicsDev = isGraphicsDev;
+        boardDev    = isBoardDev;
     }
 
     public static void clear() {
@@ -27,13 +29,15 @@ public final class SessionStore {
         characterName = null;
         admin         = false;
         graphicsDev   = false;
+        boardDev      = false;
     }
 
     public static String  getToken()         { return token; }
     public static String  getUsername()      { return username; }
     public static String  getCharacterName() { return characterName; }
     public static boolean isAdmin()          { return admin; }
-    public static boolean isGraphicsDev()   { return graphicsDev; }
+    public static boolean isGraphicsDev()    { return graphicsDev; }
+    public static boolean isBoardDev()       { return boardDev; }
     public static boolean isLoggedIn()       { return token != null && !token.isBlank(); }
     public static String  getAssetUrl()      { return "http://" + AppSettings.getServerHost() + ":9877"; }
 

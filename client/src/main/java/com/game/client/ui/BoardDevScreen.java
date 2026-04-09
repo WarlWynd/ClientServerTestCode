@@ -71,7 +71,7 @@ public class BoardDevScreen {
                 zoom = Math.max(0.25, Math.min(4.0, zoom + e.getDeltaY() * 0.002));
             } else {
                 offsetX -= e.getDeltaX();
-                offsetY -= e.getDeltaY();
+                // no vertical pan on plain scroll — use Ctrl+scroll to zoom instead
             }
             drawBoard(canvas);
         });
@@ -232,7 +232,7 @@ public class BoardDevScreen {
                 "-fx-border-color: #33aa66; -fx-border-width: 1; -fx-border-radius: 3; " +
                 "-fx-background-radius: 3; -fx-font-weight: bold;");
         loadIntoGameBtn.setOnAction(e -> {
-            BoardStore.set(copyBoard(), rows, cols);
+            BoardStore.set(copyBoard(), rows, cols, nameField.getText().trim());
             if (onLoadIntoGame != null) onLoadIntoGame.run();
         });
 

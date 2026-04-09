@@ -16,6 +16,8 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.application.Platform;
+import java.io.File;
 import java.util.function.Consumer;
 
 /**
@@ -164,13 +166,47 @@ public class SettingsPanel {
                 row("Theme:", themeRow));
 
         // ── Controls (key bindings) ───────────────────────────────────────────
-        HBox jumpRow   = keyBindRow("Jump:",   AppSettings.getKeyJump(),   AppSettings::setKeyJump);
-        HBox sprintRow = keyBindRow("Sprint:", AppSettings.getKeySprint(), AppSettings::setKeySprint);
-        HBox fireRow   = keyBindRow("Fire:",   AppSettings.getKeyFire(),   AppSettings::setKeyFire);
-        VBox controlsSection = section("Controls", jumpRow, sprintRow, fireRow);
+        HBox jumpRow       = keyBindRow("Jump:",        AppSettings.getKeyJump(),       AppSettings::setKeyJump);
+        HBox sprintRow     = keyBindRow("Sprint:",      AppSettings.getKeySprint(),     AppSettings::setKeySprint);
+        HBox fireRow       = keyBindRow("Fire:",        AppSettings.getKeyFire(),       AppSettings::setKeyFire);
+        HBox climbUpRow    = keyBindRow("Climb Up:",    AppSettings.getKeyClimbUp(),    AppSettings::setKeyClimbUp);
+        HBox climbDownRow  = keyBindRow("Climb Down:",  AppSettings.getKeyClimbDown(),  AppSettings::setKeyClimbDown);
+        HBox kickRow       = keyBindRow("Kick:",         AppSettings.getKeyKick(),       AppSettings::setKeyKick);
+        HBox punchRow      = keyBindRow("Punch:",        AppSettings.getKeyPunch(),      AppSettings::setKeyPunch);
+        HBox attackRow     = keyBindRow("Attack:",       AppSettings.getKeyAttack(),     AppSettings::setKeyAttack);
+        VBox controlsSection = section("Controls", jumpRow, sprintRow, fireRow, climbUpRow, climbDownRow, kickRow, punchRow, attackRow);
 
         // ── Gameplay ──────────────────────────────────────────────────────────
-        VBox gameplaySection = section("Gameplay", comingSoon());
+        CheckBox testNpcCheck = new CheckBox("Show Test Fight NPC");
+        testNpcCheck.setSelected(AppSettings.isShowTestNpc());
+        testNpcCheck.getStyleClass().add("check-secondary");
+        testNpcCheck.selectedProperty().addListener((obs, old, val) -> {
+            AppSettings.setShowTestNpc(val);
+            AppSettings.save();
+        });
+
+        TextField npcXField = styledField(String.valueOf((int) AppSettings.getTestNpcX()));
+        TextField npcYField = styledField(String.valueOf((int) AppSettings.getTestNpcY()));
+        npcXField.setPrefWidth(80);
+        npcYField.setPrefWidth(80);
+        npcXField.textProperty().addListener((obs, old, val) -> {
+            try { AppSettings.setTestNpcX(Float.parseFloat(val.trim())); AppSettings.save(); }
+            catch (NumberFormatException ignored) {}
+        });
+        npcYField.textProperty().addListener((obs, old, val) -> {
+            try { AppSettings.setTestNpcY(Float.parseFloat(val.trim())); AppSettings.save(); }
+            catch (NumberFormatException ignored) {}
+        });
+
+        Label testNpcNote = new Label("Spawns an immortal enemy NPC on the Test Fight Board. X=world X, Y=game Y (0=floor).");
+        testNpcNote.getStyleClass().addAll("text-muted", "italic", "font-11");
+        testNpcNote.setWrapText(true);
+
+        VBox gameplaySection = section("Gameplay",
+                row(testNpcCheck),
+                row("NPC X:", npcXField),
+                row("NPC Y:", npcYField),
+                row(testNpcNote));
 
         // ── Account ───────────────────────────────────────────────────────────
         VBox accountSection = section("Account", comingSoon());
@@ -240,7 +276,26 @@ public class SettingsPanel {
             if (onRestartClient != null) onRestartClient.run();
         });
 
-        for (Button b : new Button[]{resetBtn, saveBtn, restartClientBtn}) {
+        Button rebuildBtn = new Button("Rebuild & Restart");
+        rebuildBtn.getStyleClass().add("btn-secondary");
+        rebuildBtn.setOnAction(e -> {
+            AppSettings.save();
+            try {
+                File projectRoot = findProjectRoot();
+                String gradlew = new File(projectRoot, "gradlew.bat").getAbsolutePath();
+                new ProcessBuilder("cmd", "/c", gradlew + " :client:run")
+                        .directory(projectRoot)
+                        .inheritIO()
+                        .start();
+            } catch (Exception ex) {
+                setStatus(statusLabel, "Could not launch rebuild: " + ex.getMessage(), false);
+                return;
+            }
+            Platform.exit();
+            System.exit(0);
+        });
+
+        for (Button b : new Button[]{resetBtn, saveBtn, restartClientBtn, rebuildBtn}) {
             b.setPrefWidth(140);
         }
 
@@ -249,7 +304,7 @@ public class SettingsPanel {
         logoutBtn.getStyleClass().add("btn-secondary");
         logoutBtn.setOnAction(e -> { if (onLogout != null) onLogout.run(); });
 
-        HBox buttons = new HBox(10, resetBtn, saveBtn, restartClientBtn, logoutBtn, statusLabel);
+        HBox buttons = new HBox(10, resetBtn, saveBtn, restartClientBtn, rebuildBtn, logoutBtn, statusLabel);
         buttons.setAlignment(Pos.CENTER_LEFT);
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
@@ -322,6 +377,16 @@ public class SettingsPanel {
         f.setPrefWidth(220);
         f.getStyleClass().add("input-field-md");
         return f;
+    }
+
+    /** Walk up from the working directory until we find gradlew.bat. */
+    private static File findProjectRoot() {
+        File dir = new File(System.getProperty("user.dir"));
+        while (dir != null) {
+            if (new File(dir, "gradlew.bat").exists()) return dir;
+            dir = dir.getParentFile();
+        }
+        return new File(System.getProperty("user.dir"));
     }
 
     private static void setStatus(Label label, String msg, boolean success) {
