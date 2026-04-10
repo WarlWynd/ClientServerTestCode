@@ -1,9 +1,22 @@
 package com.game.client.ui;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.image.Image;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Procedural stick-figure sprite animator.
@@ -31,12 +44,90 @@ import javafx.scene.shape.StrokeLineJoin;
  */
 public class PlayerAnimator {
 
-    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, STAFF_IDLE, SWORD_2H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT }
+    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, GOTHIT02, GOTHIT03, STAFF_IDLE, SWORD_1H_IDLE, SWORD_2H_IDLE, AXE_1H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT, KIP_UP, FRONT_FLIP, CRAWL }
+
+    /**
+     * Viewing direction for a pose.
+     * RIGHT  — character faces right (default; base pose arrays).
+     * LEFT   — character faces left  (mirror of RIGHT unless an override exists).
+     * FRONT  — character faces the camera (used for idle stances).
+     * BACK   — character's back to camera (used for CLIMB).
+     */
+    public enum Direction { FRONT, LEFT, RIGHT, BACK }
+
+    // ── Directional pose overrides ────────────────────────────────────────────
+    // Key format: "STATE_DIRECTION" e.g. "IDLE_FRONT", "RUN_LEFT".
+    // Populated from dir_poses.json at startup and updated by SpriteEditorPanel.
+    private static final String DIR_POSES_FILE =
+            "client/src/main/resources/graphics/sprites/dir_poses.json";
+    private static final ConcurrentHashMap<String, double[][]> DIR_POSES = loadDirPoses();
+
+    private static ConcurrentHashMap<String, double[][]> loadDirPoses() {
+        ConcurrentHashMap<String, double[][]> map = new ConcurrentHashMap<>();
+        try {
+            Path p = Paths.get(DIR_POSES_FILE);
+            if (!Files.exists(p)) return map;
+            ObjectMapper om = new ObjectMapper();
+            JsonNode root = om.readTree(p.toFile());
+            root.fields().forEachRemaining(entry -> {
+                JsonNode frames = entry.getValue();
+                double[][] arr = new double[frames.size()][];
+                for (int f = 0; f < frames.size(); f++) {
+                    JsonNode fr = frames.get(f);
+                    double[] pose = new double[fr.size()];
+                    for (int j = 0; j < fr.size(); j++) pose[j] = fr.get(j).asDouble();
+                    arr[f] = pose;
+                }
+                map.put(entry.getKey(), arr);
+            });
+        } catch (Exception ignored) {}
+        return map;
+    }
+
+    /** Persist current DIR_POSES to disk. Called by SpriteEditorPanel after editing. */
+    public static void saveDirPoses() {
+        try {
+            Path p = Paths.get(DIR_POSES_FILE);
+            Files.createDirectories(p.getParent());
+            ObjectMapper om = new ObjectMapper();
+            ObjectNode root = om.createObjectNode();
+            DIR_POSES.forEach((key, frames) -> {
+                ArrayNode framesNode = om.createArrayNode();
+                for (double[] frame : frames) {
+                    ArrayNode fn = om.createArrayNode();
+                    for (double v : frame) fn.add(v);
+                    framesNode.add(fn);
+                }
+                root.set(key, framesNode);
+            });
+            om.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), root);
+        } catch (Exception ignored) {}
+    }
+
+    /** Store a directional pose override. */
+    public static void setDirectionalPoses(State s, Direction d, double[][] frames) {
+        if (frames == null || frames.length == 0)
+            DIR_POSES.remove(s.name() + "_" + d.name());
+        else
+            DIR_POSES.put(s.name() + "_" + d.name(), frames);
+    }
+
+    /** Retrieve a directional pose override, or null if none set. */
+    public static double[][] getDirectionalPoses(State s, Direction d) {
+        return DIR_POSES.get(s.name() + "_" + d.name());
+    }
+
+    /** True if a directional override exists for this state+direction. */
+    public static boolean hasDirectionalPoses(State s, Direction d) {
+        return DIR_POSES.containsKey(s.name() + "_" + d.name());
+    }
 
     // ── Timing (ms per frame) ─────────────────────────────────────────────────
     private static final long IDLE_MS      = 650;
     private static final long RUN_MS       = 105;
     private static final long GOTHIT01_MS  = 140;
+    private static final long GOTHIT02_MS  = 140;
+    private static final long GOTHIT03_MS  = 140;
     private static final long KNOCKED_MS   = 80;
     private static final long ATTACK_MS    = 70;
     private static final long OTHER_MS     = 180;
@@ -44,14 +135,187 @@ public class PlayerAnimator {
     // ── Drawing constants ─────────────────────────────────────────────────────
     private static final double LINE_W      = 5.0;
     private static final double HEAD_R      = 8.0;
+
+    // ── Image sprite dirs ─────────────────────────────────────────────────────
+    private static final String  SPRITES_DIR = "client/src/main/resources/graphics/sprites/";
+
+    /** Returns {topRow, bottomRow} of first/last rows containing non-transparent pixels. */
+    private static int[] contentBoundsOf(Image img) {
+        int w = (int) img.getWidth(), h = (int) img.getHeight();
+        int[] pixels = new int[w * h];
+        img.getPixelReader().getPixels(0, 0, w, h,
+                javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+        int top = h, bottom = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (((pixels[y * w + x] >> 24) & 0xFF) > 12) {
+                    if (y < top) top = y;
+                    if (y > bottom) bottom = y;
+                }
+            }
+        }
+        return new int[]{top < h ? top : 0, bottom >= 0 ? bottom : h - 1};
+    }
+
+    private static final java.util.WeakHashMap<Image, java.util.concurrent.ConcurrentHashMap<Integer, Image>>
+            TINT_CACHE = new java.util.WeakHashMap<>();
+
+    private static Image tintSprite(Image src, Color tint) {
+        int colorKey = ((int)(tint.getRed()   * 255) << 16)
+                     | ((int)(tint.getGreen() * 255) <<  8)
+                     |  (int)(tint.getBlue()  * 255);
+        java.util.concurrent.ConcurrentHashMap<Integer, Image> map;
+        synchronized (TINT_CACHE) {
+            map = TINT_CACHE.computeIfAbsent(src, k -> new java.util.concurrent.ConcurrentHashMap<>());
+        }
+        return map.computeIfAbsent(colorKey, k -> {
+            int w = (int) src.getWidth(), h = (int) src.getHeight();
+            WritableImage out = new WritableImage(w, h);
+            int[] pixels = new int[w * h];
+            src.getPixelReader().getPixels(0, 0, w, h,
+                    javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+            int tr = (colorKey >> 16) & 0xFF, tg = (colorKey >> 8) & 0xFF, tb = colorKey & 0xFF;
+            for (int i = 0; i < pixels.length; i++) {
+                int alpha = (pixels[i] >> 24) & 0xFF;
+                if (alpha > 12) pixels[i] = (alpha << 24) | (tr << 16) | (tg << 8) | tb;
+            }
+            out.getPixelWriter().setPixels(0, 0, w, h,
+                    javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+            return out;
+        });
+    }
+
+    /**
+     * Strips white/near-white background and removes the floor-line bar
+     * (the horizontal dark band that appears at the bottom of pose sprites).
+     * Preserves original image dimensions so aspect-ratio scaling stays consistent
+     * across all frames.
+     */
+    private static Image removeWhiteBg(Image src) {
+        int w = (int) src.getWidth(), h = (int) src.getHeight();
+        int[] pixels = new int[w * h];
+        src.getPixelReader().getPixels(0, 0, w, h,
+                javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+
+        // 1. Strip white / near-white background
+        for (int i = 0; i < pixels.length; i++) {
+            int r = (pixels[i] >> 16) & 0xFF;
+            int g = (pixels[i] >>  8) & 0xFF;
+            int b =  pixels[i]        & 0xFF;
+            if (r > 210 && g > 210 && b > 210) pixels[i] = 0;
+        }
+
+        // 2. Strip floor-line rows from the bottom.
+        //    A floor-line row has >35% non-transparent pixels spanning a wide horizontal band.
+        for (int y = h - 1; y >= Math.max(0, h - 20); y--) {
+            int dark = 0;
+            for (int x = 0; x < w; x++) {
+                if (((pixels[y * w + x] >> 24) & 0xFF) > 12) dark++;
+            }
+            if ((double) dark / w > 0.80) {
+                for (int x = 0; x < w; x++) pixels[y * w + x] = 0;
+            } else {
+                break; // stop as soon as a non-floor row is found
+            }
+        }
+
+        WritableImage out = new WritableImage(w, h);
+        out.getPixelWriter().setPixels(0, 0, w, h,
+                javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+        return out;
+    }
+
+    // ── KNOCKED_DOWN image sprites (optional — kd0001.png … kd0007.png) ──────
+    private static final int     KD_FRAME_COUNT  = 7;
+    private static final Image[] KD_SPRITES       = loadKdSprites();
+
+    private static Image[] loadKdSprites() {
+        Image[] imgs = new Image[KD_FRAME_COUNT];
+        for (int i = 1; i <= KD_FRAME_COUNT; i++) {
+            File f = new File(SPRITES_DIR + String.format("kd%04d.png", i));
+            if (f.exists()) {
+                try { imgs[i - 1] = removeWhiteBg(new Image(f.toURI().toString())); }
+                catch (Exception ignored) {}
+            }
+        }
+        return imgs;
+    }
+
+    public static boolean hasKdSprites() {
+        for (Image img : KD_SPRITES) if (img != null) return true;
+        return false;
+    }
+
+    private static Image kdSpriteForFrame(int frame, int totalFrames) {
+        int idx = (int) Math.round(frame * (KD_FRAME_COUNT - 1.0) / Math.max(totalFrames - 1, 1));
+        return KD_SPRITES[Math.min(idx, KD_FRAME_COUNT - 1)];
+    }
+
+    // ── One-shot state flags ──────────────────────────────────────────────────
+    // States in this set play through once and hold on the last frame.
+    private static final String STATE_FLAGS_FILE =
+            "client/src/main/resources/graphics/sprites/state_flags.json";
+    private static final java.util.Set<State> ONE_SHOT_STATES = loadStateFlags();
+
+    private static java.util.Set<State> loadStateFlags() {
+        java.util.Set<State> set = new java.util.concurrent.ConcurrentSkipListSet<>();
+        // Defaults: these states are inherently one-shot
+        set.add(State.GOTHIT01); set.add(State.GOTHIT02); set.add(State.GOTHIT03);
+        set.add(State.KNOCKED_DOWN); set.add(State.ROLL); set.add(State.KIP_UP);
+        set.add(State.FRONT_FLIP);
+        set.add(State.PUNCH); set.add(State.CROSS); set.add(State.HOOK);
+        set.add(State.UPPERCUT); set.add(State.HAYMAKER);
+        set.add(State.HEAD_KICK); set.add(State.LOW_KICK); set.add(State.BODY_KICK);
+        set.add(State.SPINNING_BACK_KICK); set.add(State.SIDE_KICK); set.add(State.SHOOT);
+        try {
+            Path p = Paths.get(STATE_FLAGS_FILE);
+            if (Files.exists(p)) {
+                ObjectMapper om = new ObjectMapper();
+                JsonNode root = om.readTree(p.toFile());
+                // "oneShot" array in JSON overrides defaults
+                if (root.has("oneShot")) {
+                    set.clear();
+                    root.get("oneShot").forEach(n -> {
+                        try { set.add(State.valueOf(n.asText())); }
+                        catch (IllegalArgumentException ignored) {}
+                    });
+                }
+            }
+        } catch (Exception ignored) {}
+        return set;
+    }
+
+    public static boolean isOneShot(State s) { return ONE_SHOT_STATES.contains(s); }
+
+    public static void setOneShot(State s, boolean v) {
+        if (v) ONE_SHOT_STATES.add(s); else ONE_SHOT_STATES.remove(s);
+    }
+
+    public static void saveStateFlags() {
+        try {
+            Path p = Paths.get(STATE_FLAGS_FILE);
+            Files.createDirectories(p.getParent());
+            ObjectMapper om = new ObjectMapper();
+            ObjectNode root = om.createObjectNode();
+            ArrayNode arr = om.createArrayNode();
+            ONE_SHOT_STATES.stream().map(State::name).sorted().forEach(arr::add);
+            root.set("oneShot", arr);
+            om.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), root);
+        } catch (Exception ignored) {}
+    }
+
     /** Canvas units above the feet position to draw the name label. */
     public  static final double LABEL_ABOVE = 60.0;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    private volatile State   state       = State.IDLE;
-    private volatile int     frame       = 0;
-    private          long    lastFrameMs = 0;
-    private volatile boolean facingRight = true;
+    private volatile State   state         = State.IDLE;
+    private volatile int     frame         = 0;
+    private          long    lastFrameMs   = 0;
+    private volatile boolean facingRight   = true;
+    /** When true, animation holds on its last frame instead of looping. */
+    private volatile boolean holdLastFrame = false;
+    /** If non-null, overrides currentDirection() for preview/editor use. */
+    private volatile Direction forcedDirection = null;
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -72,11 +336,41 @@ public class PlayerAnimator {
     }
 
     /**
+     * Derive the current viewing direction from state + facing.
+     * CLIMB → BACK; idle stances → FRONT (unless a FRONT override exists, same logic);
+     * moving right → RIGHT; moving left → LEFT.
+     */
+    public void setForcedDirection(Direction dir) { this.forcedDirection = dir; }
+
+    public Direction currentDirection() {
+        if (state == State.CLIMB) return Direction.BACK; // always back-facing, ignores forced direction
+        if (forcedDirection != null) return forcedDirection;
+        // Left-facing characters always go LEFT (including idle) so they mirror toward their opponent.
+        // Only right-facing characters use FRONT for idle stances (faces camera in solo/editor view).
+        if (!facingRight) return Direction.LEFT;
+        return Direction.RIGHT;
+    }
+
+    /**
+     * True when the figure should be drawn without X-axis mirror.
+     * LEFT direction mirrors ONLY if no LEFT-specific override exists.
+     */
+    public boolean shouldMirror() {
+        Direction dir = currentDirection();
+        if (dir == Direction.LEFT) return !hasDirectionalPoses(state, Direction.LEFT);
+        return false;  // FRONT / RIGHT / BACK: never auto-mirror
+    }
+
+    /**
      * Whether the figure is facing right for rendering purposes.
      * Returns true during IDLE so the character always faces the viewer (forward).
      * Used by both draw() and WeaponRenderer.
      */
-    public boolean isFacingRight() { return state == State.IDLE || state == State.STAFF_IDLE || facingRight; }
+    public boolean isFacingRight() { return !shouldMirror(); }
+    public void setFacingRight(boolean v) { facingRight = v; }
+
+    /** When set, animation holds on the last frame instead of looping. Clear to resume. */
+    public void setHoldLastFrame(boolean hold) { holdLastFrame = hold; }
 
     /**
      * Returns the weapon attachment joints from the current pose frame.
@@ -110,6 +404,13 @@ public class PlayerAnimator {
         lastFrameMs = System.currentTimeMillis();
     }
 
+    /** Trigger a one-shot front-flip aerial rotation. */
+    public void triggerFrontFlip() {
+        state       = State.FRONT_FLIP;
+        frame       = 0;
+        lastFrameMs = System.currentTimeMillis();
+    }
+
     /**
      * Returns the raw pose-frame array for a given state.
      * Used by SpriteEditorPanel to initialise the editable pose copy.
@@ -121,13 +422,20 @@ public class PlayerAnimator {
             case JUMP         -> JUMP;
             case FALL         -> FALL;
             case GOTHIT01     -> GOTHIT01;
+            case GOTHIT02     -> GOTHIT02;
+            case GOTHIT03     -> GOTHIT03;
             case STAFF_IDLE    -> STAFF_IDLE;
+            case SWORD_1H_IDLE -> SWORD_2H_IDLE;
             case SWORD_2H_IDLE -> SWORD_2H_IDLE;
+            case AXE_1H_IDLE   -> AXE_2H_IDLE;
             case AXE_2H_IDLE   -> AXE_2H_IDLE;
             case DAGGER_IDLE        -> DAGGER_IDLE;
             case MORNING_STAR_IDLE  -> MORNING_STAR_IDLE;
             case BOW_IDLE           -> BOW_IDLE;
             case KNOCKED_DOWN       -> KNOCKED;
+            case KIP_UP            -> KIP_UP;
+            case FRONT_FLIP        -> FRONT_FLIP;
+            case CRAWL             -> CRAWL;
             case CROUCH -> CROUCH;
             case SNEAK  -> SNEAK;
             case CLIMB  -> CLIMB;
@@ -152,10 +460,26 @@ public class PlayerAnimator {
      * Pin the animator to a specific state without driving it from physics.
      * Used by the Graphics Dev sprite preview.
      */
+    public State getCurrentState() { return state; }
+
     public void forceState(State s) {
-        state       = s;
-        frame       = 0;
-        lastFrameMs = System.currentTimeMillis();
+        state         = s;
+        frame         = 0;
+        holdLastFrame = false;
+        lastFrameMs   = System.currentTimeMillis();
+    }
+
+    /** forceState with explicit time reference — use when the caller drives animation with a custom nowMs. */
+    public void forceState(State s, long nowMs) {
+        state         = s;
+        frame         = 0;
+        holdLastFrame = false;
+        lastFrameMs   = nowMs;
+    }
+
+    /** Returns true if this is a one-shot animation that has played through to its last frame. */
+    public boolean isOneShotDone() {
+        return isOneShot(state) && frame >= poseCount(state) - 1;
     }
 
     /**
@@ -167,12 +491,24 @@ public class PlayerAnimator {
      * @param color    Fill / stroke colour
      */
     public void draw(GraphicsContext gc, double cx, double canvasY, Color color) {
-        advanceFrame();
+        draw(gc, cx, canvasY, color, 1.0, System.currentTimeMillis());
+    }
+
+    public void draw(GraphicsContext gc, double cx, double canvasY, Color color, double scale) {
+        draw(gc, cx, canvasY, color, scale, System.currentTimeMillis());
+    }
+
+    /** Draw with explicit scale and controlled sim time (for pause/step support). */
+    public void draw(GraphicsContext gc, double cx, double canvasY, Color color, double scale, long nowMs) {
+        advanceFrame(nowMs);
+
+        // ── Procedural path ───────────────────────────────────────────────────
         double[] pose = currentPose();
 
         gc.save();
         gc.translate(cx, canvasY);
-        if (!isFacingRight()) gc.scale(-1, 1);   // mirror for left-facing; idle always faces forward
+        gc.scale(scale, scale);
+        if (shouldMirror()) gc.scale(-1, 1);   // mirror for left-facing when no LEFT override exists
 
         gc.setFill(color);
         gc.setStroke(color);
@@ -188,7 +524,8 @@ public class PlayerAnimator {
 
     private State resolve(float velX, float velY, boolean onGround) {
         // Let hit/knocked animations play out before transitioning
-        if ((state == State.GOTHIT01 || state == State.KNOCKED_DOWN || state == State.ROLL
+        if ((state == State.GOTHIT01 || state == State.GOTHIT02 || state == State.GOTHIT03 || state == State.KNOCKED_DOWN || state == State.ROLL
+                || state == State.KIP_UP || state == State.FRONT_FLIP
                 || state == State.PUNCH || state == State.CROSS || state == State.HOOK
                 || state == State.UPPERCUT || state == State.HAYMAKER
                 || state == State.HEAD_KICK || state == State.LOW_KICK || state == State.BODY_KICK
@@ -202,14 +539,18 @@ public class PlayerAnimator {
         return State.IDLE;
     }
 
-    private void advanceFrame() {
-        long now = System.currentTimeMillis();
+    private void advanceFrame(long now) {
         long interval = switch (state) {
             case IDLE         -> IDLE_MS;
             case RUN          -> RUN_MS;
             case SNEAK        -> RUN_MS;
             case GOTHIT01     -> GOTHIT01_MS;
+            case GOTHIT02     -> GOTHIT02_MS;
+            case GOTHIT03     -> GOTHIT03_MS;
             case KNOCKED_DOWN -> KNOCKED_MS;
+            case KIP_UP       -> 40;
+            case FRONT_FLIP   -> 70;
+            case CRAWL        -> 120;
             case ROLL         -> KNOCKED_MS;
             case PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER,
                  HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK,
@@ -217,25 +558,41 @@ public class PlayerAnimator {
             default           -> OTHER_MS;
         };
         if (now - lastFrameMs >= interval) {
-            frame = (frame + 1) % poseCount(state);
+            int next = frame + 1;
+            int count = poseCount(state);
+            if ((holdLastFrame || isOneShot(state)) && next >= count) {
+                frame = count - 1;  // clamp to last frame — one-shot or externally held
+            } else {
+                frame = next % count;
+            }
             lastFrameMs = now;
         }
     }
 
     private int poseCount(State s) {
+        // Check directional override first
+        double[][] dirOverride = DIR_POSES.get(s.name() + "_" + currentDirection().name());
+        if (dirOverride != null && dirOverride.length > 0) return dirOverride.length;
         return switch (s) {
             case IDLE         -> IDLE.length;
             case RUN          -> RUN.length;
             case JUMP         -> JUMP.length;
             case FALL         -> FALL.length;
             case GOTHIT01     -> GOTHIT01.length;
+            case GOTHIT02     -> GOTHIT02.length;
+            case GOTHIT03     -> GOTHIT03.length;
             case STAFF_IDLE    -> STAFF_IDLE.length;
+            case SWORD_1H_IDLE -> SWORD_2H_IDLE.length;
             case SWORD_2H_IDLE -> SWORD_2H_IDLE.length;
+            case AXE_1H_IDLE   -> AXE_2H_IDLE.length;
             case AXE_2H_IDLE   -> AXE_2H_IDLE.length;
             case DAGGER_IDLE        -> DAGGER_IDLE.length;
             case MORNING_STAR_IDLE  -> MORNING_STAR_IDLE.length;
             case BOW_IDLE           -> BOW_IDLE.length;
             case KNOCKED_DOWN       -> KNOCKED.length;
+            case KIP_UP            -> KIP_UP.length;
+            case FRONT_FLIP        -> FRONT_FLIP.length;
+            case CRAWL             -> CRAWL.length;
             case CROUCH -> CROUCH.length;
             case SNEAK  -> SNEAK.length;
             case CLIMB  -> CLIMB.length;
@@ -257,6 +614,11 @@ public class PlayerAnimator {
     }
 
     private double[] currentPose() {
+        // Check directional override first
+        Direction dir = currentDirection();
+        double[][] dirOverride = DIR_POSES.get(state.name() + "_" + dir.name());
+        if (dirOverride != null && dirOverride.length > 0)
+            return dirOverride[frame % dirOverride.length];
         int f = frame % poseCount(state);
         return switch (state) {
             case IDLE         -> IDLE[f];
@@ -264,13 +626,20 @@ public class PlayerAnimator {
             case JUMP         -> JUMP[f];
             case FALL         -> FALL[f];
             case GOTHIT01     -> GOTHIT01[f];
+            case GOTHIT02     -> GOTHIT02[f];
+            case GOTHIT03     -> GOTHIT03[f];
             case STAFF_IDLE    -> STAFF_IDLE[f];
+            case SWORD_1H_IDLE -> SWORD_2H_IDLE[f];
             case SWORD_2H_IDLE -> SWORD_2H_IDLE[f];
+            case AXE_1H_IDLE   -> AXE_2H_IDLE[f];
             case AXE_2H_IDLE   -> AXE_2H_IDLE[f];
             case DAGGER_IDLE        -> DAGGER_IDLE[f];
             case MORNING_STAR_IDLE  -> MORNING_STAR_IDLE[f];
             case BOW_IDLE           -> BOW_IDLE[f];
             case KNOCKED_DOWN       -> KNOCKED[f];
+            case KIP_UP            -> KIP_UP[frame % KIP_UP.length];
+            case FRONT_FLIP        -> FRONT_FLIP[f];
+            case CRAWL             -> CRAWL[f];
             case CROUCH -> CROUCH[f];
             case SNEAK  -> SNEAK[f];
             case CLIMB  -> CLIMB[f];
@@ -339,110 +708,34 @@ public class PlayerAnimator {
     // Defined facing RIGHT; mirrored automatically when facing left.
 
     private static final double[][] IDLE = {
-        // Frame 0 — neutral standing
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        // Frame 1 — slight weight shift
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        // Frames 2-7 — repeat cycle
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        // Frames 8-19 — continue alternating cycle
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 },
-        {  0,47,  0,38,  0,23,
-          -4,36, -10,27,  -8,18,
-           4,36,  10,27,   8,18,
-          -3,22,  -5,11,  -4, 0,
-           3,22,   5,11,   4, 0 },
-        {  0,48,  0,39,  0,23,
-          -4,36, -11,27,  -9,18,
-           4,36,   9,27,   7,18,
-          -3,22,  -6,11,  -5, 0,
-           3,22,   4,11,   3, 0 }
+        // 4-frame slow breathing cycle — upright natural stance, arms at sides.
+        // Head slightly forward (character looks right). Front arm has natural drape,
+        // back arm close to body. Right foot slightly ahead of left.
+
+        // Frame 0 — exhale, low
+        {  3,47,  2,38,  0,23,
+          -4,35,  -5,26,  -4,17,
+           5,35,   9,25,   8,15,
+          -3,22,  -4,11,  -5, 0,
+           3,22,   5,11,   6, 0 },
+        // Frame 1 — mid inhale
+        {  3,48,  2,39,  0,23,
+          -4,36,  -5,27,  -4,18,
+           5,36,   9,26,   8,16,
+          -3,22,  -4,11,  -5, 0,
+           3,22,   5,11,   6, 0 },
+        // Frame 2 — full inhale, high
+        {  3,49,  2,40,  0,24,
+          -4,36,  -5,27,  -4,18,
+           5,36,   9,26,   8,16,
+          -3,23,  -4,12,  -5, 0,
+           3,23,   5,12,   6, 0 },
+        // Frame 3 — exhale returning
+        {  3,48,  2,39,  0,23,
+          -4,35,  -5,26,  -4,17,
+           5,35,   9,25,   8,15,
+          -3,22,  -4,11,  -5, 0,
+           3,22,   5,11,   6, 0 }
     };
 
     private static final double[][] RUN = {
@@ -898,6 +1191,218 @@ public class PlayerAnimator {
            3,34,  10,36,  14,42,
           -3,20,  -3, 9,  -2, 0,
            2,20,  10, 9,  12, 0 }
+    };
+
+    private static final double[][] GOTHIT02 = {
+        // Gut/body hit — doubles over forward, arms clutch stomach.
+        // Frame A — sharp forward fold on impact
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        // Frame B — sustain, slightly less extreme
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  8,40,  5,33,  1,21,
+           0,32,  2,26,  4,22,
+           8,31,  6,25,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 },
+        {  6,41,  4,33,  0,21,
+          -1,33,  1,27,  3,23,
+           7,32,  5,26,  3,22,
+          -3,20, -4,10, -5, 0,
+           3,20,  5,10,  6, 0 }
+    };
+
+    private static final double[][] GOTHIT03 = {
+        // Head hit — head snaps backward, body rocks back, arms flung wide.
+        // Frame A — sharp backward snap on impact
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        // Frame B — settle slightly
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -8,46, -4,38, -1,22,
+          -6,36,-10,30,-12,22,
+           4,36, 10,31, 14,24,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 },
+        { -6,45, -3,37, -1,22,
+          -5,36, -9,29,-11,21,
+           4,36,  9,30, 13,23,
+          -3,21, -3,11, -4, 0,
+           2,21,  5,10,  6, 0 }
     };
 
     private static final double[][] STAFF_IDLE = {
@@ -3241,109 +3746,384 @@ public class PlayerAnimator {
     }; }
 
     private static final double[][] KNOCKED = {
-        // Frame 0 — continues from GOTHIT01 end: deep stumble, right arm thrown back
-        { -6,44, -3,36, -1,21,
-          -4,34, -14,26, -16,18,
-           3,34,  10,36,  14,42,
-          -3,20,  -3, 9,  -2, 0,
-           2,20,  10, 9,  12, 0 },
-        // Frame 1 — body pitching backward, losing balance
-        { -7,39, -4,31, -1,19,
-          -5,30, -14,23, -17,17,
-           2,30,   9,32,  13,37,
-          -3,18,  -1, 8,   1, 0,
-           2,18,   8, 8,   8, 0 },
-        // Frame 2 — falling backward, body tilting
-        { -9,33, -5,27, -1,16,
-          -5,26, -15,21, -18,16,
-           2,26,   9,28,  13,33,
-          -2,15,   0, 7,   3, 0,
-           2,15,   5, 7,   5, 0 },
-        // Frame 3 — body angling toward ground
-        {-10,28, -6,22, -1,14,
-          -6,22, -15,18, -19,15,
-           1,22,   8,24,  12,28,
-          -2,13,   2, 6,   6, 0,
-           2,13,   3, 6,   1, 0 },
-        // Frame 4 — nearly horizontal, close to ground
-        {-12,22, -7,18, -2,11,
-          -6,17, -15,16, -19,13,
-           0,17,   8,20,  12,24,
-          -1,11,   3, 5,   8, 0,
-           2,11,   1, 5,  -3, 0 },
-        // Frame 5 — body hitting ground
-        {-13,17, -8,13, -2, 9,
-          -7,13, -15,13, -20,12,
-          -1,13,   7,16,  11,19,
-          -1, 9,   5, 4,  11, 0,
-           2, 9,  -1, 4,  -7, 0 },
-        // Frame 6 — sliding to rest
-        {-15,11, -9, 9, -2, 6,
-          -7, 9, -16,11, -21,11,
-          -1, 9,   7,12,  10,15,
-           0, 6,   6, 3,  13, 0,
-           2, 6,  -4, 3, -10, 0 },
-        // Frame 7 — crumpled on ground
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        // Frames 8-19 — crumpled on ground (held)
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 },
-        {-16, 6,-10, 4, -2, 4,
-          -8, 5, -16, 8, -22,10,
-          -2, 5,   6, 8,  10,10,
-           0, 4,   8, 2,  16, 0,
-           2, 4,  -6, 2, -14, 0 }
+        // Frame 0 — impact: head snaps back, arms fling out wide
+        {  6, 44,  3, 36,  0, 22,
+          -5, 35, -14, 27, -22, 22,
+           5, 35,  14, 27,  22, 22,
+          -3, 21,  -5, 11,  -4,  0,
+           3, 21,   5, 11,   4,  0,
+          18, 30, -26, 18,   0, 44 },
+        // Frame 1 — staggering back, body leaning ~20°
+        { 10, 41,  6, 33,  1, 20,
+          -4, 32, -13, 24, -20, 17,
+           5, 32,  14, 35,  22, 36,
+          -2, 19,  -2, 10,   0,  0,
+           3, 19,   6, 10,   8,  0,
+          18, 26, -26, 16,   0, 44 },
+        // Frame 2 — falling hard ~40° backward
+        { 14, 34,  8, 27,  2, 16,
+          -4, 26, -12, 18, -18, 11,
+           4, 26,  13, 30,  21, 33,
+          -1, 15,   3,  7,   8,  0,
+           3, 15,   4,  7,   1,  0,
+          17, 19, -27, 13,   0, 44 },
+        // Frame 3 — nearly horizontal ~60° back, arms splayed
+        { 17, 23, 10, 18,  2, 11,
+          -4, 17, -13, 11, -21,  6,
+           4, 17,  14, 21,  22, 25,
+           0, 10,   6,  4,  14,  0,
+           3, 10,   1,  4,  -4,  0,
+          16, 11, -28,  9,   0, 44 },
+        // Frame 4 — body ~80° back, crashing down
+        { 19, 13, 11, 10,  2,  6,
+          -4, 10, -13,  6, -22,  3,
+           4, 10,  14, 14,  23, 18,
+           1,  7,   8,  3,  17,  0,
+           3,  7,  -1,  3,  -7,  0,
+          15,  5, -29,  5,   0, 44 },
+        // Frame 5 — flat on ground, arms spread wide (final hold pose)
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 6 — hold flat
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 7 — hold flat
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 8 — hold flat
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 9 — hold flat
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 10 — hold flat
+        {-20,  8, -10,  5,   0,  4,
+          -8,  5, -18,  3,  -28,  2,
+           2,  5,  12,  3,   22,  2,
+           3,  4,   8, 17,   16,  3,
+           5,  4,  12, 19,   21,  4,
+          18,-10, -32,  2,    0, 44 },
+        // Frame 11
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 12
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 13
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 14
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 15
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 16
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 17
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 },
+        // Frame 18
+        { -20, 8, -10, 5, 0, 4,
+          -8, 5, -15, 3, -22, 2,
+          2, 5, 7, 3, 12, 2,
+          3, 4, 8, 17, 16, 3,
+          5, 4, 12, 19, 21, 4,
+          18, -10, -32, 2, 0, 44 }
+    };
+
+    // ── Front Flip ────────────────────────────────────────────────────────────
+    // One-shot aerial forward rotation: takeoff → inverted tuck → landing.
+    // 8 frames at 70 ms each ≈ 560 ms total.
+    //
+    // Rotation stages per frame:
+    //   F0  0° — lean forward, arms back (takeoff prep)
+    //   F1 20° — launch upward, arms swing HIGH forward
+    //   F2 65° — body pitching forward, tucking begins, airborne
+    //  F3 130° — near-inverted, tight tuck ascending
+    //  F4 180° — fully inverted at apex, tight ball
+    //  F5 250° — past apex, opening, head rising on far side
+    //  F6 310° — nearly upright, arms wide, legs extending for landing
+    //  F7 360° — deep crouch landing, arms spread
+    private static final double[][] FRONT_FLIP = {
+        // Frame 0 — lean forward, arms hanging back (takeoff prep)
+        {  4,44,  2,36,  0,22,
+          -4,33,-11,26,-15,20,
+           5,33, 12,26, 16,20,
+          -2,21, -4,11, -4, 0,
+           2,21,  4,11,  4, 0 },
+        // Frame 1 — jump, arms swing HIGH forward-up
+        {  2,48,  1,40,  0,26,
+          -3,38,-10,45,-16,51,
+           4,38, 11,45, 16,51,
+          -2,25, -4,14, -5, 3,
+           2,25,  4,14,  6, 3 },
+        // Frame 2 — body ~65° forward, tucking begins, airborne
+        { 12,42,  8,37,  2,30,
+          -1,35, -5,29, -7,23,
+           4,34,  1,28, -2,22,
+           0,29,  6,36, 11,40,
+           2,29,  8,35, 13,38 },
+        // Frame 3 — body ~130° forward, ascending, tight tuck
+        { 10,24,  7,29,  2,37,
+           0,32,  5,27,  8,23,
+           4,31, -1,26, -3,22,
+           0,37,  6,43, 10,47,
+           2,37,  8,42, 12,45 },
+        // Frame 4 — fully inverted 180°, apex, tight ball
+        {  0,22,  0,30,  0,44,
+          -4,28, -6,34, -8,40,
+           4,28,  6,34,  8,40,
+          -3,42, -6,36, -4,28,
+           3,42,  6,36,  4,28 },
+        // Frame 5 — ~250°, past apex, opening; head rising on far side
+        { -8,26, -5,31,  0,36,
+          -4,32, -8,38,-10,43,
+           4,31,  2,37,  0,42,
+           0,36,  6,30, 11,23,
+           2,36,  8,28, 13,19 },
+        // Frame 6 — ~310°, nearly upright, arms wide, legs extending
+        { -4,38, -2,32,  0,22,
+          -4,28,-12,22,-18,15,
+           5,28, 12,22, 18,15,
+          -2,21, -4,11, -4, 2,
+           2,21,  4,11,  4, 2 },
+        // Frame 7 — landing deep crouch, arms spread for balance
+        {  0,28,  0,22,  0,14,
+          -5,21,-13,15,-19, 9,
+           5,21, 13,15, 19, 9,
+          -3,13, -7, 6, -6, 0,
+           3,13,  7, 6,  6, 0 }
+    };
+
+    // ── Kip-Up ────────────────────────────────────────────────────────────────
+    // One-shot recovery: rises from KNOCKED_DOWN ground pose back to IDLE.
+    // 20 frames at 40 ms each ≈ 800 ms total.
+    //
+    // Sequence maps the 11-pose sprite sheet reference with 9 interpolated
+    // in-between frames for smooth motion:
+    //   flat → tuck roll → candlestick (peak load) → explosive kick →
+    //   body rotates up → forward arch/momentum → absorb crouch → stand.
+    //
+    // Joint order (15 pairs = 30 values per frame):
+    //   head, neck, hip,
+    //   l.shoulder, l.elbow, l.hand,
+    //   r.shoulder, r.elbow, r.hand,
+    //   l.hipJoint, l.knee, l.foot,
+    //   r.hipJoint, r.knee, r.foot
+    private static final double[][] KIP_UP = {
+        // F0  — 0001: flat on back; head circle far-left, body horizontal, bent knee right
+        {-22, 8, -12, 5,   0, 4,
+          -8, 5, -14, 3,  -20, 2,
+           4, 5,   8, 3,   12, 2,
+           2, 4,  10,14,   18, 3,
+           4, 4,  14,16,   22, 2 },
+        // F1  — 0002: candlestick/loaded kip; body lower-right on floor, legs overhead-left
+        {  6, 8,   2,14,   -4,26,
+           4,14,   8, 8,   10, 3,
+           0,14,  -4, 8,   -6, 3,
+          -6,26, -14,38,  -20,46,
+          -4,25, -12,36,  -18,44 },
+        // F2  — 0003: candlestick (held, slight leg extension)
+        {  6, 8,   2,14,   -4,26,
+           4,14,   8, 8,   10, 3,
+           0,14,  -4, 8,   -6, 3,
+          -6,26, -15,39,  -21,47,
+          -4,25, -13,37,  -19,45 },
+        // F3  — 0004: tight tuck; body on floor, thighs vertical, lower legs folded left
+        {  2, 8,  -1,14,   -4,22,
+          -2,13,  -6, 8,   -8, 3,
+           3,13,   7, 8,    9, 3,
+          -6,23,  -6,38,  -14,28,
+          -4,22,  -4,36,  -12,26 },
+        // F4  — 0005: tight tuck (same, held)
+        {  2, 8,  -1,14,   -4,22,
+          -2,13,  -6, 8,   -8, 3,
+           3,13,   7, 8,    9, 3,
+          -6,23,  -6,38,  -14,28,
+          -4,22,  -4,36,  -12,26 },
+        // F5  — 0006: explosive kick; body right/low, legs flying out left
+        { 12, 8,   6,12,   -2,18,
+           8,14,   4, 8,    0, 3,
+           4,14,   0,10,   -4, 6,
+          -4,18, -14,16,  -24,12,
+          -2,18, -12,14,  -22,10 },
+        // F6  — 0007: explosive kick (same, held)
+        { 12, 8,   6,12,   -2,18,
+           8,14,   4, 8,    0, 3,
+           4,14,   0,10,   -4, 6,
+          -4,18, -14,16,  -24,12,
+          -2,18, -12,14,  -22,10 },
+        // F7  — 0008: tight tuck (second rotation; same as F3)
+        {  2, 8,  -1,14,   -4,22,
+          -2,13,  -6, 8,   -8, 3,
+           3,13,   7, 8,    9, 3,
+          -6,23,  -6,38,  -14,28,
+          -4,22,  -4,36,  -12,26 },
+        // F8  — 0009: tight tuck (held)
+        {  2, 8,  -1,14,   -4,22,
+          -2,13,  -6, 8,   -8, 3,
+           3,13,   7, 8,    9, 3,
+          -6,23,  -6,38,  -14,28,
+          -4,22,  -4,36,  -12,26 },
+        // F9  — 0010: candlestick again (second swing)
+        {  6, 8,   2,14,   -4,26,
+           4,14,   8, 8,   10, 3,
+           0,14,  -4, 8,   -6, 3,
+          -6,26, -14,38,  -20,46,
+          -4,25, -12,36,  -18,44 },
+        // F10 — 0011: candlestick (held)
+        {  6, 8,   2,14,   -4,26,
+           4,14,   8, 8,   10, 3,
+           0,14,  -4, 8,   -6, 3,
+          -6,26, -14,38,  -20,46,
+          -4,25, -12,36,  -18,44 },
+        // F11 — 0012: nearly standing; tall figure, slight forward lean, feet slightly left
+        {  0,44,  -1,36,   -1,22,
+          -4,33,  -5,25,   -4,17,
+           3,33,   4,25,    3,17,
+          -3,22,  -6,11,   -8, 0,
+           1,22,  -2,11,   -3, 0 },
+        // F12 — 0013: nearly standing (same, slight weight shift)
+        {  0,44,  -1,36,   -1,22,
+          -4,33,  -5,25,   -4,17,
+           3,33,   4,25,    3,17,
+          -3,22,  -6,11,   -8, 0,
+           1,22,  -2,11,   -3, 0 },
+        // F13 — 0014: airborne back arch; head left/low, dramatic C-arc, feet right
+        {-16,20,  -8,26,    0,30,
+         -10,28, -18,24,  -24,18,
+           8,28,  16,22,   22,16,
+          -2,29,   8,20,   16,10,
+           4,28,  14,18,   22, 8 },
+        // F14 — 0015: airborne back arch (same, peak)
+        {-16,20,  -8,26,    0,30,
+         -10,28, -18,24,  -24,18,
+           8,28,  16,22,   22,16,
+          -2,29,   8,20,   16,10,
+           4,28,  14,18,   22, 8 },
+        // F15 — 0016: backward lean; head upper-left, body diagonal, feet planted right
+        {-14,34,  -6,28,    2,18,
+          -8,25, -16,21,  -22,16,
+          -2,24, -12,19,  -18,14,
+           0,17,   4, 8,    6, 0,
+           4,17,   8, 8,   10, 0 },
+        // F16 — 0017: backward lean (same, held)
+        {-14,34,  -6,28,    2,18,
+          -8,25, -16,21,  -22,16,
+          -2,24, -12,19,  -18,14,
+           0,17,   4, 8,    6, 0,
+           4,17,   8, 8,   10, 0 },
+        // F17 — 0018: deep squat; arms forward, deep knee bend
+        {  2,34,   1,27,    0,18,
+          -4,25,  -8,18,   -2,14,
+           5,25,   9,18,    3,14,
+          -3,17,  -8, 6,   -4, 0,
+           3,17,   8, 6,    4, 0 },
+        // F18 — 0019: deep squat (same, held)
+        {  2,34,   1,27,    0,18,
+          -4,25,  -8,18,   -2,14,
+           5,25,   9,18,    3,14,
+          -3,17,  -8, 6,   -4, 0,
+           3,17,   8, 6,    4, 0 },
+        // F19 — 0020: standing upright; slight forward lean, arms at sides
+        {  2,46,   1,37,    0,22,
+          -6,35,  -7,26,   -6,17,
+           5,35,   6,26,    5,17,
+          -3,21,  -4,11,   -5, 0,
+           3,21,   4,11,    6, 0 }
+    };
+
+    // ── Crawl ─────────────────────────────────────────────────────────────────
+    // Six-frame looping crawl cycle on hands and knees.
+    // Body is roughly horizontal (hips ~y=20, shoulders ~y=20).
+    // Diagonal pairs alternate: (L-arm + R-knee) then (R-arm + L-knee).
+    // 120 ms/frame × 6 = 720 ms per full cycle.
+    private static final double[][] CRAWL = {
+        // Frame 0 — neutral four-point, left arm forward / right knee forward
+        { 16,27, 10,23,  0,20,
+          10,23, 16,13, 20, 1,    // left arm reaches forward
+           8,23,  2,13, -4, 1,    // right arm planted back
+          -2,20, -8,10,-14, 1,    // left leg planted (back)
+           2,20,  6,10, 12, 1 },  // right leg planted (forward)
+        // Frame 1 — right arm lifts and swings forward, left knee lifts
+        { 18,28, 12,24,  0,21,
+          10,24, 16,14, 20, 1,    // left arm planted
+           8,24, 14,16, 22, 3,    // right arm swings forward (lifted)
+          -2,21, -4,16,  0, 4,    // left knee lifts and moves forward
+           2,21,  6,10, 12, 1 },  // right knee still planted
+        // Frame 2 — right arm plants forward, left knee lands
+        { 16,27, 10,23,  0,20,
+           8,23,  2,13, -4, 1,    // left arm now back
+          10,23, 16,13, 22, 1,    // right arm planted forward
+           -2,20,  2,10,  8, 1,   // left knee now forward
+           2,20,  6,10, 12, 1 },  // right knee middle
+        // Frame 3 — left arm lifts and swings forward, right knee lifts
+        { 18,28, 12,24,  0,21,
+          10,24, 18,16, 26, 3,    // left arm swings forward (lifted)
+          10,24, 16,14, 22, 1,    // right arm planted
+          -2,21,  2,10,  8, 1,    // left knee planted (forward)
+           2,21,  4,16,  8, 4 },  // right knee lifts and moves forward
+        // Frame 4 — left arm plants further forward, right knee lands
+        { 16,27, 10,23,  0,20,
+          12,23, 18,13, 24, 1,    // left arm planted forward
+          10,23, 16,13, 22, 1,    // right arm middle
+          -2,20,  2,10,  8, 1,    // left knee forward
+           2,20,  8,10, 14, 1 },  // right knee planted
+        // Frame 5 — body weight shifts, preparing next cycle
+        { 16,27, 10,23,  0,20,
+          12,23, 18,13, 22, 1,    // left arm forward
+           8,23,  2,13, -2, 1,    // right arm back
+          -4,20, -8,10,-14, 1,    // left knee pulled back
+           2,20,  8,10, 14, 1 }   // right knee forward
     };
 }

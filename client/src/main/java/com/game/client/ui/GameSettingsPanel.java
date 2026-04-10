@@ -111,6 +111,48 @@ public class GameSettingsPanel {
 
         VBox rememberPassSection = section("Login — Remember Password", rememberPassDesc, allowRememberPassBox);
 
+        // ── Gameplay ──────────────────────────────────────────────────────────
+        CheckBox testNpcCheck = new CheckBox("Show Test Fight NPC");
+        testNpcCheck.setSelected(AppSettings.isShowTestNpc());
+        testNpcCheck.getStyleClass().add("check-secondary");
+        testNpcCheck.selectedProperty().addListener((obs, old, val) -> {
+            AppSettings.setShowTestNpc(val);
+            AppSettings.save();
+        });
+
+        Label npcXLbl = new Label("NPC X:");
+        npcXLbl.setMinWidth(140);
+        npcXLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField npcXField = new TextField(String.valueOf((int) AppSettings.getTestNpcX()));
+        npcXField.setPrefWidth(80);
+        npcXField.getStyleClass().add("input-field-md");
+        npcXField.textProperty().addListener((obs, old, val) -> {
+            try { AppSettings.setTestNpcX(Float.parseFloat(val.trim())); AppSettings.save(); }
+            catch (NumberFormatException ignored) {}
+        });
+
+        Label npcYLbl = new Label("NPC Y:");
+        npcYLbl.setMinWidth(140);
+        npcYLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField npcYField = new TextField(String.valueOf((int) AppSettings.getTestNpcY()));
+        npcYField.setPrefWidth(80);
+        npcYField.getStyleClass().add("input-field-md");
+        npcYField.textProperty().addListener((obs, old, val) -> {
+            try { AppSettings.setTestNpcY(Float.parseFloat(val.trim())); AppSettings.save(); }
+            catch (NumberFormatException ignored) {}
+        });
+
+        HBox npcXRow = new HBox(12, npcXLbl, npcXField);
+        npcXRow.setAlignment(Pos.CENTER_LEFT);
+        HBox npcYRow = new HBox(12, npcYLbl, npcYField);
+        npcYRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label testNpcNote = new Label("Spawns an immortal enemy NPC on the Test Fight Board. X=world X, Y=game Y (0=floor).");
+        testNpcNote.getStyleClass().addAll("text-muted", "font-11");
+        testNpcNote.setWrapText(true);
+
+        VBox gameplaySection = section("Gameplay", testNpcCheck, npcXRow, npcYRow, testNpcNote);
+
         // ── Save / status ─────────────────────────────────────────────────────
         Label statusLabel = new Label();
         statusLabel.getStyleClass().add("font-11");
@@ -153,7 +195,7 @@ public class GameSettingsPanel {
         buttons.setAlignment(Pos.CENTER_LEFT);
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
-        VBox content = new VBox(gravitySection, jumpSection, speedSection, rememberPassSection, buttons);
+        VBox content = new VBox(gravitySection, jumpSection, speedSection, rememberPassSection, gameplaySection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);

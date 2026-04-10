@@ -19,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -58,14 +59,22 @@ public class GraphicsDevScreen {
     }
 
     public Node build() {
-        Tab filesTab   = new Tab("📁 Files",          buildFilesView());
-        Tab spritesTab = new Tab("🕹 Sprite Preview", buildSpritePreview());
-        Tab editorTab  = new Tab("✏ Pose Editor",     new SpriteEditorPanel().build());
+        Tab filesTab      = new Tab("📁 Files",          buildFilesView());
+        Tab spritesTab    = new Tab("🕹 Sprite Preview", buildSpritePreview());
+        Tab editorTab     = new Tab("✏ Pose Editor",     new SpriteEditorPanel().build());
+        Tab charEditorTab = new Tab("🧍 Sprite Editor",  new SpriteCharacterPanel().build());
+        Tab mobTab        = new Tab("👾 Mob Manager",    new MobManagerPanel().build());
+        Tab lootTab       = new Tab("📦 Loot Tables",   new LootTablePanel().build());
+        Tab itemTab       = new Tab("⚔ Item Registry",  new ItemRegistryPanel().build());
         filesTab.setClosable(false);
         spritesTab.setClosable(false);
         editorTab.setClosable(false);
+        charEditorTab.setClosable(false);
+        mobTab.setClosable(false);
+        lootTab.setClosable(false);
+        itemTab.setClosable(false);
 
-        TabPane inner = new TabPane(filesTab, spritesTab, editorTab);
+        TabPane inner = new TabPane(filesTab, spritesTab, editorTab, charEditorTab, mobTab, lootTab, itemTab);
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;
@@ -95,29 +104,55 @@ public class GraphicsDevScreen {
         return root;
     }
 
-    /** Live animated preview of every PlayerAnimator state. */
-    private Node buildSpritePreview() {
-        PlayerAnimator.State[] states = PlayerAnimator.State.values();
+    /** Live animated preview of every PlayerAnimator state — 4 direction rows. */
+    // States that make sense facing the camera — shown in the Front View row only.
+    private static final java.util.Set<PlayerAnimator.State> FRONT_STATES = java.util.EnumSet.of(
+        PlayerAnimator.State.IDLE,
+        PlayerAnimator.State.STAFF_IDLE,
+        PlayerAnimator.State.SWORD_1H_IDLE, PlayerAnimator.State.SWORD_2H_IDLE,
+        PlayerAnimator.State.AXE_1H_IDLE, PlayerAnimator.State.AXE_2H_IDLE,
+        PlayerAnimator.State.DAGGER_IDLE,
+        PlayerAnimator.State.MORNING_STAR_IDLE, PlayerAnimator.State.BOW_IDLE,
+        PlayerAnimator.State.CROUCH, PlayerAnimator.State.PRONE,
+        PlayerAnimator.State.KNOCKED_DOWN,
+        PlayerAnimator.State.JUMP, PlayerAnimator.State.FALL
+    );
 
-        // One animator + weapon renderer per state, pinned to that state
-        PlayerAnimator[] animators       = new PlayerAnimator[states.length];
-        WeaponRenderer[] weaponRenderers = new WeaponRenderer[states.length];
-        for (int i = 0; i < states.length; i++) {
-            animators[i] = new PlayerAnimator();
-            animators[i].forceState(states[i]);
-            weaponRenderers[i] = new WeaponRenderer();
-            if (states[i] == PlayerAnimator.State.STAFF_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.WOODEN_STAFF);
-            } else if (states[i] == PlayerAnimator.State.SWORD_2H_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_SWORD);
-            } else if (states[i] == PlayerAnimator.State.AXE_2H_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_AXE);
-            } else if (states[i] == PlayerAnimator.State.DAGGER_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_DAGGER);
-            } else if (states[i] == PlayerAnimator.State.MORNING_STAR_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.MAIN_HAND, Weapon.MORNING_STAR);
-            } else if (states[i] == PlayerAnimator.State.BOW_IDLE) {
-                weaponRenderers[i].equip(EquipSlot.TWO_HANDED, Weapon.LONG_BOW);
+    private Node buildSpritePreview() {
+        PlayerAnimator.State[]     states = PlayerAnimator.State.values();
+        PlayerAnimator.Direction[] dirs   = PlayerAnimator.Direction.values(); // FRONT, LEFT, RIGHT, BACK
+
+        int n = states.length;
+
+        // 4 rows × n states — animators[row][col]
+        PlayerAnimator[][] animators       = new PlayerAnimator[4][n];
+        WeaponRenderer[][]  weaponRenderers = new WeaponRenderer[4][n];
+        for (int row = 0; row < 4; row++) {
+            PlayerAnimator.Direction dir = dirs[row];
+            for (int i = 0; i < n; i++) {
+                animators[row][i] = new PlayerAnimator();
+                animators[row][i].forceState(states[i]);
+                animators[row][i].setForcedDirection(dir);
+                // LEFT direction mirrors (no LEFT-specific poses = auto-mirror default IDLE)
+                if (dir == PlayerAnimator.Direction.LEFT) animators[row][i].setFacingRight(false);
+
+                weaponRenderers[row][i] = new WeaponRenderer();
+                if (states[i] == PlayerAnimator.State.STAFF_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.WOODEN_STAFF);
+                else if (states[i] == PlayerAnimator.State.SWORD_1H_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_SWORD);
+                else if (states[i] == PlayerAnimator.State.SWORD_2H_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_SWORD);
+                else if (states[i] == PlayerAnimator.State.AXE_1H_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.HATCHET);
+                else if (states[i] == PlayerAnimator.State.AXE_2H_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_AXE);
+                else if (states[i] == PlayerAnimator.State.DAGGER_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_DAGGER);
+                else if (states[i] == PlayerAnimator.State.MORNING_STAR_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.MORNING_STAR);
+                else if (states[i] == PlayerAnimator.State.BOW_IDLE)
+                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.LONG_BOW);
             }
         }
 
@@ -129,7 +164,9 @@ public class GraphicsDevScreen {
             Color.web("#f0a030"),  // FALL       — warning amber
             Color.web("#e94560"),  // GOTHIT01   — accent red
             Color.web("#c8a020"),  // STAFF_IDLE    — gold
+            Color.web("#d0e8ff"),  // SWORD_1H_IDLE — light steel
             Color.web("#c0d8ff"),  // SWORD_2H_IDLE — steel blue
+            Color.web("#d09050"),  // AXE_1H_IDLE   — light amber
             Color.web("#c08030"),  // AXE_2H_IDLE   — iron amber
             Color.web("#88aacc"),  // DAGGER_IDLE        — steel grey-blue
             Color.web("#aaaaaa"),  // MORNING_STAR_IDLE  — iron grey
@@ -154,28 +191,25 @@ public class GraphicsDevScreen {
             Color.web("#88ff44")   // SHOOT              — lime green
         };
 
-        // Canvas: 6 figures spread across, enough height for label
-        int cols      = states.length;
-        int colW      = 110;
-        int canvasW   = cols * colW + 20;
-        int canvasH   = 220;
-        double feetY  = 160; // canvas Y where feet sit
+        // Layout constants
+        int    colW     = 110;
+        int    rowH     = 195;   // pixels per direction row (figure + label)
+        int    figH     = 155;   // feet sit this many px from top of each row band
+        int    labelH   = 15;    // row direction label height
+        int    hdrH     = 20;    // header band above figure area
+        int    canvasW  = n * colW + 20;
+        int    canvasH  = 4 * (rowH + hdrH) + 10;
 
         Canvas canvas = new Canvas(canvasW, canvasH);
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
-        // Description labels beneath the canvas
-        Label desc = new Label(
-                "Live preview of all sprite animation states. " +
-                "Colours match in-game player colouring.");
-        desc.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
-        desc.setWrapText(true);
-
-        // Legend
-        StringBuilder legendText = new StringBuilder();
-        for (PlayerAnimator.State s : states) legendText.append(s.name()).append("  ");
-        Label legend = new Label(legendText.toString().trim());
-        legend.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 11;");
+        String[] dirLabels = { "⬤  Front View", "◀  Left View", "▶  Right View", "⬛  Back View" };
+        Color[]  dirColors = {
+            Color.web("#4488ff"),   // Front — blue
+            Color.web("#ff8844"),   // Left  — orange
+            Color.web("#44cc44"),   // Right — green
+            Color.web("#aa66ff")    // Back  — purple
+        };
 
         // ── AnimationTimer drives the canvas ─────────────────────────────────
         AnimationTimer timer = new AnimationTimer() {
@@ -183,31 +217,54 @@ public class GraphicsDevScreen {
                 gc.setFill(Color.web("#0f0f1e"));
                 gc.fillRect(0, 0, canvasW, canvasH);
 
-                // Grid lines
-                gc.setStroke(Color.web("#22224a"));
-                gc.setLineWidth(1);
-                for (int x = 0; x <= canvasW; x += colW) gc.strokeLine(x, 0, x, canvasH);
-                gc.strokeLine(0, feetY, canvasW, feetY);  // floor line
+                for (int row = 0; row < 4; row++) {
+                    int    bandTop = row * (rowH + hdrH);
+                    double feetY   = bandTop + hdrH + figH;
 
-                for (int i = 0; i < states.length; i++) {
-                    double cx = 20 + i * colW + colW / 2.0;
-
-                    // Shadow ellipse at feet
-                    gc.setFill(Color.color(0, 0, 0, 0.3));
-                    gc.fillOval(cx - 16, feetY - 4, 32, 8);
-
-                    // Sprite + weapon (two-pass for correct depth)
-                    Color c = palette[i % palette.length];
-                    weaponRenderers[i].drawBehindBody(gc, animators[i], cx, feetY, c);
-                    animators[i].draw(gc, cx, feetY, c);
-                    weaponRenderers[i].draw(gc, animators[i], cx, feetY, c);
-
-                    // State name label
-                    gc.setFill(c.deriveColor(0, 1, 1.3, 1));
+                    // Direction header bar
+                    gc.setFill(dirColors[row].deriveColor(0, 1, 0.25, 1));
+                    gc.fillRect(0, bandTop, canvasW, hdrH);
+                    gc.setFill(dirColors[row]);
                     gc.setFont(javafx.scene.text.Font.font("System",
-                            javafx.scene.text.FontWeight.BOLD, 11));
-                    String name = states[i].name();
-                    gc.fillText(name, cx - name.length() * 3.3, feetY + 24);
+                            javafx.scene.text.FontWeight.BOLD, 12));
+                    gc.fillText(dirLabels[row], 8, bandTop + 14);
+
+                    // Grid lines for this row
+                    gc.setStroke(Color.web("#22224a"));
+                    gc.setLineWidth(1);
+                    for (int x = 0; x <= canvasW; x += colW) {
+                        gc.strokeLine(x, bandTop + hdrH, x, bandTop + hdrH + rowH);
+                    }
+                    gc.setStroke(dirColors[row].deriveColor(0, 0.6, 0.5, 0.4));
+                    gc.strokeLine(0, feetY, canvasW, feetY);  // floor line
+
+                    for (int i = 0; i < n; i++) {
+                        // Front View: skip states that don't make sense facing the camera
+                        if (dirs[row] == PlayerAnimator.Direction.FRONT && !FRONT_STATES.contains(states[i]))
+                            continue;
+
+                        double cx = 10 + i * colW + colW / 2.0;
+
+                        // Shadow ellipse at feet
+                        gc.setFill(Color.color(0, 0, 0, 0.3));
+                        gc.fillOval(cx - 16, feetY - 4, 32, 8);
+
+                        Color c = palette[i % palette.length];
+                        // Restart one-shot animations so they loop in the preview
+                        if (animators[row][i].isOneShotDone()) {
+                            animators[row][i].forceState(states[i]);
+                        }
+                        weaponRenderers[row][i].drawBehindBody(gc, animators[row][i], cx, feetY, c);
+                        animators[row][i].draw(gc, cx, feetY, c);
+                        weaponRenderers[row][i].draw(gc, animators[row][i], cx, feetY, c);
+
+                        // State name label
+                        gc.setFill(c.deriveColor(0, 1, 1.3, 1));
+                        gc.setFont(javafx.scene.text.Font.font("System",
+                                javafx.scene.text.FontWeight.BOLD, 10));
+                        String name = states[i].name();
+                        gc.fillText(name, cx - name.length() * 2.9, feetY + 22);
+                    }
                 }
             }
         };
@@ -222,9 +279,9 @@ public class GraphicsDevScreen {
         scroll.setFitToWidth(false);
         scroll.setFitToHeight(false);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scroll.setStyle("-fx-background: #0f0f1e; -fx-background-color: #0f0f1e;");
-        scroll.setPrefViewportHeight(canvasH + 20);
+        scroll.setPrefViewportHeight(Math.min(canvasH + 20, 750));
 
         // ── Export button ─────────────────────────────────────────────────────
         Path outDir = Paths.get("client/src/main/resources/graphics/sprites");
@@ -255,7 +312,10 @@ public class GraphicsDevScreen {
             }
         });
 
-        VBox root = new VBox(12, scroll, desc, legend, exportRow);
+        Label desc = new Label("Live preview of all animation states across all 4 viewing directions.");
+        desc.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+
+        VBox root = new VBox(12, scroll, desc, exportRow);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-background-color: #1a1a2e;");
         return root;
@@ -396,23 +456,29 @@ public class GraphicsDevScreen {
 
     private void importFile() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Import Image File");
+        chooser.setTitle("Import Image File(s)");
         chooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter("Image Files", SUPPORTED_EXTENSIONS));
 
-        File file = chooser.showOpenDialog(stage);
-        if (file == null) return;
+        List<File> files = chooser.showOpenMultipleDialog(stage);
+        if (files == null || files.isEmpty()) return;
 
         String destDir = activeDir();
-        try {
-            Path dest = Paths.get(destDir, file.getName());
-            Files.createDirectories(dest.getParent());
-            Files.copy(file.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
-            status("✓ Imported: " + file.getName() + " → " + destDir);
-            refreshList();
-        } catch (IOException e) {
-            status("✗ Import failed: " + e.getMessage());
+        int ok = 0, fail = 0;
+        for (File file : files) {
+            try {
+                Path dest = Paths.get(destDir, file.getName());
+                Files.createDirectories(dest.getParent());
+                Files.copy(file.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                ok++;
+            } catch (IOException e) {
+                fail++;
+                status("✗ Import failed: " + file.getName() + " — " + e.getMessage());
+            }
         }
+        if (ok > 0) status("✓ Imported " + ok + " file(s) → " + destDir
+                + (fail > 0 ? " (" + fail + " failed)" : ""));
+        refreshList();
     }
 
     private void onFileSelected(String name) {

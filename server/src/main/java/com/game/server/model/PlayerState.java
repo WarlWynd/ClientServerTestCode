@@ -18,6 +18,18 @@ public class PlayerState {
     public volatile int   score    = 0;
     public volatile long  lastSeen = System.currentTimeMillis();
 
+    // Character stats
+    public volatile int hp       = 100;
+    public volatile int mana     = 50;
+    public volatile int statInt  = 1;
+    public volatile int statStr  = 1;
+    public volatile int statWis  = 1;
+    public volatile int statCha  = 1;
+    public volatile int statSta  = 1;
+    public volatile int statAgi  = 1;
+    public volatile int statDex  = 1;
+    public volatile int statLuk  = 1;
+
     public PlayerState(long userId, String username, String characterName, String ip) {
         this.userId        = userId;
         this.username      = username;

@@ -57,6 +57,9 @@ public class AuthHandler {
             }
 
             Session session = sessionRepo.create(user.get().id(), user.get().username());
+            // Register address immediately so FORCE_LOGOUT can reach this client
+            // even before they send a GAME_JOIN packet.
+            if (gameHandler != null) gameHandler.registerLoginAddress(session.token(), addr, port);
             out.put("success",      true);
             out.put("sessionToken", session.token());
             out.put("username",     session.username());

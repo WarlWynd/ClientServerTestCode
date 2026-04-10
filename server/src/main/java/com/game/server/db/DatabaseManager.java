@@ -59,6 +59,16 @@ public final class DatabaseManager {
                 user_id         BIGINT      NOT NULL,
                 character_name  VARCHAR(50) NOT NULL UNIQUE,
                 created_at      TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+                stat_hp         INT         NOT NULL DEFAULT 100,
+                stat_mana       INT         NOT NULL DEFAULT 50,
+                stat_int        INT         NOT NULL DEFAULT 1,
+                stat_str        INT         NOT NULL DEFAULT 1,
+                stat_wis        INT         NOT NULL DEFAULT 1,
+                stat_cha        INT         NOT NULL DEFAULT 1,
+                stat_sta        INT         NOT NULL DEFAULT 1,
+                stat_agi        INT         NOT NULL DEFAULT 1,
+                stat_dex        INT         NOT NULL DEFAULT 1,
+                stat_luk        INT         NOT NULL DEFAULT 1,
                 CONSTRAINT fk_char_user
                     FOREIGN KEY (user_id) REFERENCES users(id)
                     ON DELETE CASCADE
@@ -165,6 +175,16 @@ public final class DatabaseManager {
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
             stmt.execute(DDL_CHARACTERS);
+            addColumnIfMissing(conn, "characters", "stat_hp",   "INT NOT NULL DEFAULT 100");
+            addColumnIfMissing(conn, "characters", "stat_mana", "INT NOT NULL DEFAULT 50");
+            addColumnIfMissing(conn, "characters", "stat_int",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_str",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_wis",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_cha",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_sta",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_agi",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_dex",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_luk",  "INT NOT NULL DEFAULT 1");
             stmt.execute(DDL_SERVER_SETTINGS);
             stmt.execute(DDL_BOARDS);
             stmt.execute(DDL_BOARD_PROGRESS);

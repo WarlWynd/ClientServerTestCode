@@ -1,5 +1,6 @@
 package com.game.server.db;
 
+import com.game.server.model.PlayerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,6 +94,36 @@ public class CharacterRepository {
         } catch (SQLException e) {
             log.error("isNameAvailable() failed: {}", e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Loads stat columns from the characters table into the given PlayerState.
+     * No-op if the character row is not found.
+     */
+    public void loadStats(long userId, PlayerState state) {
+        String sql = "SELECT stat_hp, stat_mana, stat_int, stat_str, stat_wis, " +
+                     "stat_cha, stat_sta, stat_agi, stat_dex, stat_luk " +
+                     "FROM characters WHERE user_id = ? LIMIT 1";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    state.hp      = rs.getInt("stat_hp");
+                    state.mana    = rs.getInt("stat_mana");
+                    state.statInt = rs.getInt("stat_int");
+                    state.statStr = rs.getInt("stat_str");
+                    state.statWis = rs.getInt("stat_wis");
+                    state.statCha = rs.getInt("stat_cha");
+                    state.statSta = rs.getInt("stat_sta");
+                    state.statAgi = rs.getInt("stat_agi");
+                    state.statDex = rs.getInt("stat_dex");
+                    state.statLuk = rs.getInt("stat_luk");
+                }
+            }
+        } catch (SQLException e) {
+            log.error("loadStats() failed for userId={}: {}", userId, e.getMessage());
         }
     }
 

@@ -331,3 +331,71 @@
 .tab-pane-dark .tab-pane {
     -fx-background-color: -af-bg;
 }
+
+/* ── Combat Preview wooden floor ─────────────────────────────────────────── */
+/* Literal wood colours — intentionally not theme-variable (wood is always wood). */
+.combat-floor {
+    /* Layer 1: perspective shadow at the top edge of the floor strip.          */
+    /* Layer 2: alternating dark-wood planks with thin divider lines.           */
+    -fx-background-color:
+        linear-gradient(from 0% 0% to 0% 10%,
+            rgba(0,0,0,0.40)  0%,
+            rgba(0,0,0,0)   100%),
+        linear-gradient(from 0% 0% to 0% 100%,
+            #7d4e24  0%,    #7d4e24 11.5%,
+            #3a1e0a 11.5%,  #3a1e0a 12%,
+            #6b3f1a 12%,    #6b3f1a 23.5%,
+            #3a1e0a 23.5%,  #3a1e0a 24%,
+            #7a4820 24%,    #7a4820 35.5%,
+            #3a1e0a 35.5%,  #3a1e0a 36%,
+            #623a18 36%,    #623a18 47.5%,
+            #3a1e0a 47.5%,  #3a1e0a 48%,
+            #7d4e24 48%,    #7d4e24 59.5%,
+            #3a1e0a 59.5%,  #3a1e0a 60%,
+            #6b3f1a 60%,    #6b3f1a 71.5%,
+            #3a1e0a 71.5%,  #3a1e0a 72%,
+            #7a4820 72%,    #7a4820 83.5%,
+            #3a1e0a 83.5%,  #3a1e0a 84%,
+            #623a18 84%,    #623a18 100%);
+    /* Bright top lip where wall meets floor */
+    -fx-border-color: #c8882a;
+    -fx-border-width: 2 0 0 0;
+}
+
+/* ── ComboBox (dark theme) ────────────────────────────────────────────────── */
+.combo-dark {
+    -fx-background-color: -af-card;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+.combo-dark .list-cell {
+    -fx-text-fill: -af-text-primary;
+    -fx-background-color: transparent;
+    -fx-padding: 4 8 4 8;
+}
+.combo-dark .arrow-button {
+    -fx-background-color: -af-border;
+    -fx-background-radius: 0 4 4 0;
+}
+.combo-dark .arrow-button .arrow {
+    -fx-background-color: -af-text-secondary;
+}
+/* Popup — JavaFX creates a separate window; only .combo-box-popup reaches it */
+.combo-box-popup > .list-view {
+    -fx-background-color: -af-card;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+}
+.combo-box-popup > .list-view .list-cell {
+    -fx-text-fill: -af-text-primary;
+    -fx-background-color: -af-card;
+    -fx-padding: 5 10 5 10;
+}
+.combo-box-popup > .list-view .list-cell:filled:hover {
+    -fx-background-color: -af-border;
+}
+.combo-box-popup > .list-view .list-cell:filled:selected {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+}

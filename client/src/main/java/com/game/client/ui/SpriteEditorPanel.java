@@ -71,15 +71,16 @@ public class SpriteEditorPanel {
     };
 
     // ── State ─────────────────────────────────────────────────────────────────
-    /** Mutable copy of all pose data — one double[][] per State ordinal. */
-    private final double[][][] allPoses;
+    /** Mutable copy of all pose data — one double[][] per State ordinal, per Direction. */
+    private final java.util.Map<PlayerAnimator.Direction, double[][][]> dirPoses = new java.util.HashMap<>();
 
-    private PlayerAnimator.State currentState   = PlayerAnimator.State.IDLE;
-    private int                  currentFrame   = 0;
-    private int                  dragJoint      = -1;
-    private boolean              playing        = false;
-    private double               speedMult      = 1.0;  // playback speed multiplier
-    private double[]             copiedFrame    = null; // clipboard for Copy/Paste Frame
+    private PlayerAnimator.State     currentState     = PlayerAnimator.State.IDLE;
+    private PlayerAnimator.Direction currentDirection = PlayerAnimator.Direction.FRONT;
+    private int                      currentFrame     = 0;
+    private int                      dragJoint        = -1;
+    private boolean                  playing          = false;
+    private double                   speedMult        = 1.0;  // playback speed multiplier
+    private double[]                 copiedFrame      = null; // clipboard for Copy/Paste Frame
 
     // ── Color group visibility (8 groups match legend order) ─────────────────
     // 0=Red/spine  1=Blue/L.arm  2=Green/R.arm  3=Amber/L.leg  4=Purple/R.leg
@@ -101,13 +102,20 @@ public class SpriteEditorPanel {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public SpriteEditorPanel() {
-        PlayerAnimator.State[] states = PlayerAnimator.State.values();
-        allPoses = new double[states.length][][];
-        for (PlayerAnimator.State s : states) {
-            double[][] src  = PlayerAnimator.getFrames(s);
-            double[][] copy = new double[src.length][];
-            for (int i = 0; i < src.length; i++) copy[i] = src[i].clone();
-            allPoses[s.ordinal()] = copy;
+        PlayerAnimator.State[]     states = PlayerAnimator.State.values();
+        PlayerAnimator.Direction[] dirs   = PlayerAnimator.Direction.values();
+        for (PlayerAnimator.Direction d : dirs) {
+            double[][][] poses = new double[states.length][][];
+            for (PlayerAnimator.State s : states) {
+                // Seed each direction with either the saved override (if any) or the base frames
+                double[][] override = PlayerAnimator.getDirectionalPoses(s, d);
+                double[][] src = (override != null && override.length > 0)
+                        ? override : PlayerAnimator.getFrames(s);
+                double[][] copy = new double[src.length][];
+                for (int i = 0; i < src.length; i++) copy[i] = src[i].clone();
+                poses[s.ordinal()] = copy;
+            }
+            dirPoses.put(d, poses);
         }
     }
 
@@ -119,19 +127,12 @@ public class SpriteEditorPanel {
         Label stateHdr = styledLabel("State:", 12, false);
 
         ComboBox<PlayerAnimator.State> stateBox = new ComboBox<>();
-        stateBox.getItems().addAll(PlayerAnimator.State.values());
+        java.util.List<PlayerAnimator.State> sortedStates = java.util.Arrays.stream(PlayerAnimator.State.values())
+                .sorted(java.util.Comparator.comparing(Enum::name))
+                .collect(java.util.stream.Collectors.toList());
+        stateBox.getItems().addAll(sortedStates);
         stateBox.setValue(currentState);
         styleCombo(stateBox);
-
-        stateBox.setOnAction(e -> {
-            if (stateBox.getValue() != null) {
-                currentState = stateBox.getValue();
-                currentFrame = 0;
-                refreshFrameLabel();
-                redraw();
-                refreshCode();
-            }
-        });
 
         // ── State management buttons ──────────────────────────────────────────
         Button addStateBtn    = smBtn("+",  "#1e8449");
@@ -143,6 +144,23 @@ public class SpriteEditorPanel {
         addStateBtn.setOnAction(e    -> addState(stateBox));
         renameStateBtn.setOnAction(e -> renameState(stateBox));
         removeStateBtn.setOnAction(e -> removeState(stateBox));
+
+        // ── Direction toggle buttons ──────────────────────────────────────────
+        Label dirHdr = styledLabel("View:", 12, false);
+        ToggleGroup dirGroup = new ToggleGroup();
+        ToggleButton dirFront = dirToggleBtn("⬤ Front", PlayerAnimator.Direction.FRONT, dirGroup);
+        ToggleButton dirLeft  = dirToggleBtn("◀ Left",  PlayerAnimator.Direction.LEFT,  dirGroup);
+        ToggleButton dirRight = dirToggleBtn("▶ Right", PlayerAnimator.Direction.RIGHT, dirGroup);
+        ToggleButton dirBack  = dirToggleBtn("⬛ Back",  PlayerAnimator.Direction.BACK,  dirGroup);
+        dirFront.setSelected(true); // default to FRONT
+        dirGroup.selectedToggleProperty().addListener((obs, old, now) -> {
+            if (now == null) { old.setSelected(true); return; } // prevent deselect
+            currentDirection = (PlayerAnimator.Direction) now.getUserData();
+            if (currentFrame >= frames().length) currentFrame = frames().length - 1;
+            refreshFrameLabel(); redraw(); refreshCode();
+        });
+        HBox dirBar = new HBox(4, dirHdr, dirFront, dirLeft, dirRight, dirBack);
+        dirBar.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         Button prev = toolBtn("◀");
         Button next = toolBtn("▶");
@@ -193,10 +211,35 @@ public class SpriteEditorPanel {
             speedValLabel.setText(String.format("%.2f×", speedMult));
         });
 
+        // ── One-shot checkbox ─────────────────────────────────────────────────
+        CheckBox oneShotCheck = new CheckBox("One-shot");
+        oneShotCheck.setSelected(PlayerAnimator.isOneShot(currentState));
+        oneShotCheck.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 11;");
+        oneShotCheck.setTooltip(new Tooltip(
+                "When checked: animation plays through once and holds on the last frame.\n" +
+                "When unchecked: animation loops continuously."));
+        oneShotCheck.setOnAction(e -> {
+            PlayerAnimator.setOneShot(currentState, oneShotCheck.isSelected());
+            PlayerAnimator.saveStateFlags();
+        });
+        // Keep checkbox in sync when switching states
+        stateBox.setOnAction(e -> {
+            if (stateBox.getValue() != null) {
+                currentState = stateBox.getValue();
+                currentFrame = 0;
+                oneShotCheck.setSelected(PlayerAnimator.isOneShot(currentState));
+                refreshFrameLabel();
+                redraw();
+                refreshCode();
+            }
+        });
+
         Label hint = new Label("Drag the coloured circles to reposition joints");
         hint.setStyle("-fx-text-fill: #606080; -fx-font-size: 11;");
 
         HBox toolbar = new HBox(10, stateHdr, stateBox, addStateBtn, renameStateBtn, removeStateBtn,
+                new Separator(javafx.geometry.Orientation.VERTICAL), dirBar,
+                new Separator(javafx.geometry.Orientation.VERTICAL), oneShotCheck,
                 new Separator(javafx.geometry.Orientation.VERTICAL), prev, frameLabel, next, playPauseBtn,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 speedHdr, speedSlider, speedValLabel,
@@ -226,7 +269,27 @@ public class SpriteEditorPanel {
                 };
                 long intervalMs = Math.max(16, (long)(baseMs / speedMult));
                 if (now - lastFrameNs[0] >= intervalMs * 1_000_000L) {
-                    currentFrame = (currentFrame + 1) % frames().length;
+                    int nextF = currentFrame + 1;
+                    int count = frames().length;
+                    if (PlayerAnimator.isOneShot(currentState) && nextF >= count) {
+                        currentFrame = count - 1;  // hold on last frame
+                        // stop playback automatically
+                        playing = false;
+                        playTimer.stop();
+                        canvas.setOnMousePressed(SpriteEditorPanel.this::onPress);
+                        canvas.setOnMouseDragged(SpriteEditorPanel.this::onDrag);
+                        canvas.setOnMouseReleased(ev -> { dragJoint = -1; redraw(); });
+                        canvas.setStyle("");
+                        playPauseBtn.setText("▶ Play");
+                        playPauseBtn.setStyle(playPauseBtn.getStyle()
+                                .replace("-fx-text-fill: #f0a030;", "-fx-text-fill: #50c050;"));
+                        prev.setDisable(false);
+                        next.setDisable(false);
+                        resetBtn.setDisable(false);
+                        refreshCode();
+                    } else {
+                        currentFrame = nextF % count;
+                    }
                     refreshFrameLabel();
                     redraw();
                     lastFrameNs[0] = now;
@@ -306,7 +369,7 @@ public class SpriteEditorPanel {
             for (int i = 0; i <= currentFrame; i++)       updated[i] = old[i].clone();
             updated[currentFrame + 1] = old[currentFrame].clone(); // new frame = copy of current
             for (int i = currentFrame + 2; i < updated.length; i++) updated[i] = old[i - 1].clone();
-            allPoses[currentState.ordinal()] = updated;
+            dirPoses.get(currentDirection)[currentState.ordinal()] = updated;
             currentFrame++;   // move to the newly inserted frame
             refreshFrameLabel(); redraw(); refreshCode();
             setSaveStatus("Frame added at position " + (currentFrame + 1) + " — save to persist.", true);
@@ -318,7 +381,7 @@ public class SpriteEditorPanel {
             double[][] updated = new double[old.length - 1][];
             int dst = 0;
             for (int i = 0; i < old.length; i++) if (i != currentFrame) updated[dst++] = old[i].clone();
-            allPoses[currentState.ordinal()] = updated;
+            dirPoses.get(currentDirection)[currentState.ordinal()] = updated;
             if (currentFrame >= updated.length) currentFrame = updated.length - 1;
             refreshFrameLabel(); redraw(); refreshCode();
             setSaveStatus("Frame removed — save to persist.", true);
@@ -428,10 +491,17 @@ public class SpriteEditorPanel {
                 codePanel);
         root.setStyle("-fx-background-color: #1a1a2e;");
 
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(false);
+        scroll.setFitToHeight(false);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
+
         refreshFrameLabel();
         redraw();
         refreshCode();
-        return root;
+        return scroll;
     }
 
     // ── Mouse events ──────────────────────────────────────────────────────────
@@ -480,19 +550,39 @@ public class SpriteEditorPanel {
         gc.setLineWidth(1.5);
         gc.strokeLine(FEET_CX, 0, FEET_CX, CANVAS_H);
 
-        // Floor line
-        gc.setStroke(Color.web("#7a4a22"));
+        // Direction indicator — tinted header bar + label
+        Color dirColor = switch (currentDirection) {
+            case FRONT -> Color.web("#4488ff");
+            case LEFT  -> Color.web("#ff8844");
+            case RIGHT -> Color.web("#44cc44");
+            case BACK  -> Color.web("#aa66ff");
+        };
+        gc.setFill(dirColor.deriveColor(0, 1, 0.18, 1));
+        gc.fillRect(0, 0, CANVAS_W, 22);
+        gc.setFill(dirColor);
+        gc.setFont(Font.font("System", FontWeight.BOLD, 12));
+        String dirArrow = switch (currentDirection) {
+            case FRONT -> "⬤  Front View";
+            case LEFT  -> "◀  Left View  (mirrored in-game)";
+            case RIGHT -> "▶  Right View";
+            case BACK  -> "⬛  Back View";
+        };
+        gc.fillText(dirArrow, 8, 15);
+
+        // Floor line — tinted to match direction
+        gc.setStroke(dirColor.deriveColor(0, 0.7, 0.5, 1));
         gc.setLineWidth(2);
         gc.strokeLine(0, FEET_CY, CANVAS_W, FEET_CY);
-        gc.setFill(Color.web("#7a4a22"));
+        gc.setFill(dirColor.deriveColor(0, 0.7, 0.5, 1));
         gc.setFont(Font.font("System", 10));
         gc.fillText("floor (y = 0)", 4, FEET_CY - 4);
 
         double[] pose = frames()[currentFrame];
 
-        // Stick figure
+        // Stick figure — mirror display when editing LEFT direction
         gc.save();
         gc.translate(FEET_CX, FEET_CY);
+        if (currentDirection == PlayerAnimator.Direction.LEFT) gc.scale(-1, 1);
         gc.setFill(Color.web("#d0d0ff"));
         gc.setStroke(Color.web("#d0d0ff"));
         gc.setLineWidth(LINE_W);
@@ -553,6 +643,7 @@ public class SpriteEditorPanel {
                 gc.fillText(String.valueOf(i), jcx + 7, jcy + 4);
             }
         }
+
     }
 
     /** Draws pose using editor SCALE (gc translated to feet origin). */
@@ -606,6 +697,7 @@ public class SpriteEditorPanel {
         double[] pose = frames()[currentFrame];
         StringBuilder sb = new StringBuilder();
         sb.append("// ").append(currentState.name())
+          .append(" [").append(currentDirection.name()).append("]")
           .append(" — Frame ").append(currentFrame).append("\n");
         sb.append("{ ");
         for (int i = 0; i < pose.length; i++) {
@@ -687,7 +779,7 @@ public class SpriteEditorPanel {
     }
 
     private double[][] frames() {
-        double[][] raw = allPoses[currentState.ordinal()];
+        double[][] raw = dirPoses.get(currentDirection)[currentState.ordinal()];
         // Pad any 30-value (body-only) frame to 36 values with default weapon positions
         for (int f = 0; f < raw.length; f++) {
             if (raw[f].length < 36) {
@@ -704,9 +796,19 @@ public class SpriteEditorPanel {
         return raw;
     }
 
+
     private void resetCurrentFrame() {
-        allPoses[currentState.ordinal()][currentFrame] =
-                PlayerAnimator.getFrames(currentState)[currentFrame].clone();
+        // For non-RIGHT directions, reset to the saved override or base RIGHT frames
+        double[][] base;
+        if (currentDirection == PlayerAnimator.Direction.RIGHT) {
+            base = PlayerAnimator.getFrames(currentState);
+        } else {
+            double[][] override = PlayerAnimator.getDirectionalPoses(currentState, currentDirection);
+            base = (override != null && override.length > 0)
+                    ? override : PlayerAnimator.getFrames(currentState);
+        }
+        if (currentFrame < base.length)
+            dirPoses.get(currentDirection)[currentState.ordinal()][currentFrame] = base[currentFrame].clone();
         redraw();
         refreshCode();
     }
@@ -740,6 +842,26 @@ public class SpriteEditorPanel {
         return b;
     }
 
+    private static ToggleButton dirToggleBtn(String text, PlayerAnimator.Direction dir, ToggleGroup group) {
+        ToggleButton b = new ToggleButton(text);
+        b.setToggleGroup(group);
+        b.setUserData(dir);
+        b.setStyle("-fx-background-color: #16213e;" +
+                   "-fx-text-fill: #a0a0c0;" +
+                   "-fx-background-radius: 4;" +
+                   "-fx-border-color: #3a3a6a;" +
+                   "-fx-border-radius: 4;" +
+                   "-fx-padding: 4 10 4 10;" +
+                   "-fx-font-size: 11;");
+        b.selectedProperty().addListener((obs, old, sel) ->
+            b.setStyle(b.getStyle()
+                .replace("-fx-text-fill: #a0a0c0;", sel ? "-fx-text-fill: #ffffff;" : "-fx-text-fill: #a0a0c0;")
+                .replace("-fx-background-color: #16213e;", sel ? "-fx-background-color: #0f3460;" : "-fx-background-color: #16213e;")
+            )
+        );
+        return b;
+    }
+
     private static <T> ListCell<T> themedCell() {
         return new ListCell<>() {
             @Override
@@ -764,41 +886,47 @@ public class SpriteEditorPanel {
         // Auto-backup before every save so you can always roll back
         backupAll();
 
-        Path file = Paths.get(
-                "client/src/main/java/com/game/client/ui/PlayerAnimator.java");
-        if (!Files.exists(file)) {
-            setSaveStatus("✗ PlayerAnimator.java not found at: " + file.toAbsolutePath(), false);
-            return;
-        }
-        try {
-            String source   = Files.readString(file);
-            String arrName  = arrayNameFor(currentState);
-            String newBlock = buildArrayBlock(arrName, allPoses[currentState.ordinal()]);
+        double[][] editedFrames = dirPoses.get(currentDirection)[currentState.ordinal()];
 
-            // Find start of the array declaration
-            String startMarker = "private static final double[][] " + arrName + " = {";
-            int start = source.indexOf(startMarker);
-            if (start == -1) {
-                setSaveStatus("✗ Could not locate array " + arrName + " in source.", false);
+        // RIGHT direction → overwrite source array in PlayerAnimator.java (existing behaviour)
+        if (currentDirection == PlayerAnimator.Direction.RIGHT) {
+            Path file = Paths.get(
+                    "client/src/main/java/com/game/client/ui/PlayerAnimator.java");
+            if (!Files.exists(file)) {
+                setSaveStatus("✗ PlayerAnimator.java not found at: " + file.toAbsolutePath(), false);
                 return;
             }
-
-            // Walk forward counting braces to find the matching };
-            int depth = 0, end = -1;
-            for (int i = start + startMarker.length() - 1; i < source.length(); i++) {
-                char c = source.charAt(i);
-                if      (c == '{') depth++;
-                else if (c == '}') { depth--; if (depth == 0) { end = source.indexOf(';', i) + 1; break; } }
+            try {
+                String source    = Files.readString(file);
+                String arrName   = arrayNameFor(currentState);
+                String newBlock  = buildArrayBlock(arrName, editedFrames);
+                String startMarker = "private static final double[][] " + arrName + " = {";
+                int start = source.indexOf(startMarker);
+                if (start == -1) {
+                    setSaveStatus("✗ Could not locate array " + arrName + " in source.", false);
+                    return;
+                }
+                int depth = 0, end = -1;
+                for (int i = start + startMarker.length() - 1; i < source.length(); i++) {
+                    char c = source.charAt(i);
+                    if      (c == '{') depth++;
+                    else if (c == '}') { depth--; if (depth == 0) { end = source.indexOf(';', i) + 1; break; } }
+                }
+                if (end == -1) { setSaveStatus("✗ Could not find end of array " + arrName, false); return; }
+                Files.writeString(file, source.substring(0, start) + newBlock + source.substring(end));
+                setSaveStatus("✓ Saved " + arrName + " (" + editedFrames.length
+                        + " frame(s)) [Right] to PlayerAnimator.java — restart to apply.", true);
+            } catch (Exception ex) {
+                setSaveStatus("✗ Save failed: " + ex.getMessage(), false);
             }
-            if (end == -1) { setSaveStatus("✗ Could not find end of array " + arrName, false); return; }
-
-            Files.writeString(file,
-                    source.substring(0, start) + newBlock + source.substring(end));
-            setSaveStatus("✓ Saved " + arrName + " (" + allPoses[currentState.ordinal()].length
-                    + " frame(s)) to PlayerAnimator.java — restart client to apply.", true);
-        } catch (Exception ex) {
-            setSaveStatus("✗ Save failed: " + ex.getMessage(), false);
+            return;
         }
+
+        // All other directions → push to PlayerAnimator's DIR_POSES map and persist to JSON
+        PlayerAnimator.setDirectionalPoses(currentState, currentDirection, editedFrames);
+        PlayerAnimator.saveDirPoses();
+        setSaveStatus("✓ Saved " + currentState.name() + " [" + currentDirection.name() + "] ("
+                + editedFrames.length + " frame(s)) to dir_poses.json — takes effect immediately.", true);
     }
 
     /** Build the replacement source block for one state array. */
@@ -837,7 +965,7 @@ public class SpriteEditorPanel {
 
     // ── Backup / Restore ─────────────────────────────────────────────────────
 
-    /** Serialise all current allPoses to a timestamped JSON backup file. */
+    /** Serialise all current poses (RIGHT/base direction) to a timestamped JSON backup file. */
     private void backupAll() {
         try {
             Files.createDirectories(BACKUP_DIR);
@@ -848,7 +976,7 @@ public class SpriteEditorPanel {
             root.put("timestamp", ts);
             ObjectNode statesNode = mapper.createObjectNode();
             for (PlayerAnimator.State s : PlayerAnimator.State.values()) {
-                double[][] frames = allPoses[s.ordinal()];
+                double[][] frames = dirPoses.get(PlayerAnimator.Direction.RIGHT)[s.ordinal()];
                 ArrayNode framesNode = mapper.createArrayNode();
                 for (double[] frame : frames) {
                     ArrayNode fn = mapper.createArrayNode();
@@ -926,7 +1054,7 @@ public class SpriteEditorPanel {
                             for (int j = 0; j < fn.size(); j++) pose[j] = fn.get(j).asDouble();
                             frames[f] = pose;
                         }
-                        allPoses[s.ordinal()] = frames;
+                        dirPoses.get(PlayerAnimator.Direction.RIGHT)[s.ordinal()] = frames;
                     }
                     // Clamp current frame if needed
                     if (currentFrame >= frames().length) currentFrame = frames().length - 1;
@@ -972,7 +1100,7 @@ public class SpriteEditorPanel {
                 src = src.replace(", KNOCKED_DOWN }", ", " + name + ", KNOCKED_DOWN }");
 
                 // 2. New array (copy of IDLE frame 0) inserted before KNOCKED array
-                double[][] seed = { allPoses[PlayerAnimator.State.IDLE.ordinal()][0].clone() };
+                double[][] seed = { dirPoses.get(PlayerAnimator.Direction.RIGHT)[PlayerAnimator.State.IDLE.ordinal()][0].clone() };
                 String newArr = buildArrayBlock(name, seed) + "\n\n    ";
                 src = src.replace("private static final double[][] KNOCKED = {",
                                   newArr + "private static final double[][] KNOCKED = {");

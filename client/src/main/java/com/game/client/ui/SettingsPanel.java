@@ -203,38 +203,6 @@ public class SettingsPanel {
         HBox attackRow     = keyBindRow("Attack:",       AppSettings.getKeyAttack(),     AppSettings::setKeyAttack);
         VBox controlsSection = section("Controls", jumpRow, sprintRow, fireRow, climbUpRow, climbDownRow, kickRow, punchRow, attackRow);
 
-        // ── Gameplay ──────────────────────────────────────────────────────────
-        CheckBox testNpcCheck = new CheckBox("Show Test Fight NPC");
-        testNpcCheck.setSelected(AppSettings.isShowTestNpc());
-        testNpcCheck.getStyleClass().add("check-secondary");
-        testNpcCheck.selectedProperty().addListener((obs, old, val) -> {
-            AppSettings.setShowTestNpc(val);
-            AppSettings.save();
-        });
-
-        TextField npcXField = styledField(String.valueOf((int) AppSettings.getTestNpcX()));
-        TextField npcYField = styledField(String.valueOf((int) AppSettings.getTestNpcY()));
-        npcXField.setPrefWidth(80);
-        npcYField.setPrefWidth(80);
-        npcXField.textProperty().addListener((obs, old, val) -> {
-            try { AppSettings.setTestNpcX(Float.parseFloat(val.trim())); AppSettings.save(); }
-            catch (NumberFormatException ignored) {}
-        });
-        npcYField.textProperty().addListener((obs, old, val) -> {
-            try { AppSettings.setTestNpcY(Float.parseFloat(val.trim())); AppSettings.save(); }
-            catch (NumberFormatException ignored) {}
-        });
-
-        Label testNpcNote = new Label("Spawns an immortal enemy NPC on the Test Fight Board. X=world X, Y=game Y (0=floor).");
-        testNpcNote.getStyleClass().addAll("text-muted", "italic", "font-11");
-        testNpcNote.setWrapText(true);
-
-        VBox gameplaySection = section("Gameplay",
-                row(testNpcCheck),
-                row("NPC X:", npcXField),
-                row("NPC Y:", npcYField),
-                row(testNpcNote));
-
         // ── Account ───────────────────────────────────────────────────────────
         VBox accountSection = section("Account", comingSoon());
 
@@ -336,7 +304,7 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(audioSection, displaySection, controlsSection, gameplaySection, accountSection);
+        VBox content = new VBox(audioSection, displaySection, controlsSection, accountSection);
         if (connectionSection != null) content.getChildren().add(connectionSection);
         content.getChildren().add(buttons);
         content.getStyleClass().add("app-root");

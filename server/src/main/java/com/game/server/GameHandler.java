@@ -62,12 +62,23 @@ public class GameHandler {
         broadcastSettings(socket);
     }
 
+    /**
+     * Records the client address immediately after a successful login.
+     * This ensures FORCE_LOGOUT can reach clients that are still on the login/
+     * character-creation screens and have not yet sent a GAME_JOIN.
+     */
+    public void registerLoginAddress(String token, InetAddress addr, int port) {
+        clients.put(token, new ClientAddr(addr, port));
+    }
+
     // ── Packet handlers ──────────────────────────────────────────────────────
 
     public void handleJoin(DatagramSocket socket, Packet in, Session session,
                            InetAddress addr, int port) throws Exception {
         String charName = charRepo.getCharacterName(session.userId());
-        players.put(session.token(), new PlayerState(session.userId(), session.username(), charName, addr.getHostAddress()));
+        PlayerState ps = new PlayerState(session.userId(), session.username(), charName, addr.getHostAddress());
+        charRepo.loadStats(session.userId(), ps);
+        players.put(session.token(), ps);
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
         sendSettings(socket, addr, port);
