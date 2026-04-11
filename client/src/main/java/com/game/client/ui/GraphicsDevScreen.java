@@ -447,7 +447,12 @@ public class GraphicsDevScreen {
         double[] previewScale = { 1.0 };
         scaleSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) previewScale[0] = n; });
 
+        Label frameCounterLabel = new Label("— / —");
+        frameCounterLabel.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 11; -fx-min-width: 52;");
+
         HBox playbackRow = new HBox(6, playBtn, pauseBtn, repeatBtn,
+                new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL),
+                frameCounterLabel,
                 new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL),
                 scaleLabel, scaleSpinner);
         playbackRow.setAlignment(Pos.CENTER_LEFT);
@@ -464,6 +469,7 @@ public class GraphicsDevScreen {
             // would cap quadruped states like POUNCE to 1 frame on RIGHT direction).
             javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s, PlayerAnimator.Direction.RIGHT);
             int[] spriteIdx = { 0 };
+            frameCounterLabel.setText(sprites != null && sprites.length > 0 ? "1 / " + sprites.length : "— / —");
             long[] lastTickMs = { 0L };
             long intervalMs = switch (s) {
                 case TROT       -> 130;
@@ -499,6 +505,7 @@ public class GraphicsDevScreen {
                                     ? (repeat[0] ? 0 : sprites.length - 1)
                                     : next % sprites.length;
                             lastTickMs[0] = nowMs;
+                            frameCounterLabel.setText((spriteIdx[0] + 1) + " / " + sprites.length);
                         }
                         javafx.scene.image.Image img = sprites[spriteIdx[0]];
                         if (img != null) {
