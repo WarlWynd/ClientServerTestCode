@@ -40,6 +40,8 @@ public class MobManagerPanel {
             Paths.get("client/src/main/resources/graphics/sprites/mob-definitions.json");
     private static final Path SPAWN_FILE =
             Paths.get("client/src/main/resources/graphics/sprites/mob-spawns.json");
+    private static final Path PORTAL_FILE =
+            Paths.get("client/src/main/resources/graphics/sprites/portal-spawns.json");
     private static final File BOARDS_DIR =
             new File(System.getProperty("user.home"), ".game/boards");
 
@@ -66,6 +68,18 @@ public class MobManagerPanel {
         }
     }
 
+    // ── Portal point (per board) ──────────────────────────────────────────────
+    public static class PortalPoint {
+        int    col, row;
+        String destBoard;
+        int    destCol, destRow;
+
+        PortalPoint(int col, int row, String destBoard, int destCol, int destRow) {
+            this.col = col; this.row = row;
+            this.destBoard = destBoard; this.destCol = destCol; this.destRow = destRow;
+        }
+    }
+
     // ── Spawn point (per board) ───────────────────────────────────────────────
     public static class SpawnPoint {
         String mobName;
@@ -86,7 +100,10 @@ public class MobManagerPanel {
     private MobDef              selected = null;
 
     // Map spawns
-    private final Map<String, List<SpawnPoint>> spawns = new LinkedHashMap<>(); // boardName → spawns
+    private final Map<String, List<SpawnPoint>>  spawns  = new LinkedHashMap<>(); // boardName → spawns
+
+    // Map portals
+    private final Map<String, List<PortalPoint>> portals = new LinkedHashMap<>(); // boardName → portals
     private String              currentBoard = null;
     private BoardTile[][]       boardGrid    = null;
     private int                 boardRows    = 0, boardCols = 0;
@@ -113,13 +130,17 @@ public class MobManagerPanel {
     private AnimationTimer      previewTimer;
 
     // UI refs — Map Spawns
-    private ComboBox<String>    boardCombo;
+    private ComboBox<String>      boardCombo;
     private TableView<SpawnPoint> spawnList;
-    private Canvas              mapCanvas;
-    private Label               spawnStatus;
-    private Label               zoomValLbl;
-    private ComboBox<String>    placeMobCombo;
-    private Spinner<Integer>    respawnSpinner, maxCountSpinner;
+    private Canvas                mapCanvas;
+    private Label                 spawnStatus;
+    private Label                 zoomValLbl;
+    private ComboBox<String>      placeMobCombo;
+    private Spinner<Integer>      respawnSpinner, maxCountSpinner;
+
+    // UI refs — Portals
+    private TableView<PortalPoint> portalList;
+    private Label                  portalStatus;
 
     // UI refs — Practice Fight
     private Canvas              practiceCanvas;
@@ -137,9 +158,13 @@ public class MobManagerPanel {
     private long                practiceLeftHitMs, practiceRightHitMs;
     // [0]=cx, [1]=y, [2]=dmg, [3]=startMs, [4]=isHeal(0/1), [5]=label
     private final List<Object[]> practiceDmgNums     = new ArrayList<>();
-    private long                practiceCombatNextMs = 0;
+    private long                practiceCombatNextMs   = 0;
     private long                practiceLeftStunEndMs  = 0;
     private long                practiceRightStunEndMs = 0;
+    private long                practiceLeftKoEndMs    = 0;
+    private long                practiceRightKoEndMs   = 0;
+    private long                practiceLeftKipEndMs   = 0;  // KIP_UP grace window end
+    private long                practiceRightKipEndMs  = 0;
     private int                 practiceCombatTurn   = 0; // 0=left attacks, 1=right attacks
     private Label               practiceActionLabel;
     // Mechanics settings (loaded from game-mechanics.json, editable in panel)
@@ -155,6 +180,7 @@ public class MobManagerPanel {
     public Node build() {
         loadMobs();
         loadSpawns();
+        loadPortals();
         ensureDefaults();
 
         Tab rosterTab = new Tab("🐾 Mob Roster", buildRosterTab());
@@ -169,6 +195,7 @@ public class MobManagerPanel {
     public Node buildSpawnView() {
         loadMobs();
         loadSpawns();
+        loadPortals();
         ensureDefaults();
         return buildSpawnTab();
     }
@@ -573,7 +600,7 @@ public class MobManagerPanel {
         bottomBar.setStyle("-fx-background-color: #16213e; -fx-background-radius: 4;");
         bottomBar.setMaxWidth(340);
 
-        HBox bottomRow = new HBox(bottomBar);
+        HBox bottomRow = new HBox(8, bottomBar, buildPortalPanel());
 
         VBox root = new VBox(8, topBar, mapScroll, bottomRow);
         root.setPadding(new Insets(10));
@@ -631,6 +658,7 @@ public class MobManagerPanel {
         } catch (Exception ignored) {}
 
         refreshSpawnList();
+        refreshPortalList();
         drawMapCanvas();
     }
 
@@ -936,6 +964,178 @@ public class MobManagerPanel {
         } catch (Exception ignored) {}
     }
 
+    // ── Portal panel ──────────────────────────────────────────────────────────
+
+    private Node buildPortalPanel() {
+        // ── Form row — new portal entry ──────────────────────────────────────
+        Spinner<Integer> pColSpin = new Spinner<>(0, 999, 0);
+        Spinner<Integer> pRowSpin = new Spinner<>(0, 999, 0);
+        pColSpin.setPrefWidth(60); pRowSpin.setPrefWidth(60);
+        pColSpin.setEditable(true); pRowSpin.setEditable(true);
+        stylePortalSpinner(pColSpin); stylePortalSpinner(pRowSpin);
+
+        TextField destBoardField = new TextField();
+        destBoardField.setPromptText("dest board (.csv)");
+        destBoardField.setPrefWidth(130);
+        destBoardField.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0;" +
+                "-fx-border-color: #3a3a6a; -fx-border-radius: 4; -fx-padding: 3;");
+
+        Spinner<Integer> dColSpin = new Spinner<>(0, 999, 0);
+        Spinner<Integer> dRowSpin = new Spinner<>(0, 999, 0);
+        dColSpin.setPrefWidth(60); dRowSpin.setPrefWidth(60);
+        dColSpin.setEditable(true); dRowSpin.setEditable(true);
+        stylePortalSpinner(dColSpin); stylePortalSpinner(dRowSpin);
+
+        Button addPortalBtn = btn("+ Add Portal", "#1a3a4a");
+        addPortalBtn.setMaxWidth(Double.MAX_VALUE);
+        addPortalBtn.setOnAction(e -> {
+            if (currentBoard == null) return;
+            String dest = destBoardField.getText().trim();
+            if (dest.isEmpty()) return;
+            portals.computeIfAbsent(currentBoard, k -> new ArrayList<>())
+                   .add(new PortalPoint(pColSpin.getValue(), pRowSpin.getValue(),
+                                        dest, dColSpin.getValue(), dRowSpin.getValue()));
+            refreshPortalList();
+        });
+
+        Label fromLbl = new Label("From:");
+        fromLbl.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 10;");
+        Label toLbl = new Label("To:");
+        toLbl.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 10;");
+        Label colLbl1 = new Label("Col");
+        colLbl1.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 10;");
+        Label rowLbl1 = new Label("Row");
+        rowLbl1.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 10;");
+        Label colLbl2 = new Label("Col");
+        colLbl2.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 10;");
+        Label rowLbl2 = new Label("Row");
+        rowLbl2.setStyle("-fx-text-fill: #6060a0; -fx-font-size: 10;");
+
+        HBox fromRow = new HBox(4, fromLbl,
+                new VBox(1, colLbl1, pColSpin),
+                new VBox(1, rowLbl1, pRowSpin));
+        fromRow.setAlignment(Pos.BOTTOM_LEFT);
+        HBox toRow = new HBox(4, toLbl, destBoardField,
+                new VBox(1, colLbl2, dColSpin),
+                new VBox(1, rowLbl2, dRowSpin));
+        toRow.setAlignment(Pos.BOTTOM_LEFT);
+
+        // ── Portal table ─────────────────────────────────────────────────────
+        portalList = new TableView<>();
+        portalList.setStyle("-fx-background-color: #0f0f1e; -fx-border-color: #3a3a6a;" +
+                "-fx-control-inner-background: #0f0f1e; -fx-table-header-border-color: #3a3a6a;");
+        portalList.setPrefHeight(150);
+        portalList.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        TableColumn<PortalPoint, Number> pCol  = new TableColumn<>("Col");
+        TableColumn<PortalPoint, Number> pRow  = new TableColumn<>("Row");
+        TableColumn<PortalPoint, String> pDest = new TableColumn<>("Dest Board");
+        TableColumn<PortalPoint, Number> pDCol = new TableColumn<>("dCol");
+        TableColumn<PortalPoint, Number> pDRow = new TableColumn<>("dRow");
+
+        pCol.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().col));
+        pRow.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().row));
+        pDest.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue().destBoard));
+        pDCol.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().destCol));
+        pDRow.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().destRow));
+
+        String cs = "-fx-text-fill: #c8c8e0; -fx-font-size: 10; -fx-alignment: CENTER;";
+        for (TableColumn<?,?> c : List.of(pCol, pRow, pDest, pDCol, pDRow)) c.setStyle(cs);
+        pCol.setPrefWidth(36); pRow.setPrefWidth(36); pDest.setPrefWidth(110);
+        pDCol.setPrefWidth(36); pDRow.setPrefWidth(36);
+        portalList.getColumns().addAll(pCol, pRow, pDest, pDCol, pDRow);
+
+        // ── Buttons ───────────────────────────────────────────────────────────
+        Button delPortalBtn   = btn("🗑 Delete Selected", "#7b241c");
+        Button clearPortalBtn = btn("Clear All",          "#5a1a1a");
+        Button savePortalBtn  = btn("💾 Save Portals",     "#1e5f3a");
+
+        delPortalBtn.setOnAction(e -> {
+            PortalPoint sel = portalList.getSelectionModel().getSelectedItem();
+            if (sel != null && currentBoard != null) {
+                List<PortalPoint> pts = portals.get(currentBoard);
+                if (pts != null) { pts.remove(sel); refreshPortalList(); }
+            }
+        });
+        clearPortalBtn.setOnAction(e -> {
+            if (currentBoard != null) { portals.remove(currentBoard); refreshPortalList(); }
+        });
+        savePortalBtn.setOnAction(e -> savePortals());
+
+        portalStatus = new Label();
+        portalStatus.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 10;");
+
+        VBox portalBox = new VBox(5,
+                lbl("Portals on this board:", 11, true),
+                fromRow, toRow, addPortalBtn,
+                portalList,
+                new HBox(4, delPortalBtn, clearPortalBtn, savePortalBtn),
+                portalStatus);
+        portalBox.setPadding(new Insets(8));
+        portalBox.setStyle("-fx-background-color: #16213e; -fx-background-radius: 4;");
+        portalBox.setMaxWidth(340);
+        return portalBox;
+    }
+
+    private void refreshPortalList() {
+        portalList.getItems().clear();
+        if (currentBoard == null) return;
+        List<PortalPoint> pts = portals.get(currentBoard);
+        if (pts != null) portalList.getItems().addAll(pts);
+    }
+
+    private void savePortals() {
+        try {
+            ObjectMapper om  = new ObjectMapper();
+            ObjectNode root  = om.createObjectNode();
+            for (Map.Entry<String, List<PortalPoint>> entry : portals.entrySet()) {
+                ArrayNode arr = om.createArrayNode();
+                for (PortalPoint pp : entry.getValue()) {
+                    ObjectNode node = om.createObjectNode();
+                    node.put("col",       pp.col);
+                    node.put("row",       pp.row);
+                    node.put("destBoard", pp.destBoard);
+                    node.put("destCol",   pp.destCol);
+                    node.put("destRow",   pp.destRow);
+                    arr.add(node);
+                }
+                root.set(entry.getKey(), arr);
+            }
+            Files.createDirectories(PORTAL_FILE.getParent());
+            om.writerWithDefaultPrettyPrinter().writeValue(PORTAL_FILE.toFile(), root);
+            int total = portals.values().stream().mapToInt(List::size).sum();
+            setStatus(portalStatus, "✓ Saved " + total + " portal(s) across "
+                    + portals.size() + " board(s).", true);
+        } catch (Exception e) {
+            setStatus(portalStatus, "✗ Save failed: " + e.getMessage(), false);
+        }
+    }
+
+    private void loadPortals() {
+        portals.clear();
+        if (!Files.exists(PORTAL_FILE)) return;
+        try {
+            ObjectMapper om = new ObjectMapper();
+            JsonNode root = om.readTree(PORTAL_FILE.toFile());
+            root.fields().forEachRemaining(entry -> {
+                List<PortalPoint> pts = new ArrayList<>();
+                for (JsonNode node : entry.getValue()) {
+                    pts.add(new PortalPoint(
+                            node.path("col").asInt(0),
+                            node.path("row").asInt(0),
+                            node.path("destBoard").asText(""),
+                            node.path("destCol").asInt(0),
+                            node.path("destRow").asInt(0)));
+                }
+                portals.put(entry.getKey(), pts);
+            });
+        } catch (Exception ignored) {}
+    }
+
+    private void stylePortalSpinner(Spinner<Integer> s) {
+        s.setStyle("-fx-background-color: #1a1a2e; -fx-text-fill: #c8c8e8;");
+    }
+
     private void ensureDefaults() {
         if (!mobs.isEmpty()) return;
         MobDef wolf = new MobDef("Wolf", MobRole.BEAST, Color.web("#888888"));
@@ -1181,6 +1381,10 @@ public class MobManagerPanel {
         practiceCombatNextMs   = 0;
         practiceLeftStunEndMs  = 0;
         practiceRightStunEndMs = 0;
+        practiceLeftKoEndMs    = 0;
+        practiceRightKoEndMs   = 0;
+        practiceLeftKipEndMs   = 0;
+        practiceRightKipEndMs  = 0;
         practiceLeftHitMs      = 0;
         practiceRightHitMs     = 0;
         practiceCombatTurn     = 0;
@@ -1229,19 +1433,53 @@ public class MobManagerPanel {
         if (practicePlaying && lm != null && rm != null) {
             if (practiceCombatNextMs == 0) practiceCombatNextMs = nowMs;
 
-            // Return stun victims to idle when stun expires
+            int koMs = pmKoSpinner != null ? pmKoSpinner.getValue() : 3000;
+
+            // KO recovery — when KO timer expires, play KIP_UP then resume
+            if (practiceLeftKoEndMs > 0 && nowMs >= practiceLeftKoEndMs) {
+                practiceLeftKoEndMs = 0;
+                practiceLeftHp = lm.baseHp;
+                practiceLeftAnim.setHoldLastFrame(false);
+                boolean leftIsQuad = lm.bodyType == MobCategory.QUADRUPED;
+                int kipDuration = leftIsQuad ? 400 : 900;
+                practiceLeftAnim.forceState(
+                        leftIsQuad ? PlayerAnimator.State.QUAD_IDLE : PlayerAnimator.State.KIP_UP, nowMs);
+                practiceLeftKipEndMs  = nowMs + kipDuration; // protect from interruption
+                practiceCombatNextMs  = nowMs + kipDuration; // don't attack until kip finishes
+                if (practiceActionLabel != null)
+                    practiceActionLabel.setText(lm.name + " recovers — fight continues!");
+            }
+            if (practiceRightKoEndMs > 0 && nowMs >= practiceRightKoEndMs) {
+                practiceRightKoEndMs = 0;
+                practiceRightHp = rm.baseHp;
+                practiceRightAnim.setHoldLastFrame(false);
+                boolean rightIsQuad = rm.bodyType == MobCategory.QUADRUPED;
+                int kipDuration = rightIsQuad ? 400 : 900;
+                practiceRightAnim.forceState(
+                        rightIsQuad ? PlayerAnimator.State.QUAD_IDLE : PlayerAnimator.State.KIP_UP, nowMs);
+                practiceRightKipEndMs = nowMs + kipDuration;
+                practiceCombatNextMs  = nowMs + kipDuration;
+                if (practiceActionLabel != null)
+                    practiceActionLabel.setText(rm.name + " recovers — fight continues!");
+            }
+
+            // Return stun victims to idle when stun expires (skip if KO'd or kipping up)
             if (practiceLeftStunEndMs > 0 && nowMs >= practiceLeftStunEndMs) {
-                practiceLeftAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+                if (practiceLeftHp > 0 && practiceLeftKoEndMs == 0 && nowMs >= practiceLeftKipEndMs)
+                    practiceLeftAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
                 practiceLeftStunEndMs = 0;
             }
             if (practiceRightStunEndMs > 0 && nowMs >= practiceRightStunEndMs) {
-                practiceRightAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+                if (practiceRightHp > 0 && practiceRightKoEndMs == 0 && nowMs >= practiceRightKipEndMs)
+                    practiceRightAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
                 practiceRightStunEndMs = 0;
             }
-            // Return attacker to idle when one-shot finishes
-            if (practiceLeftAnim.isOneShotDone()  && practiceLeftStunEndMs  == 0)
+            // Return attacker to idle when one-shot finishes (only if alive, not KO'd, not kipping)
+            if (practiceLeftAnim.isOneShotDone()  && practiceLeftStunEndMs  == 0
+                    && practiceLeftHp  > 0 && practiceLeftKoEndMs  == 0 && nowMs >= practiceLeftKipEndMs)
                 practiceLeftAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
-            if (practiceRightAnim.isOneShotDone() && practiceRightStunEndMs == 0)
+            if (practiceRightAnim.isOneShotDone() && practiceRightStunEndMs == 0
+                    && practiceRightHp > 0 && practiceRightKoEndMs == 0 && nowMs >= practiceRightKipEndMs)
                 practiceRightAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
 
             if (nowMs >= practiceCombatNextMs) {
@@ -1289,7 +1527,8 @@ public class MobManagerPanel {
                         catch (Exception ignored) {}
 
                         String stunStateName = rule.stunState.get();
-                        if (!"NONE".equals(stunStateName)) {
+                        long defKipEnd = (practiceCombatTurn == 0) ? practiceRightKipEndMs : practiceLeftKipEndMs;
+                        if (!"NONE".equals(stunStateName) && nowMs >= defKipEnd) {
                             PlayerAnimator.State stunState = PlayerAnimator.State.GOTHIT01;
                             try { stunState = PlayerAnimator.State.valueOf(stunStateName); }
                             catch (Exception ignored) {}
@@ -1313,9 +1552,26 @@ public class MobManagerPanel {
                         if (AppSettings.isCombatShowDamage())
                             practiceDmgNums.add(new Object[]{ defCx, floorYNow - 80, (double)dmg, (double)nowMs, 0.0, rule.label.get() });
 
-                        if (practiceActionLabel != null)
-                            practiceActionLabel.setText(attacker.name + " → " + rule.label.get() +
-                                    " → " + defender.name + " (" + dmg + " dmg)");
+                        float defHpAfter = (practiceCombatTurn == 0) ? practiceRightHp : practiceLeftHp;
+                        if (defHpAfter == 0) {
+                            // Defender KO'd — play fall animation, hold, then recover after koMs
+                            PlayerAnimator.State deathState = defender.bodyType == MobCategory.QUADRUPED
+                                    ? PlayerAnimator.State.QUAD_DEATH : PlayerAnimator.State.KNOCKED_DOWN;
+                            defAnim.forceState(deathState, nowMs);
+                            defAnim.setHoldLastFrame(true);
+                            // KO recovery time is always real-world ms — not speed-adjusted
+                            long koEndMs = nowMs + koMs;
+                            if (practiceCombatTurn == 0) practiceRightKoEndMs = koEndMs;
+                            else                         practiceLeftKoEndMs  = koEndMs;
+                            practiceCombatNextMs = koEndMs; // pause combat until KO recovery fires
+                            if (practiceActionLabel != null)
+                                practiceActionLabel.setText("💀 " + defender.name + " is KO'd! " +
+                                        attacker.name + " wins the round — recovering in " + koMs + "ms…");
+                        } else {
+                            if (practiceActionLabel != null)
+                                practiceActionLabel.setText(attacker.name + " → " + rule.label.get() +
+                                        " → " + defender.name + " (" + dmg + " dmg)");
+                        }
                     } else {
                         if (practiceActionLabel != null)
                             practiceActionLabel.setText(attacker.name + " has no attack states defined.");
