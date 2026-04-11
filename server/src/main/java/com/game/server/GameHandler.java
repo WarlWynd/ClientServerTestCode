@@ -3,6 +3,7 @@ package com.game.server;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.server.db.CharacterRepository;
+import com.game.server.db.InventoryRepository;
 import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.PlayerState;
@@ -45,6 +46,7 @@ public class GameHandler {
 
     private final CharacterRepository      charRepo     = new CharacterRepository();
     private final UserRepository           userRepo     = new UserRepository();
+    private final InventoryRepository      invRepo      = new InventoryRepository();
     private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
 
     /** Current committed game settings — loaded from DB on first use. */
@@ -171,6 +173,8 @@ public class GameHandler {
         PlayerState p = players.remove(sessionToken);
         clients.remove(sessionToken);
         if (p != null) {
+            long userId = userRepo.getUserId(p.username);
+            if (userId > 0) invRepo.removeNoLogItems(userId);
             log.info("EVICT  user='{}' (timeout/logout) players_online={}", p.username, players.size());
             try { broadcastGameState(socket); } catch (Exception ignored) {}
         }

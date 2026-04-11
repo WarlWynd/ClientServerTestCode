@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.server.db.CharacterRepository;
+import com.game.server.db.InventoryRepository;
 import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.SessionRepository;
 import com.game.server.db.UserRepository;
@@ -30,6 +31,7 @@ public class AuthHandler {
     final         UserRepository          userRepo     = new UserRepository();
     private final SessionRepository       sessionRepo  = new SessionRepository();
     private final CharacterRepository     charRepo     = new CharacterRepository();
+    private final InventoryRepository     invRepo      = new InventoryRepository();
     private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
 
     private GameHandler gameHandler;
@@ -127,6 +129,11 @@ public class AuthHandler {
     public void handleLogout(DatagramSocket socket, Packet in,
                              InetAddress addr, int port) throws Exception {
         if (in.sessionToken != null) {
+            // Remove noLog items before invalidating the session
+            sessionRepo.validate(in.sessionToken).ifPresent(s -> {
+                long userId = userRepo.getUserId(s.username());
+                if (userId > 0) invRepo.removeNoLogItems(userId);
+            });
             sessionRepo.invalidate(in.sessionToken);
             log.info("LOGOUT token={}", in.sessionToken);
         }

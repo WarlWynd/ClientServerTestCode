@@ -1,11 +1,16 @@
 package com.game.server.db;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Data-access object for character_inventory.
@@ -109,6 +114,51 @@ public class InventoryRepository {
             log.error("addItem() failed for userId={} item='{}': {}", userId, itemName, e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Deletes all inventory entries whose item is flagged noLog=true in item-registry.json.
+     * Called on explicit logout and session eviction so temporary items don't persist.
+     */
+    public void removeNoLogItems(long userId) {
+        long charId = charRepo.getCharacterId(userId);
+        if (charId < 0) return;
+
+        Set<String> noLogNames = loadNoLogItemNames();
+        if (noLogNames.isEmpty()) return;
+
+        String sql = "DELETE FROM character_inventory WHERE character_id = ? AND item_name = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (String name : noLogNames) {
+                ps.setLong(1, charId);
+                ps.setString(2, name);
+                ps.addBatch();
+            }
+            ps.executeBatch();
+            log.debug("removeNoLogItems() cleared noLog items for userId={}", userId);
+        } catch (SQLException e) {
+            log.error("removeNoLogItems() failed for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    private static Set<String> loadNoLogItemNames() {
+        Set<String> names = new HashSet<>();
+        File f = new File("client/src/main/resources/graphics/sprites/item-registry.json");
+        if (!f.exists()) return names;
+        try {
+            ObjectMapper om = new ObjectMapper();
+            for (JsonNode node : om.readTree(f)) {
+                if (node.path("noLog").asBoolean(false)) {
+                    String name = node.path("name").asText(null);
+                    if (name != null) names.add(name);
+                }
+            }
+        } catch (Exception e) {
+            LoggerFactory.getLogger(InventoryRepository.class)
+                    .warn("Could not load item-registry.json for noLog check: {}", e.getMessage());
+        }
+        return names;
     }
 
     /** Toggles the equipped state of an inventory entry. Verifies ownership by userId. */
