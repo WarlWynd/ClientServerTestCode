@@ -247,8 +247,8 @@ public class InventoryPanel {
 
         Map<String, ItemRegistryPanel.ItemDef> itemMap = ItemRegistryPanel.loadItemMap();
 
-        // Stat totals
-        int[] totals = new int[10]; // HP,MANA,INT,STR,WIS,CHA,STA,AGI,DEX,LUK
+        // Stat totals: ARMOR,HP,MANA,INT,STR,WIS,CHA,STA,AGI,DEX,LUK
+        int[] totals = new int[11];
 
         for (InventoryRow row : rows) {
             if (!row.isEquipped()) continue;
@@ -266,17 +266,18 @@ public class InventoryPanel {
                 lbl.setStyle("-fx-text-fill: #d0d8e0; -fx-font-size: 12; -fx-font-style: normal;");
             }
 
-            totals[0] += def.statHp;   totals[1] += def.statMana;
-            totals[2] += def.statInt;  totals[3] += def.statStr;
-            totals[4] += def.statWis;  totals[5] += def.statCha;
-            totals[6] += def.statSta;  totals[7] += def.statAgi;
-            totals[8] += def.statDex;  totals[9] += def.statLuk;
+            totals[0]  += def.statArmor;
+            totals[1]  += def.statHp;   totals[2]  += def.statMana;
+            totals[3]  += def.statInt;  totals[4]  += def.statStr;
+            totals[5]  += def.statWis;  totals[6]  += def.statCha;
+            totals[7]  += def.statSta;  totals[8]  += def.statAgi;
+            totals[9]  += def.statDex;  totals[10] += def.statLuk;
         }
 
         if (armorStatSummary != null) {
-            String[] names = {"HP","MANA","INT","STR","WIS","CHA","STA","AGI","DEX","LUK"};
+            String[] names = {"ARMOR","HP","MANA","INT","STR","WIS","CHA","STA","AGI","DEX","LUK"};
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 10; i++) {
+            for (int i = 0; i < 11; i++) {
                 if (totals[i] != 0) {
                     if (sb.length() > 0) sb.append("   ");
                     sb.append(names[i]).append(": ").append(totals[i] > 0 ? "+" : "").append(totals[i]);

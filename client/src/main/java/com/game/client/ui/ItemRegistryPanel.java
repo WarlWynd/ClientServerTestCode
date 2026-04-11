@@ -66,6 +66,7 @@ public class ItemRegistryPanel {
         ItemCategory category;
         ArmorSlot    armorSlot = ArmorSlot.NONE;
         String       description;
+        int          statArmor;                        // damage reduction %
         int          statHp, statMana;
         int          statInt, statStr, statWis, statCha;
         int          statSta, statAgi, statDex, statLuk;
@@ -86,6 +87,7 @@ public class ItemRegistryPanel {
     private ComboBox<String>  categoryCombo;
     private ComboBox<String>  slotCombo;
     private TextArea          descField;
+    private Spinner<Integer>  spArmor;
     private Spinner<Integer>  spHp, spMana;
     private Spinner<Integer>  spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue;
     private Label             statusLabel;
@@ -208,10 +210,12 @@ public class ItemRegistryPanel {
         spValue = intSpinner(-9999, 99999, 0);
 
         // ── Stats grid ────────────────────────────────────────────────────────
+        spArmor = intSpinner(0, 100, 0);
         spHp   = statSpinner(); spMana = statSpinner();
         spInt  = statSpinner(); spStr  = statSpinner(); spWis = statSpinner(); spCha = statSpinner();
         spSta  = statSpinner(); spAgi  = statSpinner(); spDex = statSpinner(); spLuk = statSpinner();
 
+        spArmor.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.statArmor = n; });
         spHp.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statHp   = n; });
         spMana.valueProperty().addListener((o, p, n)  -> { if (selected != null) selected.statMana = n; });
         spInt.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statInt  = n; });
@@ -230,6 +234,7 @@ public class ItemRegistryPanel {
                            "-fx-border-color: #3a3a6a; -fx-border-radius: 4;");
 
         int row = 0;
+        addStatRow(statsGrid, row++, "ARMOR (Dmg Reduction %)", spArmor, "#7090c0");
         addStatRow(statsGrid, row++, "HP   (Hit Points)",   spHp,   "#e05050");
         addStatRow(statsGrid, row++, "MANA (Mana Pool)",    spMana, "#5080ff");
         addStatRow(statsGrid, row++, "INT  (Intelligence)", spInt,  "#53c0f0");
@@ -279,6 +284,9 @@ public class ItemRegistryPanel {
         // ── Right: stat summary ───────────────────────────────────────────────
         Label summaryTitle = lbl("Stat Guide", 13, true);
         String guide =
+                "ARMOR — Dmg Reduction\n" +
+                "  % of incoming damage\n" +
+                "  reduced. 0–100.\n\n" +
                 "HP — Hit Points\n"     +
                 "  Direct HP bonus/penalty\n\n" +
                 "MANA — Mana Pool\n"    +
@@ -342,6 +350,7 @@ public class ItemRegistryPanel {
         if (selected == null) return;
         ItemDef dup = new ItemDef(selected.name + " (copy)", selected.category);
         dup.armorSlot   = selected.armorSlot;
+        dup.statArmor   = selected.statArmor;
         dup.description = selected.description;
         dup.statHp   = selected.statHp;  dup.statMana = selected.statMana;
         dup.statInt  = selected.statInt; dup.statStr  = selected.statStr;
@@ -367,6 +376,7 @@ public class ItemRegistryPanel {
         categoryCombo.setValue(it.category.name());
         slotCombo.setValue(it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
         descField.setText(it.description);
+        spArmor.getValueFactory().setValue(it.statArmor);
         spHp.getValueFactory().setValue(it.statHp);
         spMana.getValueFactory().setValue(it.statMana);
         spInt.getValueFactory().setValue(it.statInt);
@@ -383,7 +393,7 @@ public class ItemRegistryPanel {
     private void clearForm() {
         nameField.setText("");
         descField.setText("");
-        for (Spinner<Integer> sp : List.of(spHp, spMana, spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue))
+        for (Spinner<Integer> sp : List.of(spArmor, spHp, spMana, spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue))
             if (sp != null) sp.getValueFactory().setValue(0);
     }
 
@@ -448,6 +458,7 @@ public class ItemRegistryPanel {
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 com.fasterxml.jackson.databind.JsonNode stats = n.path("stats");
+                it.statArmor = stats.path("ARMOR").asInt(0);
                 it.statHp   = stats.path("HP").asInt(0);   it.statMana = stats.path("MANA").asInt(0);
                 it.statInt  = stats.path("INT").asInt(0);  it.statStr  = stats.path("STR").asInt(0);
                 it.statWis  = stats.path("WIS").asInt(0);  it.statCha  = stats.path("CHA").asInt(0);
@@ -473,6 +484,7 @@ public class ItemRegistryPanel {
                 n.put("description", it.description);
                 n.put("value",       it.value);
                 ObjectNode stats = om.createObjectNode();
+                stats.put("ARMOR", it.statArmor);
                 stats.put("HP",  it.statHp);  stats.put("MANA", it.statMana);
                 stats.put("INT", it.statInt); stats.put("STR",  it.statStr);
                 stats.put("WIS", it.statWis); stats.put("CHA",  it.statCha);
@@ -504,6 +516,7 @@ public class ItemRegistryPanel {
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 JsonNode stats = n.path("stats");
+                it.statArmor = stats.path("ARMOR").asInt(0);
                 it.statHp   = stats.path("HP").asInt(0);   it.statMana = stats.path("MANA").asInt(0);
                 it.statInt  = stats.path("INT").asInt(0);  it.statStr  = stats.path("STR").asInt(0);
                 it.statWis  = stats.path("WIS").asInt(0);  it.statCha  = stats.path("CHA").asInt(0);
