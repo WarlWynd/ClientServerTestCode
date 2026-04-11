@@ -1567,6 +1567,8 @@ public class MobManagerPanel {
                             if (practiceActionLabel != null)
                                 practiceActionLabel.setText("💀 " + defender.name + " is KO'd! " +
                                         attacker.name + " wins the round — recovering in " + koMs + "ms…");
+                            practiceCombatTurn = 1 - practiceCombatTurn;
+                            return; // skip the normal interval advance below
                         } else {
                             if (practiceActionLabel != null)
                                 practiceActionLabel.setText(attacker.name + " → " + rule.label.get() +

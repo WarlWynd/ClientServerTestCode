@@ -15,12 +15,16 @@ import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import com.game.client.UDPClient;
+import com.game.shared.Packet;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Graphics Developer Tab.
@@ -45,7 +49,10 @@ public class GraphicsDevScreen {
             "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.svg"
     };
 
-    private final Stage stage;
+    private final Stage     stage;
+    private final UDPClient client;
+
+    private GameSettingsPanel gameSettingsPanel;
 
     private ListView<String> fileList;
     private ImageView        previewImage;
@@ -54,8 +61,17 @@ public class GraphicsDevScreen {
     private Label            statusLabel;
     private ToggleGroup      categoryToggle;
 
-    public GraphicsDevScreen(Stage stage) {
-        this.stage = stage;
+    public GraphicsDevScreen(Stage stage, UDPClient client) {
+        this.stage  = stage;
+        this.client = client;
+    }
+
+    public void setRestartCallback(Consumer<Integer> callback) {
+        if (gameSettingsPanel != null) gameSettingsPanel.setRestartCallback(callback);
+    }
+
+    public void onPacket(Packet packet) {
+        if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
     }
 
     public Node build() {
@@ -74,7 +90,15 @@ public class GraphicsDevScreen {
         itemTab.setClosable(false);
         mechanicsTab.setClosable(false);
 
-        TabPane inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
+        TabPane inner;
+        if (client != null) {
+            gameSettingsPanel = new GameSettingsPanel(client);
+            Tab gameSettingsTab = new Tab("🎛 Game Settings", gameSettingsPanel.buildView());
+            gameSettingsTab.setClosable(false);
+            inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab, gameSettingsTab);
+        } else {
+            inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
+        }
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;

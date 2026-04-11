@@ -145,7 +145,8 @@ public class GameScreen {
     private Tab     gameTab;
     private boolean gameLoopRunning = false;
     private Timeline pingTimer;
-    private AdminPanel adminPanel;
+    private AdminPanel       adminPanel;
+    private GraphicsDevScreen graphicsDevScreen;
 
     // ── System message bar ────────────────────────────────────────────────────
     private HBox    systemMsgBar;
@@ -340,7 +341,6 @@ public class GameScreen {
             tabs.add(isAdminTab);
 
             adminPanel = new AdminPanel(client);
-            adminPanel.setRestartCallback(this::startReconnectCountdown);
             String adminIp = client.getAdminHost();
             Tab adminTab = new Tab("🛡 Admin " + adminIp, withIpBanner(adminPanel.buildView(), adminIp));
             adminTab.setClosable(false);
@@ -348,7 +348,9 @@ public class GameScreen {
             Tab audioTab = new Tab("🎵 Audio Dev " + adminIp, withIpBanner(new AudioDevScreen(stage).build(), adminIp));
             audioTab.setClosable(false);
             audioTab.getProperties().put("connectionIp", adminIp);
-            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage).build(), adminIp));
+            graphicsDevScreen = new GraphicsDevScreen(stage, client);
+            graphicsDevScreen.setRestartCallback(this::startReconnectCountdown);
+            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(graphicsDevScreen.build(), adminIp));
             graphicsTab.setClosable(false);
             graphicsTab.getProperties().put("connectionIp", adminIp);
             Tab boardTab = new Tab("🗺 Board Dev " + adminIp, withIpBanner(new BoardDevScreen(stage,
@@ -361,7 +363,7 @@ public class GameScreen {
             tabs.add(boardTab);
         } else if (SessionStore.isGraphicsDev()) {
             String adminIp = client.getAdminHost();
-            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage).build(), adminIp));
+            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage, null).build(), adminIp));
             graphicsTab.setClosable(false);
             graphicsTab.getProperties().put("connectionIp", adminIp);
             tabs.add(graphicsTab);
@@ -831,6 +833,7 @@ public class GameScreen {
 
     private void onPacket(Packet packet) {
         if (adminPanel != null) adminPanel.onPacket(packet);
+        if (graphicsDevScreen != null) graphicsDevScreen.onPacket(packet);
         switch (packet.type) {
             case GAME_STATE -> {
                 lastGameStateMs = System.currentTimeMillis();

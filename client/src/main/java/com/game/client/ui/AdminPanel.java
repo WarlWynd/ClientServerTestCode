@@ -28,7 +28,6 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
 
-import java.util.function.Consumer;
 
 /**
  * Embeddable admin dashboard panel — shown as a tab in GameScreen for admin users.
@@ -51,11 +50,6 @@ public class AdminPanel {
     private TextField searchField;
     private ComboBox<String> searchFieldCombo;
     private Timeline ticker;
-    private GameSettingsPanel gameSettingsPanel;
-
-    public void setRestartCallback(Consumer<Integer> callback) {
-        if (gameSettingsPanel != null) gameSettingsPanel.setRestartCallback(callback);
-    }
 
     public AdminPanel(UDPClient client) {
         this.client = client;
@@ -135,22 +129,10 @@ public class AdminPanel {
         VBox.setVgrow(table, Priority.ALWAYS);
         playersPage.getStyleClass().add("app-root");
 
-        // ── Game Settings inner tab ───────────────────────────────────────────
-        gameSettingsPanel = new GameSettingsPanel(client);
-        javafx.scene.Node gameSettingsPage = gameSettingsPanel.buildView();
-
-        Tab playersTab     = new Tab("👥 Players",      playersPage);
-        Tab gameSettingsTab = new Tab("🎛 Game Settings", gameSettingsPage);
-        playersTab.setClosable(false);
-        gameSettingsTab.setClosable(false);
-
-        TabPane innerTabs = new TabPane(playersTab, gameSettingsTab);
-        innerTabs.getStyleClass().add("tab-pane-dark");
-
         ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
 
-        return innerTabs;
+        return playersPage;
     }
 
     private VBox buildSection(String title, Node... children) {
@@ -254,12 +236,8 @@ public class AdminPanel {
                 }
                 showStatus(msg, ok);
             });
-            case ADMIN_SAVE_SETTINGS_RESPONSE,
-                 ADMIN_RESTART_RESPONSE,
-                 ADMIN_DEPLOY_RESPONSE -> {
-                if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
-            }
         }
+
     }
 
     // ── Table helpers ─────────────────────────────────────────────────────────
