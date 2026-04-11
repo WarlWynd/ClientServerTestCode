@@ -42,24 +42,26 @@ public class ItemRegistryPanel {
     public enum ArmorSlot {
         NONE, HEAD, NECK, SHOULDERS, CHEST, BACK,
         WRISTS_L, WRISTS_R, HANDS, WAIST, LEGS, FEET,
-        RING_L, RING_R, TRINKET;
+        RING_L, RING_R, EARRING_L, EARRING_R, TRINKET;
         public String label() {
             return switch (this) {
-                case NONE      -> "—";
-                case HEAD      -> "Head";
-                case NECK      -> "Neck";
-                case SHOULDERS -> "Shoulders";
-                case CHEST     -> "Chest";
-                case BACK      -> "Back";
-                case WRISTS_L  -> "Bracers (L)";
-                case WRISTS_R  -> "Bracers (R)";
-                case HANDS     -> "Hands";
-                case WAIST     -> "Waist";
-                case LEGS      -> "Legs";
-                case FEET      -> "Feet";
-                case RING_L    -> "Ring (L)";
-                case RING_R    -> "Ring (R)";
-                case TRINKET   -> "Trinket";
+                case NONE       -> "—";
+                case HEAD       -> "Head";
+                case NECK       -> "Neck";
+                case SHOULDERS  -> "Shoulders";
+                case CHEST      -> "Chest";
+                case BACK       -> "Back";
+                case WRISTS_L   -> "Bracers (L)";
+                case WRISTS_R   -> "Bracers (R)";
+                case HANDS      -> "Hands";
+                case WAIST      -> "Waist";
+                case LEGS       -> "Legs";
+                case FEET       -> "Feet";
+                case RING_L     -> "Ring (L)";
+                case RING_R     -> "Ring (R)";
+                case EARRING_L  -> "Earring (L)";
+                case EARRING_R  -> "Earring (R)";
+                case TRINKET    -> "Trinket";
             };
         }
     }
@@ -569,6 +571,7 @@ public class ItemRegistryPanel {
         addMissingArmor("Gold Ring",       ItemCategory.JEWELRY, ArmorSlot.RING_L,    "A simple gold ring.",           0,0, 0,0,0,1,0,0,0,2, 40);
         addMissingArmor("Silver Necklace", ItemCategory.JEWELRY, ArmorSlot.NECK,      "A delicate silver necklace.",   0,5, 2,0,1,1,0,0,0,0, 60);
         addMissingArmor("Lucky Charm",     ItemCategory.JEWELRY, ArmorSlot.TRINKET,   "Trinket that improves luck.",   0,0, 0,0,0,0,0,0,0,5, 75);
+        addMissingArmor("Pearl Earring",   ItemCategory.JEWELRY, ArmorSlot.EARRING_L, "A lustrous pearl earring.",     0,0, 0,0,1,1,0,0,0,1, 45);
     }
 
     private void addMissing(String name, ItemCategory cat, String desc,

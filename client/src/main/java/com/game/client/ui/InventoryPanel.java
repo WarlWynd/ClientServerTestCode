@@ -180,7 +180,8 @@ public class InventoryPanel {
         { ItemRegistryPanel.ArmorSlot.WRISTS_L,  ItemRegistryPanel.ArmorSlot.WRISTS_R  },
         { ItemRegistryPanel.ArmorSlot.HANDS,     ItemRegistryPanel.ArmorSlot.LEGS      },
         { ItemRegistryPanel.ArmorSlot.FEET,      ItemRegistryPanel.ArmorSlot.TRINKET   },
-        { ItemRegistryPanel.ArmorSlot.RING_L,    ItemRegistryPanel.ArmorSlot.RING_R    },
+        { ItemRegistryPanel.ArmorSlot.RING_L,     ItemRegistryPanel.ArmorSlot.RING_R     },
+        { ItemRegistryPanel.ArmorSlot.EARRING_L,  ItemRegistryPanel.ArmorSlot.EARRING_R  },
     };
 
     private Node buildArmorTab() {
