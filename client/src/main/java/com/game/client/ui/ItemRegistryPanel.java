@@ -40,7 +40,9 @@ public class ItemRegistryPanel {
 
     // ── Armor / jewelry equipment slot ────────────────────────────────────────
     public enum ArmorSlot {
-        NONE, HEAD, NECK, SHOULDERS, CHEST, BACK, WRISTS, HANDS, WAIST, LEGS, FEET, RING, TRINKET;
+        NONE, HEAD, NECK, SHOULDERS, CHEST, BACK,
+        WRISTS_L, WRISTS_R, HANDS, WAIST, LEGS, FEET,
+        RING_L, RING_R, TRINKET;
         public String label() {
             return switch (this) {
                 case NONE      -> "—";
@@ -49,12 +51,14 @@ public class ItemRegistryPanel {
                 case SHOULDERS -> "Shoulders";
                 case CHEST     -> "Chest";
                 case BACK      -> "Back";
-                case WRISTS    -> "Wrists";
+                case WRISTS_L  -> "Bracers (L)";
+                case WRISTS_R  -> "Bracers (R)";
                 case HANDS     -> "Hands";
                 case WAIST     -> "Waist";
                 case LEGS      -> "Legs";
                 case FEET      -> "Feet";
-                case RING      -> "Ring";
+                case RING_L    -> "Ring (L)";
+                case RING_R    -> "Ring (R)";
                 case TRINKET   -> "Trinket";
             };
         }
@@ -555,14 +559,14 @@ public class ItemRegistryPanel {
         addMissingArmor("Iron Pauldrons",  ItemCategory.ARMOR,   ArmorSlot.SHOULDERS, "Iron shoulder guards.",         0,0, 0,1,0,0,2,0,0,0, 25);
         addMissingArmor("Chain Hauberk",   ItemCategory.ARMOR,   ArmorSlot.CHEST,     "Chainmail chest armor.",        5,0, 0,2,0,0,4,0,0,0, 80);
         addMissingArmor("Leather Cloak",   ItemCategory.ARMOR,   ArmorSlot.BACK,      "A sturdy traveling cloak.",     0,0, 0,0,0,0,1,1,0,0, 20);
-        addMissingArmor("Iron Bracers",    ItemCategory.ARMOR,   ArmorSlot.WRISTS,    "Iron wrist guards.",            0,0, 0,1,0,0,1,0,1,0, 18);
+        addMissingArmor("Iron Bracers",    ItemCategory.ARMOR,   ArmorSlot.WRISTS_L,  "Iron wrist guards.",            0,0, 0,1,0,0,1,0,1,0, 18);
         addMissingArmor("Mail Gauntlets",  ItemCategory.ARMOR,   ArmorSlot.HANDS,     "Chainmail gloves.",             0,0, 0,1,0,0,1,0,1,0, 22);
         addMissingArmor("Leather Belt",    ItemCategory.ARMOR,   ArmorSlot.WAIST,     "A reinforced leather belt.",    0,0, 0,0,0,0,1,1,0,0, 15);
         addMissingArmor("Iron Greaves",    ItemCategory.ARMOR,   ArmorSlot.LEGS,      "Iron leg armor.",               0,0, 0,1,0,0,3,0,0,0, 55);
         addMissingArmor("Iron Boots",      ItemCategory.ARMOR,   ArmorSlot.FEET,      "Heavy iron boots.",             0,0, 0,1,0,0,2,0,0,0, 35);
 
         // Default jewelry
-        addMissingArmor("Gold Ring",       ItemCategory.JEWELRY, ArmorSlot.RING,      "A simple gold ring.",           0,0, 0,0,0,1,0,0,0,2, 40);
+        addMissingArmor("Gold Ring",       ItemCategory.JEWELRY, ArmorSlot.RING_L,    "A simple gold ring.",           0,0, 0,0,0,1,0,0,0,2, 40);
         addMissingArmor("Silver Necklace", ItemCategory.JEWELRY, ArmorSlot.NECK,      "A delicate silver necklace.",   0,5, 2,0,1,1,0,0,0,0, 60);
         addMissingArmor("Lucky Charm",     ItemCategory.JEWELRY, ArmorSlot.TRINKET,   "Trinket that improves luck.",   0,0, 0,0,0,0,0,0,0,5, 75);
     }

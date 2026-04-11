@@ -159,7 +159,7 @@ public class InventoryPanel {
             if (armorTab.isSelected()) refreshArmorTab();
         });
 
-        TabPane subTabs = new TabPane(itemsTab, armorTab);
+        TabPane subTabs = new TabPane(armorTab, itemsTab);
         subTabs.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 80;");
         VBox.setVgrow(subTabs, Priority.ALWAYS);
 
@@ -175,11 +175,12 @@ public class InventoryPanel {
 
     private static final ItemRegistryPanel.ArmorSlot[][] SLOT_GRID = {
         { ItemRegistryPanel.ArmorSlot.HEAD,      ItemRegistryPanel.ArmorSlot.NECK      },
-        { ItemRegistryPanel.ArmorSlot.SHOULDERS,  ItemRegistryPanel.ArmorSlot.CHEST     },
-        { ItemRegistryPanel.ArmorSlot.BACK,       ItemRegistryPanel.ArmorSlot.WRISTS    },
-        { ItemRegistryPanel.ArmorSlot.HANDS,      ItemRegistryPanel.ArmorSlot.WAIST     },
-        { ItemRegistryPanel.ArmorSlot.LEGS,       ItemRegistryPanel.ArmorSlot.FEET      },
-        { ItemRegistryPanel.ArmorSlot.RING,       ItemRegistryPanel.ArmorSlot.TRINKET   },
+        { ItemRegistryPanel.ArmorSlot.SHOULDERS, ItemRegistryPanel.ArmorSlot.CHEST     },
+        { ItemRegistryPanel.ArmorSlot.BACK,      ItemRegistryPanel.ArmorSlot.WAIST     },
+        { ItemRegistryPanel.ArmorSlot.WRISTS_L,  ItemRegistryPanel.ArmorSlot.WRISTS_R  },
+        { ItemRegistryPanel.ArmorSlot.HANDS,     ItemRegistryPanel.ArmorSlot.LEGS      },
+        { ItemRegistryPanel.ArmorSlot.FEET,      ItemRegistryPanel.ArmorSlot.TRINKET   },
+        { ItemRegistryPanel.ArmorSlot.RING_L,    ItemRegistryPanel.ArmorSlot.RING_R    },
     };
 
     private Node buildArmorTab() {
