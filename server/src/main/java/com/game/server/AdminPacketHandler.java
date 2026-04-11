@@ -48,6 +48,7 @@ public class AdminPacketHandler {
         }
 
         switch (packet.type) {
+            case ADMIN_CONNECT_REQUEST    -> handleAdminConnect(socket, session, addr, port);
             case ADMIN_USER_LIST_REQUEST  -> handleUserList(socket, session, addr, port);
             case ADMIN_KICK_REQUEST       -> handleKick(socket, packet, session, addr, port);
             case ADMIN_BAN_REQUEST        -> handleBan(socket, packet, session, addr, port);
@@ -61,6 +62,15 @@ public class AdminPacketHandler {
     }
 
     // ── Handlers ─────────────────────────────────────────────────────────────
+
+    private void handleAdminConnect(DatagramSocket socket, Session session,
+                                    InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+        out.put("success", true);
+        out.put("username", session.username());
+        sendResponse(socket, out, PacketType.ADMIN_CONNECT_RESPONSE, addr, port);
+        log.info("ADMIN_CONNECT ok  user='{}'  from {}:{}", session.username(), addr.getHostAddress(), port);
+    }
 
     private void handleUserList(DatagramSocket socket, Session session,
                                 InetAddress addr, int port) throws Exception {
@@ -341,6 +351,7 @@ public class AdminPacketHandler {
 
     private PacketType packetTypeFor(PacketType request) {
         return switch (request) {
+            case ADMIN_CONNECT_REQUEST   -> PacketType.ADMIN_CONNECT_RESPONSE;
             case ADMIN_USER_LIST_REQUEST -> PacketType.ADMIN_USER_LIST_RESPONSE;
             case ADMIN_KICK_REQUEST      -> PacketType.ADMIN_KICK_RESPONSE;
             case ADMIN_BAN_REQUEST       -> PacketType.ADMIN_BAN_RESPONSE;

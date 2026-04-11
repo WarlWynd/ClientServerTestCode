@@ -9,6 +9,8 @@ import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -19,6 +21,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 public class LoginScreen {
 
@@ -131,6 +134,15 @@ public class LoginScreen {
     private boolean pendingRemember;
     private boolean pendingRememberPassword;
 
+    // Pending session data stored between LOGIN_RESPONSE and ADMIN_CONNECT_RESPONSE
+    private String  pendingToken;
+    private String  pendingUsername;
+    private boolean pendingIsAdmin;
+    private boolean pendingIsGraphicsDev;
+    private boolean pendingIsBoardDev;
+    private boolean pendingIsAudioDev;
+    private Timeline adminConnectTimeout;
+
     private void doLogin(boolean rememberEmail, boolean rememberPassword) {
         String email    = emailField.getText().trim();
         String password = passwordField.getText();
@@ -158,37 +170,69 @@ public class LoginScreen {
                 case LOGIN_RESPONSE -> {
                     boolean success = packet.payload.get("success").asBoolean();
                     if (success) {
-                        String  token    = packet.payload.get("sessionToken").asText();
-                        String  username = packet.payload.get("username").asText();
-                        boolean isAdmin       = packet.payload.has("isAdmin")       && packet.payload.get("isAdmin").asBoolean();
-                        boolean isGraphicsDev = packet.payload.has("isGraphicsDev") && packet.payload.get("isGraphicsDev").asBoolean();
-                        boolean isBoardDev    = packet.payload.has("isBoardDev")    && packet.payload.get("isBoardDev").asBoolean();
-                        boolean isAudioDev    = packet.payload.has("isAudioDev")    && packet.payload.get("isAudioDev").asBoolean();
-                        // Tab visibility is driven purely by MySQL role flags. Security for
-                        // admin/dev actions is enforced at the network level — sendToAdmin()
-                        // routes to the internal LAN IP which external users cannot reach.
-                        SessionStore.set(token, username, isAdmin, isGraphicsDev, isBoardDev, isAudioDev);
-                        AppSettings.setRememberUsername(pendingRemember);
-                        AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
-                        AppSettings.setRememberPassword(pendingRememberPassword);
-                        AppSettings.setLastPassword(pendingRememberPassword
-                                ? PasswordCrypto.encrypt(passwordField.getText(), emailField.getText().trim())
-                                : "");
-                        AppSettings.save();
+                        pendingToken        = packet.payload.get("sessionToken").asText();
+                        pendingUsername     = packet.payload.get("username").asText();
+                        pendingIsAdmin      = packet.payload.has("isAdmin")       && packet.payload.get("isAdmin").asBoolean();
+                        pendingIsGraphicsDev = packet.payload.has("isGraphicsDev") && packet.payload.get("isGraphicsDev").asBoolean();
+                        pendingIsBoardDev   = packet.payload.has("isBoardDev")    && packet.payload.get("isBoardDev").asBoolean();
+                        pendingIsAudioDev   = packet.payload.has("isAudioDev")    && packet.payload.get("isAudioDev").asBoolean();
                         if (packet.payload.has("characterName"))
                             SessionStore.setCharacterName(packet.payload.get("characterName").asText());
-                        new CharacterScreen(stage, client).show();
+
+                        if (pendingIsAdmin) {
+                            // MySQL says admin — verify we can actually reach the admin UDP endpoint
+                            statusLabel.setText("Verifying admin access…");
+                            ObjectNode req = PacketSerializer.mapper().createObjectNode();
+                            client.sendToAdmin(new Packet(PacketType.ADMIN_CONNECT_REQUEST, pendingToken, req));
+
+                            adminConnectTimeout = new Timeline(
+                                    new KeyFrame(Duration.seconds(2), e -> completeLogin(false)));
+                            adminConnectTimeout.setCycleCount(1);
+                            adminConnectTimeout.play();
+                        } else {
+                            completeLogin(false);
+                        }
                     } else {
                         statusLabel.setText(packet.payload.get("message").asText("Login failed."));
                         loginButton.setDisable(false);
                     }
                 }
+                case ADMIN_CONNECT_RESPONSE -> {
+                    if (adminConnectTimeout != null) {
+                        adminConnectTimeout.stop();
+                        adminConnectTimeout = null;
+                    }
+                    boolean ok = packet.payload.has("success") && packet.payload.get("success").asBoolean();
+                    completeLogin(ok);
+                }
                 case ERROR -> {
+                    if (adminConnectTimeout != null) {
+                        adminConnectTimeout.stop();
+                        adminConnectTimeout = null;
+                    }
                     statusLabel.setText(packet.payload.get("message").asText("Server error."));
                     loginButton.setDisable(false);
                 }
                 default -> {}
             }
         });
+    }
+
+    /** Finalise the login, granting admin only if adminConfirmed=true (live UDP handshake succeeded). */
+    private void completeLogin(boolean adminConfirmed) {
+        boolean isAdmin = pendingIsAdmin && adminConfirmed;
+        // Tab visibility is driven purely by MySQL role flags + live admin UDP verify.
+        // Security for admin/dev actions is enforced at the network level — sendToAdmin()
+        // routes to the internal LAN IP which external users cannot reach.
+        SessionStore.set(pendingToken, pendingUsername, isAdmin,
+                pendingIsGraphicsDev, pendingIsBoardDev, pendingIsAudioDev);
+        AppSettings.setRememberUsername(pendingRemember);
+        AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");
+        AppSettings.setRememberPassword(pendingRememberPassword);
+        AppSettings.setLastPassword(pendingRememberPassword
+                ? PasswordCrypto.encrypt(passwordField.getText(), emailField.getText().trim())
+                : "");
+        AppSettings.save();
+        new CharacterScreen(stage, client).show();
     }
 }

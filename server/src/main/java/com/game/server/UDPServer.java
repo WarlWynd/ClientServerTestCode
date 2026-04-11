@@ -136,7 +136,8 @@ public class UDPServer {
             case GAME_JOIN     -> gameHandler.handleJoin(socket, packet, session, addr, port);
             case GAME_LEAVE    -> gameHandler.handleLeave(socket, packet, session);
             case PLAYER_UPDATE -> gameHandler.handlePlayerUpdate(socket, packet, session);
-            case ADMIN_USER_LIST_REQUEST,
+            case ADMIN_CONNECT_REQUEST,
+                 ADMIN_USER_LIST_REQUEST,
                  ADMIN_KICK_REQUEST,
                  ADMIN_BAN_REQUEST,
                  ADMIN_SET_ADMIN_REQUEST,

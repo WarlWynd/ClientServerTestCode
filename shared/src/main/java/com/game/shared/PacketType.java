@@ -38,6 +38,8 @@ public enum PacketType {
     SERVER_SETTINGS,
 
     // ── Admin ────────────────────────────────────────────────────
+    ADMIN_CONNECT_REQUEST,
+    ADMIN_CONNECT_RESPONSE,
     ADMIN_USER_LIST_REQUEST,
     ADMIN_USER_LIST_RESPONSE,
     ADMIN_KICK_REQUEST,
