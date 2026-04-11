@@ -68,4 +68,13 @@ public enum PacketType {
     INVENTORY_DROP_RESPONSE,
     INVENTORY_GIVE_ITEM_REQUEST,
     INVENTORY_GIVE_ITEM_RESPONSE,
+
+    // ── Quests ───────────────────────────────────────────────────────────
+    QUEST_LIST_REQUEST,
+    QUEST_LIST_RESPONSE,
+    QUEST_ACCEPT_REQUEST,
+    QUEST_ACCEPT_RESPONSE,
+    QUEST_ABANDON_REQUEST,
+    QUEST_ABANDON_RESPONSE,
+    MOB_KILLED,
 }

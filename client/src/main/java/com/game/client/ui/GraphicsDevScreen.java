@@ -403,7 +403,16 @@ public class GraphicsDevScreen {
                     for (File f : files) frameList.getItems().add(f.getName());
                 }
             }
-            int n = PlayerAnimator.getStateFrameCount(s);
+            // KIP_UP uses ku001–ku011 in the sprites root when no states/kip_up/ files exist
+            if (s == PlayerAnimator.State.KIP_UP && frameList.getItems().isEmpty()) {
+                File spritesRoot = new File(SPRITES_DIR);
+                for (int i = 1; i <= 11; i++) {
+                    File f = new File(spritesRoot, String.format("ku%03d.png", i));
+                    if (f.exists()) frameList.getItems().add(f.getName());
+                }
+            }
+            int n = frameList.getItems().size();
+            if (n == 0) n = PlayerAnimator.getStateFrameCount(s);
             int sel = statePicker.getSelectionModel().getSelectedItems().size();
             String label = sel > 1 ? s.name() + " (+" + (sel - 1) + " more selected)" : s.name();
             importStatus.setText(n > 0 ? "✓ " + n + " frame(s) — " + label : "No frames — " + label);

@@ -42,6 +42,7 @@ public class UDPServer {
     private final CharacterHandler   charHandler       = new CharacterHandler();
     private final AdminPacketHandler adminHandler      = new AdminPacketHandler(authHandler, gameHandler);
     private final InventoryHandler   inventoryHandler  = new InventoryHandler();
+    private final QuestHandler       questHandler      = new QuestHandler();
     private final SessionRepository  sessionRepo       = new SessionRepository();
 
     private DatagramSocket         socket;
@@ -151,6 +152,10 @@ public class UDPServer {
             case INVENTORY_GIVE_ITEM_REQUEST -> inventoryHandler.handleGiveItem(socket, packet, session, addr, port);
             case INVENTORY_EQUIP_REQUEST     -> inventoryHandler.handleEquip(socket, packet, session, addr, port);
             case INVENTORY_DROP_REQUEST      -> inventoryHandler.handleDrop(socket, packet, session, addr, port);
+            case QUEST_LIST_REQUEST          -> questHandler.handleList(socket, packet, session, addr, port);
+            case QUEST_ACCEPT_REQUEST        -> questHandler.handleAccept(socket, packet, session, addr, port);
+            case QUEST_ABANDON_REQUEST       -> questHandler.handleAbandon(socket, packet, session, addr, port);
+            case MOB_KILLED                  -> questHandler.handleMobKilled(socket, packet, session, addr, port);
             default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }

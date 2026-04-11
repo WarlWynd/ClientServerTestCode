@@ -1,0 +1,38 @@
+[
+  {
+    "id": "quest_001",
+    "name": "First Blood",
+    "description": "Defeat 3 enemies in the test fight board.",
+    "objectives": [
+      { "type": "KILL_MOB", "target": "any", "count": 3 }
+    ],
+    "rewards": {
+      "gold": 50,
+      "xp": 100
+    }
+  },
+  {
+    "id": "quest_002",
+    "name": "Warrior's Trial",
+    "description": "Defeat 10 enemies to prove your worth.",
+    "objectives": [
+      { "type": "KILL_MOB", "target": "any", "count": 10 }
+    ],
+    "rewards": {
+      "gold": 200,
+      "xp": 500
+    }
+  },
+  {
+    "id": "quest_003",
+    "name": "Well Stocked",
+    "description": "Collect 5 items in your inventory.",
+    "objectives": [
+      { "type": "HAVE_ITEMS", "count": 5 }
+    ],
+    "rewards": {
+      "gold": 100,
+      "xp": 150
+    }
+  }
+]

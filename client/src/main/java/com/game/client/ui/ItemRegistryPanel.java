@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.client.SessionStore;
+import com.game.client.UDPClient;
+import com.game.shared.Packet;
+import com.game.shared.PacketSerializer;
+import com.game.shared.PacketType;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -49,6 +54,7 @@ public class ItemRegistryPanel {
     }
 
     // ── Panel state ───────────────────────────────────────────────────────────
+    private UDPClient           client   = null;
     private final List<ItemDef> items    = new ArrayList<>();
     private ItemDef             selected = null;
 
@@ -60,6 +66,14 @@ public class ItemRegistryPanel {
     private Spinner<Integer>  spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue;
     private Label             statusLabel;
     private TextField         searchField;
+
+    // ── Construction ─────────────────────────────────────────────────────────
+
+    public ItemRegistryPanel() {}
+
+    public ItemRegistryPanel(UDPClient client) {
+        this.client = client;
+    }
 
     // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -82,11 +96,18 @@ public class ItemRegistryPanel {
         itemList.setStyle("-fx-background-color: #0f0f1e; -fx-border-color: #3a3a6a;" +
                           "-fx-border-radius: 4; -fx-control-inner-background: #0f0f1e;");
         itemList.setCellFactory(lv -> new ListCell<>() {
+            private static final java.util.Set<String> COINS = java.util.Set.of(
+                    "Bronze Coin", "Silver Coin", "Gold Coin", "Platinum Coin");
             @Override protected void updateItem(String item, boolean empty) {
                 super.updateItem(item, empty);
                 setText(empty || item == null ? null : item);
-                if (!empty) setStyle("-fx-text-fill: #e0e0e0; -fx-font-size: 12;" +
-                        "-fx-background-color: " + (isSelected() ? "#3a3a6a" : "transparent") + ";");
+                if (!empty) {
+                    String bare = item.length() > 2 ? item.substring(2).trim() : item.trim();
+                    String padding = COINS.contains(bare) ? "1 4 1 4" : "4 4 4 4";
+                    setStyle("-fx-text-fill: #e0e0e0; -fx-font-size: 12;" +
+                            "-fx-padding: " + padding + ";" +
+                            "-fx-background-color: " + (isSelected() ? "#3a3a6a" : "transparent") + ";");
+                }
             }
         });
         refreshList("");
@@ -209,6 +230,13 @@ public class ItemRegistryPanel {
                 lbl("Stat Bonuses  (negative = penalty):", 11, true),
                 statsGrid,
                 saveBtn, statusLabel);
+
+        if (client != null) {
+            Button giveBtn = btn("🎒 Give to Self", "#1e3a5f");
+            giveBtn.setMaxWidth(200);
+            giveBtn.setOnAction(e -> giveToSelf());
+            cfgCol.getChildren().add(giveBtn);
+        }
         cfgCol.setPrefWidth(340);
         VBox.setVgrow(cfgCol, Priority.ALWAYS);
 
@@ -321,11 +349,25 @@ public class ItemRegistryPanel {
             if (sp != null) sp.getValueFactory().setValue(0);
     }
 
+    private static final java.util.List<String> COIN_ORDER =
+            java.util.List.of("Bronze Coin", "Silver Coin", "Gold Coin", "Platinum Coin");
+
     private void refreshList(String filter) {
         String sel = selected != null ? selected.name : null;
         itemList.getItems().clear();
         String lo = (filter == null ? "" : filter).toLowerCase();
-        for (ItemDef it : items) {
+
+        // Sort: coins first (in tier order), then everything else in insertion order
+        java.util.List<ItemDef> sorted = new java.util.ArrayList<>(items);
+        sorted.sort((a, b) -> {
+            int ia = COIN_ORDER.indexOf(a.name), ib = COIN_ORDER.indexOf(b.name);
+            if (ia >= 0 && ib >= 0) return Integer.compare(ia, ib);
+            if (ia >= 0) return -1;
+            if (ib >= 0) return  1;
+            return 0;
+        });
+
+        for (ItemDef it : sorted) {
             if (!lo.isEmpty() && !it.name.toLowerCase().contains(lo)) continue;
             itemList.getItems().add(categoryIcon(it.category) + " " + it.name);
         }
@@ -400,29 +442,34 @@ public class ItemRegistryPanel {
     }
 
     private void ensureDefaults() {
-        if (!items.isEmpty()) return;
+        // Merge: add any default that isn't already present by name.
+        // Currency (bronze=1 < silver=10 < gold=100 < platinum=1000)
+        addMissing("Bronze Coin",   ItemCategory.MATERIAL,   "Bronze currency. 10 bronze = 1 silver.",          0,0,  0,0,0,0,0,0,0,0,   1);
+        addMissing("Silver Coin",   ItemCategory.MATERIAL,   "Silver currency. 10 silver = 1 gold.",            0,0,  0,0,0,0,0,0,0,0,  10);
+        addMissing("Gold Coin",     ItemCategory.MATERIAL,   "Gold currency. 10 gold = 1 platinum.",            0,0,  0,0,0,0,0,0,0,0, 100);
+        addMissing("Platinum Coin", ItemCategory.MATERIAL,   "Platinum currency. Most valuable coin.",          0,0,  0,0,0,0,0,0,0,0,1000);
 
         // Materials
-        addDefault("Gold Coin",     ItemCategory.MATERIAL,   "Standard currency.",                              0,0,  0,0,0,0,0,0,0,0,  1);
-        addDefault("Fang",          ItemCategory.MATERIAL,   "A sharp beast fang. Used in crafting.",           0,0,  0,1,0,0,0,1,0,0,  3);
-        addDefault("Animal Hide",   ItemCategory.MATERIAL,   "Rough hide. Useful for crafting armor.",          0,0,  0,0,0,0,1,0,0,0,  5);
-        addDefault("Cloth Scraps",  ItemCategory.MATERIAL,   "Torn cloth pieces.",                              0,0,  0,0,0,0,0,0,0,0,  2);
-        addDefault("Bone Fragment", ItemCategory.MATERIAL,   "Fragment of old bone.",                           0,0,  0,0,0,0,0,0,0,0,  2);
+        addMissing("Fang",          ItemCategory.MATERIAL,   "A sharp beast fang. Used in crafting.",           0,0,  0,1,0,0,0,1,0,0,  3);
+        addMissing("Animal Hide",   ItemCategory.MATERIAL,   "Rough hide. Useful for crafting armor.",          0,0,  0,0,0,0,1,0,0,0,  5);
+        addMissing("Cloth Scraps",  ItemCategory.MATERIAL,   "Torn cloth pieces.",                              0,0,  0,0,0,0,0,0,0,0,  2);
+        addMissing("Bone Fragment", ItemCategory.MATERIAL,   "Fragment of old bone.",                           0,0,  0,0,0,0,0,0,0,0,  2);
 
         // Consumables
-        addDefault("Health Potion", ItemCategory.CONSUMABLE, "Restores HP when used.",                         20,0,  0,0,0,0,0,0,0,0, 15);
-        addDefault("Mana Potion",   ItemCategory.CONSUMABLE, "Restores Mana when used.",                        0,20, 0,0,0,0,0,0,0,0, 15);
-        addDefault("Stamina Brew",  ItemCategory.CONSUMABLE, "Temporarily boosts STA.",                         0,0,  0,0,0,0,3,0,0,0, 12);
+        addMissing("Health Potion", ItemCategory.CONSUMABLE, "Restores HP when used.",                         20,0,  0,0,0,0,0,0,0,0, 15);
+        addMissing("Mana Potion",   ItemCategory.CONSUMABLE, "Restores Mana when used.",                        0,20, 0,0,0,0,0,0,0,0, 15);
+        addMissing("Stamina Brew",  ItemCategory.CONSUMABLE, "Temporarily boosts STA.",                         0,0,  0,0,0,0,3,0,0,0, 12);
 
         // Boss drops
-        addDefault("Boss Trophy",   ItemCategory.MISC,       "Proof of a great victory.",                       0,0,  1,1,1,1,1,1,1,1, 50);
-        addDefault("Rare Equipment",ItemCategory.ARMOR,      "Finely crafted gear.",                           10,5,  0,3,0,0,2,0,2,0,100);
+        addMissing("Boss Trophy",   ItemCategory.MISC,       "Proof of a great victory.",                       0,0,  1,1,1,1,1,1,1,1, 50);
+        addMissing("Rare Equipment",ItemCategory.ARMOR,      "Finely crafted gear.",                           10,5,  0,3,0,0,2,0,2,0,100);
     }
 
-    private void addDefault(String name, ItemCategory cat, String desc,
+    private void addMissing(String name, ItemCategory cat, String desc,
                             int HP, int MANA,
                             int INT, int STR, int WIS, int CHA,
                             int STA, int AGI, int DEX, int LUK, int value) {
+        if (items.stream().anyMatch(it -> it.name.equals(name))) return;
         ItemDef it = new ItemDef(name, cat);
         it.description = desc;
         it.statHp   = HP;   it.statMana = MANA;
@@ -430,6 +477,29 @@ public class ItemRegistryPanel {
         it.statSta  = STA;  it.statAgi  = AGI;  it.statDex = DEX; it.statLuk = LUK;
         it.value = value;
         items.add(it);
+    }
+
+    private void giveToSelf() {
+        if (selected == null) {
+            statusLabel.setText("Select an item first.");
+            return;
+        }
+        if (client == null || !SessionStore.isLoggedIn()) {
+            statusLabel.setText("Not connected.");
+            return;
+        }
+        try {
+            ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+            payload.put("itemName", selected.name);
+            payload.put("quantity", 1);
+            client.send(new Packet(PacketType.INVENTORY_GIVE_ITEM_REQUEST,
+                    SessionStore.getToken(), payload));
+            statusLabel.setText("Sent \u2713 — check your inventory.");
+            statusLabel.setStyle("-fx-text-fill: #50c050; -fx-font-size: 11;");
+        } catch (Exception ex) {
+            statusLabel.setText("Error: " + ex.getMessage());
+            statusLabel.setStyle("-fx-text-fill: #e94560; -fx-font-size: 11;");
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

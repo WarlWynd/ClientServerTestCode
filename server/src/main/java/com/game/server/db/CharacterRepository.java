@@ -51,6 +51,21 @@ public class CharacterRepository {
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
+    /** Returns the character row id for the given user, or -1 if none. */
+    public long getCharacterId(long userId) {
+        String sql = "SELECT id FROM characters WHERE user_id = ? LIMIT 1";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong("id") : -1L;
+            }
+        } catch (SQLException e) {
+            log.error("getCharacterId() failed: {}", e.getMessage());
+            return -1L;
+        }
+    }
+
     /** Returns the character name for the given user, or null if none. */
     public String getCharacterName(long userId) {
         String sql = "SELECT character_name FROM characters WHERE user_id = ? LIMIT 1";

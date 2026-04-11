@@ -362,6 +362,40 @@
     -fx-border-width: 2 0 0 0;
 }
 
+/* ── List View ────────────────────────────────────────────────────────────── */
+.list-dark {
+    -fx-background-color: -af-surface;
+    -fx-control-inner-background: -af-surface;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+.list-dark .list-cell {
+    -fx-text-fill: -af-text-primary;
+    -fx-background-color: -af-surface;
+    -fx-padding: 4 8 4 8;
+}
+.list-dark .list-cell:odd {
+    -fx-background-color: -af-card;
+}
+.list-dark .list-cell:filled:hover {
+    -fx-background-color: -af-border;
+    -fx-text-fill: -af-text-primary;
+}
+.list-dark .list-cell:selected,
+.list-dark .list-cell:filled:selected {
+    -fx-background-color: -af-accent;
+    -fx-text-fill: white;
+}
+
+/* ── Canvas preview pane ──────────────────────────────────────────────────── */
+.canvas-preview-bg {
+    -fx-background-color: -af-border-light;
+    -fx-border-color: -af-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
 /* ── ComboBox (dark theme) ────────────────────────────────────────────────── */
 .combo-dark {
     -fx-background-color: -af-card;

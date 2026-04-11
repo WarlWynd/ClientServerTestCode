@@ -17,5 +17,48 @@
     "row" : 20,
     "respawnSec" : 30,
     "maxCount" : 2
+  } ],
+  "BoardOne.csv" : [ {
+    "mob" : "Wolf",
+    "col" : 14,
+    "row" : 15,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Wolf",
+    "col" : 7,
+    "row" : 42,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Skeleton",
+    "col" : 16,
+    "row" : 36,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Skeleton",
+    "col" : 28,
+    "row" : 40,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Warlord",
+    "col" : 52,
+    "row" : 42,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Skeleton",
+    "col" : 44,
+    "row" : 42,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Skeleton",
+    "col" : 39,
+    "row" : 40,
+    "respawnSec" : 30,
+    "maxCount" : 2
   } ]
 }

@@ -105,6 +105,15 @@ public class GameScreen {
     private long     npcHitTimeMs     = 0;
     private PlayerAnimator.State npcCurrentAttack = PlayerAnimator.State.PUNCH;
     private boolean  npcActive        = false;
+    private int      npcHp            = 100;
+    private static final int   NPC_MAX_HP             = 100;
+    private long     npcRespawnMs     = 0;   // >0 means NPC is dead, waiting to respawn
+    private static final long  NPC_RESPAWN_DELAY_MS   = 5_000;
+    private long     playerLastAttackMs = 0;
+    private static final long  PLAYER_ATTACK_COOLDOWN_MS = 600;
+    private static final float PLAYER_ATTACK_RANGE    = 80f;
+    private static final int[] PLAYER_DAMAGE          = { 8, 10, 12, 15, 18, 20 };
+    private boolean  wasAttackHeld    = false;
     private static final long  NPC_ATTACK_INTERVAL_MS = 2_500;
     private static final long  NPC_HIT_DELAY_MS       = 500;
     private static final float NPC_HIT_RANGE          = 70f;
@@ -156,6 +165,8 @@ public class GameScreen {
     private GraphicsDevScreen graphicsDevScreen;
     private InventoryPanel    inventoryPanel;
     private Tab               inventoryTab;
+    private QuestPanel        questPanel;
+    private Tab               questTab;
 
     // ── System message bar ────────────────────────────────────────────────────
     private HBox    systemMsgBar;
@@ -370,10 +381,17 @@ public class GameScreen {
         inventoryTab.setClosable(false);
         inventoryTab.getProperties().put("connectionIp", serverIp);
 
+        // ── Quest tab (all users) ─────────────────────────────────────────────
+        questPanel = new QuestPanel(client);
+        questTab = new Tab("📜 Quests " + serverIp, questPanel.build());
+        questTab.setClosable(false);
+        questTab.getProperties().put("connectionIp", serverIp);
+
         // ── Role-gated tabs ───────────────────────────────────────────────────
         java.util.List<Tab> tabs = new java.util.ArrayList<>();
         tabs.add(gameTab);
         tabs.add(inventoryTab);
+        tabs.add(questTab);
         tabs.add(settingsTab);
 
         if (SessionStore.isAdmin()) {
@@ -443,6 +461,10 @@ public class GameScreen {
             }
             if (c == KeyCode.I && tabPane.getSelectionModel().getSelectedItem() == gameTab) {
                 tabPane.getSelectionModel().select(inventoryTab);
+                e.consume();
+            }
+            if (c == KeyCode.Q && tabPane.getSelectionModel().getSelectedItem() == gameTab) {
+                tabPane.getSelectionModel().select(questTab);
                 e.consume();
             }
         });
@@ -575,6 +597,33 @@ public class GameScreen {
         }
 
         localAnimator.update(localVelX, velY, localY <= PLAYER_RADIUS + 2f || isStandingOnSolid());
+
+        // ── Player attack (F key — rising edge, with cooldown) ────────────────
+        boolean attackHeld = heldKeys.contains(KeyCode.F);
+        long    nowMs      = System.currentTimeMillis();
+        if (attackHeld && !wasAttackHeld && npcActive
+                && nowMs - playerLastAttackMs > PLAYER_ATTACK_COOLDOWN_MS
+                && Math.abs(npcX - localX) <= PLAYER_ATTACK_RANGE) {
+            playerLastAttackMs = nowMs;
+            int dmg = PLAYER_DAMAGE[rng.nextInt(PLAYER_DAMAGE.length)];
+            npcHp = Math.max(0, npcHp - dmg);
+            localAnimator.forceState(PlayerAnimator.State.PUNCH);
+            // Floating damage text on NPC
+            damageTexts.add(new DamageText(npcX + (rng.nextFloat() - 0.5f) * 20f,
+                    npcY + PLAYER_RADIUS + 10f, "-" + dmg));
+            if (npcHp <= 0) {
+                npcActive     = false;
+                npcRespawnMs  = nowMs + NPC_RESPAWN_DELAY_MS;
+                localScore++;
+                try {
+                    ObjectNode kp = PacketSerializer.mapper().createObjectNode();
+                    kp.put("mobType", "any");
+                    sendPacket(PacketType.MOB_KILLED, kp);
+                } catch (Exception ignored) {}
+            }
+        }
+        wasAttackHeld = attackHeld;
+
         updateCamera();
 
         long now = System.currentTimeMillis();
@@ -827,6 +876,7 @@ public class GameScreen {
             npcAnimator.draw(gc, npcX, npcFeetY, npcColor);
             npcWeaponRenderer.draw(gc, npcAnimator, npcX, npcFeetY, npcColor);
             drawNameLabel(gc, npcX, npcFeetY, "ENEMY", 0);
+            drawNpcHpBar(gc, npcX, npcFeetY);
         }
 
         // Local player (drawn on top)
@@ -868,6 +918,18 @@ public class GameScreen {
         gc.fillRoundRect(px, py, textW + 8, 14, 4, 4);
         gc.setFill(Color.WHITE);
         gc.fillText(label, x - (float)(textW / 2), canvasY - PlayerAnimator.LABEL_ABOVE - 3);
+    }
+
+    private void drawNpcHpBar(GraphicsContext gc, float x, float canvasY) {
+        double barW  = 50;
+        double barH  = 6;
+        double barX  = x - barW / 2;
+        double barY  = canvasY - PlayerAnimator.LABEL_ABOVE - 32;
+        double fillW = barW * ((double) npcHp / NPC_MAX_HP);
+        gc.setFill(Color.color(0.2, 0.0, 0.0, 0.7));
+        gc.fillRoundRect(barX, barY, barW, barH, 3, 3);
+        gc.setFill(Color.web("#e03030"));
+        gc.fillRoundRect(barX, barY, fillW, barH, 3, 3);
     }
 
     // ── Packet handling ──────────────────────────────────────────────────────
@@ -990,6 +1052,11 @@ public class GameScreen {
                  INVENTORY_DROP_RESPONSE,
                  INVENTORY_GIVE_ITEM_RESPONSE -> {
                 if (inventoryPanel != null) inventoryPanel.onPacket(packet);
+            }
+            case QUEST_LIST_RESPONSE,
+                 QUEST_ACCEPT_RESPONSE,
+                 QUEST_ABANDON_RESPONSE -> {
+                if (questPanel != null) questPanel.onPacket(packet);
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
@@ -1197,15 +1264,27 @@ public class GameScreen {
             damageTexts.clear();
             return;
         }
-        npcActive = true;
-        npcX      = AppSettings.getTestNpcX();
-        npcY      = AppSettings.getTestNpcY();
+
+        long now = System.currentTimeMillis();
+
+        // Handle respawn
+        if (!npcActive && npcRespawnMs > 0 && now >= npcRespawnMs) {
+            npcActive    = true;
+            npcHp        = NPC_MAX_HP;
+            npcRespawnMs = 0;
+            npcLastAttackMs = 0;
+        }
+        if (!npcActive) {
+            damageTexts.removeIf(DamageText::expired);
+            return;
+        }
+
+        npcX = AppSettings.getTestNpcX();
+        npcY = AppSettings.getTestNpcY();
 
         // Face toward player
         float npcVelX = npcX > localX ? -0.4f : 0.4f;
         npcAnimator.update(npcVelX, 0f, true);
-
-        long now = System.currentTimeMillis();
 
         // Launch new attack on interval
         if (now - npcLastAttackMs > NPC_ATTACK_INTERVAL_MS) {
