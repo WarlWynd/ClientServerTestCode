@@ -393,6 +393,9 @@ public class PlayerAnimator {
         } catch (Exception ignored) {}
     }
 
+    /** Returns the raw sprite image array for the given state, or null if none loaded. */
+    public static Image[] getStateSprites(State s) { return STATE_SPRITES.get(s); }
+
     public static boolean hasStateSprites(State s) {
         Image[] imgs = STATE_SPRITES.get(s);
         if (imgs == null) return false;

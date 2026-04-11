@@ -445,10 +445,27 @@ public class GraphicsDevScreen {
             if (timer[0] != null) timer[0].stop();
             paused[0] = false;
             pausedAt[0] = 0L;
+
+            // Drive animation directly from imported sprite images (bypasses
+            // poseCount() mapping which is based on stick-figure pose arrays and
+            // would cap quadruped states like POUNCE to 1 frame on RIGHT direction).
+            javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s);
+            int[] spriteIdx = { 0 };
+            long[] lastTickMs = { 0L };
+            long intervalMs = switch (s) {
+                case TROT       -> 130;
+                case GALLOP     -> 70;
+                case POUNCE     -> 60;
+                case BITE       -> 70;
+                case QUAD_DEATH -> 100;
+                case QUAD_IDLE  -> 700;
+                default         -> 120;
+            };
+
             previewAnim[0] = new PlayerAnimator();
             previewAnim[0].forceState(s);
             previewAnim[0].setForcedDirection(PlayerAnimator.Direction.RIGHT);
-            previewAnim[0].setHoldLastFrame(!repeat[0]);
+
             timer[0] = new javafx.animation.AnimationTimer() {
                 public void handle(long now) {
                     if (paused[0]) return;
@@ -459,16 +476,28 @@ public class GraphicsDevScreen {
                     gc.setFill(javafx.scene.paint.Color.web("#2a2a4a"));
                     gc.fillRect(0, 0, cw, ch);
 
-                    previewAnim[0].tick(nowMs);
-                    javafx.scene.image.Image img = previewAnim[0].getCurrentFrameImage();
-                    if (img != null) {
-                        double pad    = 12;
-                        double scale  = Math.min((cw - pad * 2) / img.getWidth(),
-                                                 (ch - pad * 2) / img.getHeight());
-                        double dw = img.getWidth()  * scale;
-                        double dh = img.getHeight() * scale;
-                        gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                    if (sprites != null && sprites.length > 0) {
+                        // Advance sprite frame on interval
+                        if (lastTickMs[0] == 0) lastTickMs[0] = nowMs;
+                        if (nowMs - lastTickMs[0] >= intervalMs) {
+                            int next = spriteIdx[0] + 1;
+                            boolean oneShot = PlayerAnimator.isOneShot(s);
+                            spriteIdx[0] = (oneShot && next >= sprites.length)
+                                    ? (repeat[0] ? 0 : sprites.length - 1)
+                                    : next % sprites.length;
+                            lastTickMs[0] = nowMs;
+                        }
+                        javafx.scene.image.Image img = sprites[spriteIdx[0]];
+                        if (img != null) {
+                            double pad   = 12;
+                            double scale = Math.min((cw - pad * 2) / img.getWidth(),
+                                                    (ch - pad * 2) / img.getHeight());
+                            double dw = img.getWidth()  * scale;
+                            double dh = img.getHeight() * scale;
+                            gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                        }
                     } else {
+                        // No sprite images — draw procedural stick figure
                         previewAnim[0].draw(gc, cw / 2, ch - 20,
                                 javafx.scene.paint.Color.WHITE, 1.5, nowMs);
                     }
