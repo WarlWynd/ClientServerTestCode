@@ -574,11 +574,31 @@ public class GraphicsDevScreen {
                 "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14; " +
                 "-fx-font-weight: bold;");
 
+        // ── Frame CRUD buttons (operate on Imported Frames list directly) ────────
+        String crudStyle = "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;";
+        Button addFrameBtn    = new Button("➕ Add");
+        Button updateFrameBtn = new Button("✏ Update");
+        Button deleteFrameBtn = new Button("🗑 Delete");
+        addFrameBtn.setStyle("-fx-background-color: #1a4a2e; -fx-text-fill: #50c050; " + crudStyle);
+        updateFrameBtn.setStyle("-fx-background-color: #2a2a1a; -fx-text-fill: #f0c030; " + crudStyle);
+        deleteFrameBtn.setStyle("-fx-background-color: #7b241c; -fx-text-fill: white; " + crudStyle);
+        updateFrameBtn.setDisable(true);
+        deleteFrameBtn.setDisable(true);
+
+        frameList.getSelectionModel().getSelectedItems().addListener(
+                (javafx.collections.ListChangeListener<String>) c -> {
+                    boolean hasSel = !frameList.getSelectionModel().getSelectedItems().isEmpty();
+                    updateFrameBtn.setDisable(!hasSel ||
+                            frameList.getSelectionModel().getSelectedItems().size() != 1);
+                    deleteFrameBtn.setDisable(!hasSel);
+                });
+
         // Internal clipboard: holds source PNGs copied from a state's folder
         final List<File>[] clipboard = new List[]{ new java.util.ArrayList<>() };
 
         HBox btnRow  = new HBox(6, browseBtn, importBtn, clearBtn);
         HBox btnRow2 = new HBox(6, copyBtn, pasteBtn, saveFrameBtn);
+        HBox btnRow3 = new HBox(6, addFrameBtn, updateFrameBtn, deleteFrameBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
         btnRow2.setAlignment(Pos.CENTER_LEFT);
 
@@ -775,6 +795,104 @@ browseBtn.setOnAction(e -> {
             importStatus.getStyleClass().add("text-success");
         });
 
+        // ── Add: append new PNG(s) after the last existing frame ─────────────
+        addFrameBtn.setOnAction(e -> {
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (s == null) return;
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Add Frame(s)");
+            fc.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PNG Images", "*.png"));
+            List<File> picked = fc.showOpenMultipleDialog(stage);
+            if (picked == null || picked.isEmpty()) return;
+            picked = new java.util.ArrayList<>(picked);
+            picked.sort(java.util.Comparator.comparing(File::getName));
+            try {
+                Path destDir = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+                Files.createDirectories(destDir);
+                // Find next available frame number
+                File[] existing = destDir.toFile().listFiles(f -> f.getName().endsWith(".png"));
+                int next = existing == null ? 1 : existing.length + 1;
+                for (File f : picked) {
+                    Path dest = destDir.resolve(String.format("%03d.png", next++));
+                    Files.copy(f.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                }
+                PlayerAnimator.reloadStateSprites(s);
+                refreshFrameList.run();
+                importStatus.setText("✓ Added " + picked.size() + " frame(s) to " + s.name());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-success");
+            } catch (Exception ex) {
+                importStatus.setText("✗ Add failed: " + ex.getMessage());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-error");
+            }
+        });
+
+        // ── Update: replace a single selected frame with a new PNG ────────────
+        updateFrameBtn.setOnAction(e -> {
+            String sel = frameList.getSelectionModel().getSelectedItem();
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (sel == null || s == null) return;
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Replace " + sel);
+            fc.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("PNG Images", "*.png"));
+            File picked = fc.showOpenDialog(stage);
+            if (picked == null) return;
+            try {
+                Path dest = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase(), sel);
+                Files.copy(picked.toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                PlayerAnimator.reloadStateSprites(s);
+                refreshFrameList.run();
+                frameList.getSelectionModel().select(sel);
+                importStatus.setText("✓ Updated " + sel + " for " + s.name());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-success");
+            } catch (Exception ex) {
+                importStatus.setText("✗ Update failed: " + ex.getMessage());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-error");
+            }
+        });
+
+        // ── Delete: remove selected frame(s) and renumber remaining ──────────
+        deleteFrameBtn.setOnAction(e -> {
+            java.util.List<String> sel = new java.util.ArrayList<>(
+                    frameList.getSelectionModel().getSelectedItems());
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (sel.isEmpty() || s == null) return;
+            Path stateDir = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+            try {
+                for (String name : sel) Files.deleteIfExists(stateDir.resolve(name));
+                // Renumber remaining files sequentially
+                File[] remaining = stateDir.toFile().listFiles(f -> f.getName().endsWith(".png"));
+                if (remaining != null) {
+                    java.util.Arrays.sort(remaining);
+                    // Rename to temp names first to avoid conflicts
+                    for (int i = 0; i < remaining.length; i++)
+                        Files.move(remaining[i].toPath(),
+                                stateDir.resolve("__tmp_" + String.format("%03d.png", i + 1)),
+                                StandardCopyOption.REPLACE_EXISTING);
+                    File[] tmp = stateDir.toFile().listFiles(f -> f.getName().startsWith("__tmp_"));
+                    if (tmp != null) {
+                        java.util.Arrays.sort(tmp);
+                        for (int i = 0; i < tmp.length; i++)
+                            Files.move(tmp[i].toPath(),
+                                    stateDir.resolve(String.format("%03d.png", i + 1)),
+                                    StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+                PlayerAnimator.reloadStateSprites(s);
+                refreshFrameList.run();
+                importStatus.setText("✓ Deleted " + sel.size() + " frame(s) from " + s.name());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-success");
+            } catch (Exception ex) {
+                importStatus.setText("✗ Delete failed: " + ex.getMessage());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-error");
+            }
+        });
+
         // Init
         Platform.runLater(refreshFrameList);
 
@@ -783,6 +901,7 @@ browseBtn.setOnAction(e -> {
                 bodyTypeLabel, bodyTypePicker,
                 stateLabel, statePicker,
                 framesLabel, frameList,
+                btnRow3,
                 stagedLabel, stagedList,
                 btnRow,
                 btnRow2,
