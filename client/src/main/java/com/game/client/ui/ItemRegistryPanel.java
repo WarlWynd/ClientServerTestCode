@@ -71,6 +71,7 @@ public class ItemRegistryPanel {
         String       name;
         ItemCategory category;
         ArmorSlot    armorSlot = ArmorSlot.NONE;
+        boolean      lore      = false;   // true = only 1 allowed in inventory
         String       description;
         int          statArmor;                        // damage reduction %
         int          statHp, statMana;
@@ -92,6 +93,7 @@ public class ItemRegistryPanel {
     private TextField         nameField;
     private ComboBox<String>  categoryCombo;
     private ComboBox<String>  slotCombo;
+    private CheckBox          loreCheck;
     private TextArea          descField;
     private Spinner<Integer>  spArmor;
     private Spinner<Integer>  spHp, spMana;
@@ -202,6 +204,10 @@ public class ItemRegistryPanel {
                 selected.armorSlot = ArmorSlot.valueOf(slotCombo.getValue());
         });
 
+        loreCheck = new CheckBox("Lore  (only 1 allowed per character)");
+        loreCheck.setStyle("-fx-text-fill: #c8a020; -fx-font-size: 12;");
+        loreCheck.setOnAction(e -> { if (selected != null) selected.lore = loreCheck.isSelected(); });
+
         descField = new TextArea();
         descField.setPromptText("Item description…");
         descField.setPrefRowCount(3);
@@ -272,6 +278,7 @@ public class ItemRegistryPanel {
                 new VBox(4, lbl("Name:",        11, false), nameField),
                 new VBox(4, lbl("Category:",    11, false), categoryCombo),
                 new VBox(4, lbl("Item Slot:", 11, false), slotCombo),
+                loreCheck,
                 new VBox(4, lbl("Description:", 11, false), descField),
                 valueRow,
                 lbl("Stat Bonuses  (negative = penalty):", 11, true),
@@ -356,6 +363,7 @@ public class ItemRegistryPanel {
         if (selected == null) return;
         ItemDef dup = new ItemDef(selected.name + " (copy)", selected.category);
         dup.armorSlot   = selected.armorSlot;
+        dup.lore        = selected.lore;
         dup.statArmor   = selected.statArmor;
         dup.description = selected.description;
         dup.statHp   = selected.statHp;  dup.statMana = selected.statMana;
@@ -381,6 +389,7 @@ public class ItemRegistryPanel {
         nameField.setText(it.name);
         categoryCombo.setValue(it.category.name());
         slotCombo.setValue(it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
+        loreCheck.setSelected(it.lore);
         descField.setText(it.description);
         spArmor.getValueFactory().setValue(it.statArmor);
         spHp.getValueFactory().setValue(it.statHp);
@@ -461,6 +470,7 @@ public class ItemRegistryPanel {
                 ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
                 try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
                 catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
+                it.lore        = n.path("lore").asBoolean(false);
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 com.fasterxml.jackson.databind.JsonNode stats = n.path("stats");
@@ -487,6 +497,7 @@ public class ItemRegistryPanel {
                 n.put("name",        it.name);
                 n.put("category",    it.category.name());
                 n.put("armorSlot",   it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
+                n.put("lore",        it.lore);
                 n.put("description", it.description);
                 n.put("value",       it.value);
                 ObjectNode stats = om.createObjectNode();
@@ -519,6 +530,7 @@ public class ItemRegistryPanel {
                 ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
                 try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
                 catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
+                it.lore        = n.path("lore").asBoolean(false);
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 JsonNode stats = n.path("stats");
