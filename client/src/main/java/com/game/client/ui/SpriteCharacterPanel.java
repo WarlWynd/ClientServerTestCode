@@ -51,6 +51,7 @@ public class SpriteCharacterPanel {
         String name;
         boolean isNpc;
         Color   tint;
+        int     armor = 0;   // 0–100: block chance % + partial damage reduction
         final List<PlayerAnimator.State> states = new ArrayList<>();
 
         SpriteChar(String name, boolean isNpc, Color tint) {
@@ -584,20 +585,37 @@ public class SpriteCharacterPanel {
             f.hitPending = false;
             int dmg = damageFor(f.pendingAttack);
             if (!opponent.isKO()) {
-                opponent.hp = Math.max(0, opponent.hp - dmg);
-                String label = attackLabel(f.pendingAttack);
-                // Blue number on the attacker (scored the hit)
-                dmgNumbers.add(new DamageNumber(
-                        attackerCx + rng.nextInt(20) - 10,
-                        floorY - 70 - rng.nextInt(15),
-                        dmg, label, Color.web("#ffdd00"), nowNs));
-                // Red number on the receiver (took the hit)
-                dmgNumbers.add(new DamageNumber(
-                        targetCx + rng.nextInt(20) - 10,
-                        floorY - 85 - rng.nextInt(20),
-                        dmg, label, Color.web("#ff3344"), nowNs));
-                // Put opponent in stun
-                if (!opponent.isKO()) {
+                // ── Block check ──────────────────────────────────────────────
+                int armor = opponent.sc.armor;
+                boolean blocked = armor > 0
+                        && opponent.hasState(PlayerAnimator.State.BLOCK)
+                        && rng.nextInt(100) < armor;
+                if (blocked) {
+                    // Full block — zero damage, show BLOCK animation
+                    opponent.anim.forceState(PlayerAnimator.State.BLOCK, nowMs);
+                    opponent.stunEndMs = nowMs + STUN_MS;
+                    dmgNumbers.add(new DamageNumber(
+                            targetCx + rng.nextInt(20) - 10,
+                            floorY - 85 - rng.nextInt(20),
+                            0, "BLOCKED", Color.web("#44aaff"), nowNs));
+                } else {
+                    // Armor reduces damage even on non-blocked hits
+                    if (armor > 0) dmg = Math.max(1, dmg - dmg * armor / 200);
+                    opponent.hp = Math.max(0, opponent.hp - dmg);
+                    String label = attackLabel(f.pendingAttack);
+                    // Yellow number on the attacker (scored the hit)
+                    dmgNumbers.add(new DamageNumber(
+                            attackerCx + rng.nextInt(20) - 10,
+                            floorY - 70 - rng.nextInt(15),
+                            dmg, label, Color.web("#ffdd00"), nowNs));
+                    // Red number on the receiver (took the hit)
+                    dmgNumbers.add(new DamageNumber(
+                            targetCx + rng.nextInt(20) - 10,
+                            floorY - 85 - rng.nextInt(20),
+                            dmg, label, Color.web("#ff3344"), nowNs));
+                }
+                // Put opponent in stun (skip if already handling a block)
+                if (!blocked && !opponent.isKO()) {
                     // KNOCKED_DOWN only triggers below 10 HP; otherwise pick hit zone
                     PlayerAnimator.State hitState;
                     if (opponent.hp < 10 && opponent.hasState(PlayerAnimator.State.KNOCKED_DOWN)) {
@@ -609,7 +627,7 @@ public class SpriteCharacterPanel {
                         opponent.anim.forceState(hitState, nowMs);
                         opponent.stunEndMs = nowMs + STUN_MS;
                     }
-                } else {
+                } else if (!blocked) {
                     // KO! — play KNOCKED_DOWN (hold on last frame), then kip-up
                     boolean hasKnocked = opponent.hasState(PlayerAnimator.State.KNOCKED_DOWN);
                     PlayerAnimator.State deadState = hasKnocked

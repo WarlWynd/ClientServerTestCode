@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class PlayerAnimator {
 
-    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, GOTHIT02, GOTHIT03, STAFF_IDLE, SWORD_1H_IDLE, SWORD_2H_IDLE, AXE_1H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT, KIP_UP, FRONT_FLIP, CRAWL,
+    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, GOTHIT02, GOTHIT03, STAFF_IDLE, SWORD_1H_IDLE, SWORD_2H_IDLE, AXE_1H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT, KIP_UP, FRONT_FLIP, CRAWL, BLOCK,
         // ── Quadruped states ──────────────────────────────────────────────────
         QUAD_IDLE, TROT, GALLOP, POUNCE, BITE, QUAD_DEATH }
 
@@ -130,6 +130,7 @@ public class PlayerAnimator {
     private static final long GOTHIT01_MS  = 140;
     private static final long GOTHIT02_MS  = 140;
     private static final long GOTHIT03_MS  = 140;
+    private static final long BLOCK_MS     = 120;
     private static final long KNOCKED_MS   = 80;
     private static final long ATTACK_MS    = 70;
     private static final long OTHER_MS     = 180;
@@ -502,6 +503,7 @@ public class PlayerAnimator {
         java.util.Set<State> set = new java.util.concurrent.ConcurrentSkipListSet<>();
         // Defaults: these states are inherently one-shot
         set.add(State.GOTHIT01); set.add(State.GOTHIT02); set.add(State.GOTHIT03);
+        set.add(State.BLOCK);
         set.add(State.KNOCKED_DOWN); set.add(State.ROLL); set.add(State.KIP_UP);
         set.add(State.FRONT_FLIP);
         set.add(State.PUNCH); set.add(State.CROSS); set.add(State.HOOK);
@@ -667,6 +669,7 @@ public class PlayerAnimator {
             case GOTHIT01     -> GOTHIT01;
             case GOTHIT02     -> GOTHIT02;
             case GOTHIT03     -> GOTHIT03;
+            case BLOCK        -> BLOCK;
             case STAFF_IDLE    -> STAFF_IDLE;
             case SWORD_1H_IDLE -> SWORD_2H_IDLE;
             case SWORD_2H_IDLE -> SWORD_2H_IDLE;
@@ -860,6 +863,7 @@ public class PlayerAnimator {
             case GOTHIT01     -> GOTHIT01_MS;
             case GOTHIT02     -> GOTHIT02_MS;
             case GOTHIT03     -> GOTHIT03_MS;
+            case BLOCK        -> BLOCK_MS;
             case KNOCKED_DOWN -> KNOCKED_MS;
             case KIP_UP       -> 40;
             case FRONT_FLIP   -> 70;
@@ -962,6 +966,7 @@ public class PlayerAnimator {
             case POUNCE     -> POUNCE.length;
             case BITE       -> BITE.length;
             case QUAD_DEATH -> QUAD_DEATH.length;
+            case BLOCK      -> BLOCK.length;
         };
     }
 
@@ -1042,6 +1047,7 @@ public class PlayerAnimator {
             case POUNCE     -> POUNCE[f];
             case BITE       -> BITE[f];
             case QUAD_DEATH -> QUAD_DEATH[f];
+            case BLOCK      -> BLOCK[f];
         };
     }
 
@@ -1851,6 +1857,21 @@ public class PlayerAnimator {
            4,36,  9,30, 13,23,
           -3,21, -3,11, -4, 0,
            2,21,  5,10,  6, 0 }
+    };
+
+    private static final double[][] BLOCK = {
+        // Frame 0 — guard raised, arms up covering head
+        {  0,43,  0,37,  0,22,
+          -3,35, -5,41, -3,45,
+           3,35,  6,41,  5,45,
+          -3,21, -6,11, -5, 0,
+           3,21,  6,11,  5, 0 },
+        // Frame 1 — absorbing impact, head tucked, guard tight
+        {  1,42,  1,36,  0,22,
+          -3,35, -4,41, -3,45,
+           3,35,  5,41,  4,45,
+          -3,21, -6,11, -5, 0,
+           3,21,  6,11,  5, 0 }
     };
 
     private static final double[][] STAFF_IDLE = {

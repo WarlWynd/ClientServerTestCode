@@ -37,7 +37,8 @@ public enum MobCategory {
         PlayerAnimator.State.LOW_KICK,    PlayerAnimator.State.BODY_KICK,
         PlayerAnimator.State.SPINNING_BACK_KICK, PlayerAnimator.State.SIDE_KICK,
         PlayerAnimator.State.SHOOT,       PlayerAnimator.State.KIP_UP,
-        PlayerAnimator.State.FRONT_FLIP,  PlayerAnimator.State.CRAWL),
+        PlayerAnimator.State.FRONT_FLIP,  PlayerAnimator.State.CRAWL,
+        PlayerAnimator.State.BLOCK),
 
     QUADRUPED("Quadruped",
         PlayerAnimator.State.QUAD_IDLE,   PlayerAnimator.State.TROT,

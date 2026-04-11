@@ -56,6 +56,7 @@ public class MobManagerPanel {
         Color       tint;
         int         baseHp;
         int         baseDamage;
+        int         armor;      // 0–100: % chance to block + damage reduction
         int         speed;
         int         aggroRange;
         String      lootTable = "";
@@ -64,7 +65,7 @@ public class MobManagerPanel {
 
         MobDef(String name, MobRole role, Color tint) {
             this.name = name; this.role = role; this.tint = tint;
-            this.baseHp = 100; this.baseDamage = 10; this.speed = 3; this.aggroRange = 200;
+            this.baseHp = 100; this.baseDamage = 10; this.armor = 0; this.speed = 3; this.aggroRange = 200;
         }
     }
 
@@ -118,7 +119,7 @@ public class MobManagerPanel {
     private ComboBox<String>          categoryCombo;
     private ComboBox<MobCategory>     bodyTypeCombo;
     private ColorPicker               colorPicker;
-    private Spinner<Integer>    hpSpinner, dmgSpinner, speedSpinner, aggroSpinner;
+    private Spinner<Integer>    hpSpinner, dmgSpinner, armorSpinner, speedSpinner, aggroSpinner;
     private Spinner<Double>     scaleSpinner;
     private List<CheckBox>      stateChecks;
     private ComboBox<String>    lootTableCombo;
@@ -275,16 +276,18 @@ public class MobManagerPanel {
 
         hpSpinner    = intSpinner(1, 9999, 100);
         dmgSpinner   = intSpinner(1, 999,  10);
+        armorSpinner = intSpinner(0, 100,   0);
         speedSpinner = intSpinner(1, 50,   3);
         aggroSpinner = intSpinner(10, 2000, 200);
         scaleSpinner = new Spinner<>(new javafx.scene.control.SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 10.0, 1.0, 0.1));
         scaleSpinner.setEditable(true);
         scaleSpinner.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0;");
-        for (Spinner<?> sp : new Spinner<?>[]{ hpSpinner, dmgSpinner, speedSpinner, aggroSpinner, scaleSpinner }) {
+        for (Spinner<?> sp : new Spinner<?>[]{ hpSpinner, dmgSpinner, armorSpinner, speedSpinner, aggroSpinner, scaleSpinner }) {
             sp.setPrefWidth(80); sp.setMaxWidth(80);
         }
         hpSpinner.valueProperty().addListener((obs, o, n)    -> { if (selected != null) selected.baseHp     = n; });
         dmgSpinner.valueProperty().addListener((obs, o, n)   -> { if (selected != null) selected.baseDamage = n; });
+        armorSpinner.valueProperty().addListener((obs, o, n) -> { if (selected != null) selected.armor      = n; });
         speedSpinner.valueProperty().addListener((obs, o, n) -> { if (selected != null) selected.speed      = n; });
         aggroSpinner.valueProperty().addListener((obs, o, n) -> { if (selected != null) selected.aggroRange = n; });
         scaleSpinner.valueProperty().addListener((obs, o, n) -> { if (selected != null) selected.scale      = n; });
@@ -292,11 +295,12 @@ public class MobManagerPanel {
         // Compact 6-column grid: label+spinner pairs side-by-side
         GridPane statsGrid = new GridPane();
         statsGrid.setHgap(6); statsGrid.setVgap(5);
-        statsGrid.add(lbl("HP:",    10, false), 0, 0); statsGrid.add(hpSpinner,    1, 0);
-        statsGrid.add(lbl("Dmg:",   10, false), 2, 0); statsGrid.add(dmgSpinner,   3, 0);
-        statsGrid.add(lbl("Speed:", 10, false), 0, 1); statsGrid.add(speedSpinner, 1, 1);
-        statsGrid.add(lbl("Aggro:", 10, false), 2, 1); statsGrid.add(aggroSpinner, 3, 1);
-        statsGrid.add(lbl("Scale:", 10, false), 0, 2); statsGrid.add(scaleSpinner, 1, 2);
+        statsGrid.add(lbl("HP:",     10, false), 0, 0); statsGrid.add(hpSpinner,    1, 0);
+        statsGrid.add(lbl("Dmg:",    10, false), 2, 0); statsGrid.add(dmgSpinner,   3, 0);
+        statsGrid.add(lbl("Armor %:",10, false), 0, 1); statsGrid.add(armorSpinner, 1, 1);
+        statsGrid.add(lbl("Speed:",  10, false), 2, 1); statsGrid.add(speedSpinner, 3, 1);
+        statsGrid.add(lbl("Aggro:",  10, false), 0, 2); statsGrid.add(aggroSpinner, 1, 2);
+        statsGrid.add(lbl("Scale:",  10, false), 2, 2); statsGrid.add(scaleSpinner, 3, 2);
         for (int c : new int[]{0, 2}) {
             ColumnConstraints lc = new ColumnConstraints(); lc.setPrefWidth(42); statsGrid.getColumnConstraints().add(lc);
             ColumnConstraints sc = new ColumnConstraints(); sc.setPrefWidth(80);  statsGrid.getColumnConstraints().add(sc);
@@ -811,6 +815,7 @@ public class MobManagerPanel {
         hpSpinner.getValueFactory().setValue(mob.baseHp);
         scaleSpinner.getValueFactory().setValue(mob.scale);
         dmgSpinner.getValueFactory().setValue(mob.baseDamage);
+        armorSpinner.getValueFactory().setValue(mob.armor);
         speedSpinner.getValueFactory().setValue(mob.speed);
         aggroSpinner.getValueFactory().setValue(mob.aggroRange);
         // Loot table combo — refresh names from file each time
@@ -833,11 +838,14 @@ public class MobManagerPanel {
 
     private void syncStates() {
         if (selected == null) return;
+        MobCategory bodyType = selected.bodyType != null ? selected.bodyType : MobCategory.HUMANOID;
         selected.states.clear();
         for (CheckBox cb : stateChecks) {
             if (!cb.isSelected()) continue;
-            try { selected.states.add(PlayerAnimator.State.valueOf(cb.getText())); }
-            catch (IllegalArgumentException ignored) {}
+            try {
+                PlayerAnimator.State s = PlayerAnimator.State.valueOf(cb.getText());
+                if (bodyType.contains(s)) selected.states.add(s);
+            } catch (IllegalArgumentException ignored) {}
         }
     }
 
@@ -873,6 +881,7 @@ public class MobManagerPanel {
                 node.put("tint",       toHex(mob.tint));
                 node.put("baseHp",     mob.baseHp);
                 node.put("baseDamage", mob.baseDamage);
+                node.put("armor",      mob.armor);
                 node.put("speed",      mob.speed);
                 node.put("aggroRange", mob.aggroRange);
                 node.put("lootTable",  mob.lootTable);
@@ -931,12 +940,15 @@ public class MobManagerPanel {
                 mob.scale = node.path("scale").asDouble(1.0);
                 mob.baseHp     = node.path("baseHp").asInt(100);
                 mob.baseDamage = node.path("baseDamage").asInt(10);
+                mob.armor      = node.path("armor").asInt(0);
                 mob.speed      = node.path("speed").asInt(3);
                 mob.aggroRange = node.path("aggroRange").asInt(200);
                 mob.lootTable  = node.path("lootTable").asText("");
                 for (JsonNode s : node.path("states")) {
-                    try { mob.states.add(PlayerAnimator.State.valueOf(s.asText())); }
-                    catch (IllegalArgumentException ignored) {}
+                    try {
+                        PlayerAnimator.State st = PlayerAnimator.State.valueOf(s.asText());
+                        if (mob.bodyType.contains(st)) mob.states.add(st);
+                    } catch (IllegalArgumentException ignored) {}
                 }
                 mobs.add(mob);
             }
@@ -1544,16 +1556,30 @@ public class MobManagerPanel {
                         int dmg = rule.minDamage.get() + (int)(Math.random() *
                                 Math.max(1, rule.maxDamage.get() - rule.minDamage.get() + 1));
 
+                        // ── Block check ───────────────────────────────────────
+                        boolean blocked = defender.armor > 0
+                                && defender.states.contains(PlayerAnimator.State.BLOCK)
+                                && (int)(Math.random() * 100) < defender.armor;
+                        if (blocked) {
+                            dmg = 0;
+                            defAnim.forceState(PlayerAnimator.State.BLOCK, nowMs);
+                        } else if (defender.armor > 0) {
+                            dmg = Math.max(1, dmg - dmg * defender.armor / 200);
+                        }
+
                         // Deduct HP from defender
                         double defCx = (practiceCombatTurn == 0) ? w * 0.65 : w * 0.35;
                         double floorYNow = h - 30;
-                        if (practiceCombatTurn == 0) practiceRightHp = Math.max(0, practiceRightHp - dmg);
-                        else                         practiceLeftHp  = Math.max(0, practiceLeftHp  - dmg);
+                        if (!blocked) {
+                            if (practiceCombatTurn == 0) practiceRightHp = Math.max(0, practiceRightHp - dmg);
+                            else                         practiceLeftHp  = Math.max(0, practiceLeftHp  - dmg);
+                        }
                         if (AppSettings.isCombatShowDamage())
-                            practiceDmgNums.add(new Object[]{ defCx, floorYNow - 80, (double)dmg, (double)nowMs, 0.0, rule.label.get() });
+                            practiceDmgNums.add(new Object[]{ defCx, floorYNow - 80, (double)dmg, (double)nowMs, 0.0,
+                                    blocked ? "BLOCKED" : rule.label.get() });
 
                         float defHpAfter = (practiceCombatTurn == 0) ? practiceRightHp : practiceLeftHp;
-                        if (defHpAfter == 0) {
+                        if (!blocked && defHpAfter == 0) {
                             // Defender KO'd — play fall animation, hold, then recover after koMs
                             PlayerAnimator.State deathState = defender.bodyType == MobCategory.QUADRUPED
                                     ? PlayerAnimator.State.QUAD_DEATH : PlayerAnimator.State.KNOCKED_DOWN;
@@ -1571,8 +1597,9 @@ public class MobManagerPanel {
                             return; // skip the normal interval advance below
                         } else {
                             if (practiceActionLabel != null)
-                                practiceActionLabel.setText(attacker.name + " → " + rule.label.get() +
-                                        " → " + defender.name + " (" + dmg + " dmg)");
+                                practiceActionLabel.setText(blocked
+                                        ? defender.name + " blocked " + attacker.name + "'s " + rule.label.get() + "!"
+                                        : attacker.name + " → " + rule.label.get() + " → " + defender.name + " (" + dmg + " dmg)");
                         }
                     } else {
                         if (practiceActionLabel != null)

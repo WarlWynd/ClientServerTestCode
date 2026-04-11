@@ -45,5 +45,5 @@
   "speed" : 4,
   "aggroRange" : 400,
   "lootTable" : "",
-  "states" : [ "IDLE", "RUN", "PUNCH", "CROSS", "HOOK", "UPPERCUT", "HAYMAKER", "HEAD_KICK", "BODY_KICK", "GOTHIT01", "GOTHIT02", "GOTHIT03", "KNOCKED_DOWN", "KIP_UP" ]
+  "states" : [ "IDLE", "RUN", "GOTHIT01", "GOTHIT02", "GOTHIT03", "KNOCKED_DOWN", "PUNCH", "CROSS", "HOOK", "UPPERCUT", "HAYMAKER", "HEAD_KICK", "LOW_KICK", "BODY_KICK", "SIDE_KICK", "KIP_UP" ]
 } ]
