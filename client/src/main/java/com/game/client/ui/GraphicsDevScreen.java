@@ -477,10 +477,7 @@ public class GraphicsDevScreen {
             timer[0].start();
         };
 
-        playBtn.setOnAction(e -> {
-            if (timer[0] == null) startPreview.run();
-            else paused[0] = false;
-        });
+        playBtn.setOnAction(e -> startPreview.run()); // always restart from frame 0
         pauseBtn.setOnAction(e -> { paused[0] = true; });
         repeatBtn.setOnAction(e -> {
             repeat[0] = !repeat[0];
@@ -526,6 +523,29 @@ public class GraphicsDevScreen {
         HBox btnRow2 = new HBox(6, copyBtn, pasteBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
         btnRow2.setAlignment(Pos.CENTER_LEFT);
+
+        // Selecting items in the Imported Frames list stages them for import
+        frameList.getSelectionModel().getSelectedItems().addListener(
+                (javafx.collections.ListChangeListener<String>) change -> {
+                    java.util.List<String> sel = new java.util.ArrayList<>(
+                            frameList.getSelectionModel().getSelectedItems());
+                    if (sel.isEmpty()) return;
+                    PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+                    if (s == null) return;
+                    File dir = new File(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+                    java.util.List<File> files = sel.stream()
+                            .map(name -> new File(dir, name))
+                            .filter(File::exists)
+                            .collect(java.util.stream.Collectors.toList());
+                    if (!files.isEmpty()) {
+                        stagedFiles[0] = files;
+                        stagedList.getItems().setAll(sel);
+                        importBtn.setDisable(false);
+                        importStatus.setText(files.size() + " frame(s) staged from " + s.name() + " — click Import to confirm.");
+                        importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                        importStatus.getStyleClass().add("text-muted");
+                    }
+                });
 
         // ── Wire events ───────────────────────────────────────────────────────
         bodyTypePicker.setOnAction(e -> {
