@@ -57,8 +57,20 @@ public class GameHandler {
 
     /** Called by AdminPacketHandler after a successful DB save — updates cached settings and broadcasts. */
     public void updateSettings(float gravity, float jumpStrength, float runSpeed,
+                               boolean allowRememberPassword, boolean showTestNpc,
+                               float testNpcX, float testNpcY,
+                               String localServerHost, int localServerPort,
+                               String externalServerHost, int externalServerPort,
+                               boolean allowExternalAdmin, boolean allowExternalDev,
+                               int rebootDelaySecs, String rebootMessage,
                                DatagramSocket socket) throws Exception {
-        currentSettings = new ServerSettingsRepository.Settings(gravity, jumpStrength, runSpeed);
+        currentSettings = new ServerSettingsRepository.Settings(
+                gravity, jumpStrength, runSpeed,
+                allowRememberPassword, showTestNpc, testNpcX, testNpcY,
+                localServerHost, localServerPort,
+                externalServerHost, externalServerPort,
+                allowExternalAdmin, allowExternalDev,
+                rebootDelaySecs, rebootMessage);
         broadcastSettings(socket);
     }
 
@@ -183,9 +195,21 @@ public class GameHandler {
     private ObjectNode buildSettingsPayload() {
         ServerSettingsRepository.Settings s = getSettings();
         ObjectNode node = PacketSerializer.mapper().createObjectNode();
-        node.put("gravity",      s.gravity());
-        node.put("jumpStrength", s.jumpStrength());
-        node.put("runSpeed",     s.runSpeed());
+        node.put("gravity",               s.gravity());
+        node.put("jumpStrength",          s.jumpStrength());
+        node.put("runSpeed",              s.runSpeed());
+        node.put("allowRememberPassword", s.allowRememberPassword());
+        node.put("showTestNpc",           s.showTestNpc());
+        node.put("testNpcX",              s.testNpcX());
+        node.put("testNpcY",              s.testNpcY());
+        node.put("localServerHost",       s.localServerHost());
+        node.put("localServerPort",       s.localServerPort());
+        node.put("externalServerHost",    s.externalServerHost());
+        node.put("externalServerPort",    s.externalServerPort());
+        node.put("allowExternalAdmin",    s.allowExternalAdmin());
+        node.put("allowExternalDev",      s.allowExternalDev());
+        node.put("rebootDelaySecs",       s.rebootDelaySecs());
+        node.put("rebootMessage",         s.rebootMessage());
         return node;
     }
 

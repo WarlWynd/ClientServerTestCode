@@ -335,8 +335,6 @@ public class GameScreen {
             adminPanel.setRestartCallback(this::startReconnectCountdown);
             Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
             adminTab.setClosable(false);
-            Tab gameSettingsTab = new Tab("🎛 Game Settings", new GameSettingsPanel(client).buildView());
-            gameSettingsTab.setClosable(false);
             Tab audioTab = new Tab("🎵 Audio Dev", new AudioDevScreen(stage).build());
             audioTab.setClosable(false);
             Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
@@ -345,7 +343,6 @@ public class GameScreen {
                     () -> tabPane.getSelectionModel().select(gameTab)).build());
             boardTab.setClosable(false);
             tabs.add(adminTab);
-            tabs.add(gameSettingsTab);
             tabs.add(audioTab);
             tabs.add(graphicsTab);
             tabs.add(boardTab);
@@ -881,6 +878,30 @@ public class GameScreen {
                 AppSettings.setGravity(g);
                 AppSettings.setJumpStrength(j);
                 AppSettings.setRunSpeed(rs);
+                if (packet.payload.has("allowRememberPassword"))
+                    AppSettings.setAllowRememberPassword(packet.payload.get("allowRememberPassword").asBoolean());
+                if (packet.payload.has("showTestNpc"))
+                    AppSettings.setShowTestNpc(packet.payload.get("showTestNpc").asBoolean());
+                if (packet.payload.has("testNpcX"))
+                    AppSettings.setTestNpcX((float) packet.payload.get("testNpcX").asDouble());
+                if (packet.payload.has("testNpcY"))
+                    AppSettings.setTestNpcY((float) packet.payload.get("testNpcY").asDouble());
+                if (packet.payload.has("localServerHost"))
+                    AppSettings.setServerHost(packet.payload.get("localServerHost").asText());
+                if (packet.payload.has("localServerPort"))
+                    AppSettings.setServerPort(packet.payload.get("localServerPort").asInt());
+                if (packet.payload.has("externalServerHost"))
+                    AppSettings.setExternalServerHost(packet.payload.get("externalServerHost").asText());
+                if (packet.payload.has("externalServerPort"))
+                    AppSettings.setExternalServerPort(packet.payload.get("externalServerPort").asInt());
+                if (packet.payload.has("allowExternalAdmin"))
+                    AppSettings.setAllowExternalAdmin(packet.payload.get("allowExternalAdmin").asBoolean());
+                if (packet.payload.has("allowExternalDev"))
+                    AppSettings.setAllowExternalDev(packet.payload.get("allowExternalDev").asBoolean());
+                if (packet.payload.has("rebootDelaySecs"))
+                    AppSettings.setRebootDelaySecs(packet.payload.get("rebootDelaySecs").asInt());
+                if (packet.payload.has("rebootMessage"))
+                    AppSettings.setRebootMessage(packet.payload.get("rebootMessage").asText());
                 AppSettings.save();
             }
             case FORCE_LOGOUT -> {

@@ -35,17 +35,20 @@ public class UDPClient {
     private static final int    RECV_BUFFER_SIZE = 4096;
 
     private final String serverHost;
+    private final String adminHost;
     private final int    serverPort;
     private final int    localPort;
 
     private DatagramSocket    socket;
     private InetAddress       serverAddr;
+    private InetAddress       adminAddr;
     private volatile boolean  running;
     private Consumer<Packet>  listener;
     private Thread            receiverThread;
 
     public UDPClient(ClientConfig config) {
         this.serverHost = AppSettings.getServerHost();
+        this.adminHost  = config.getAdminHost();
         this.serverPort = AppSettings.getServerPort();
         this.localPort  = config.getClientPort();
     }
@@ -54,6 +57,7 @@ public class UDPClient {
 
     public void start() throws Exception {
         serverAddr = InetAddress.getByName(serverHost);
+        adminAddr  = InetAddress.getByName(adminHost);
         socket     = (localPort == 0)
                 ? new DatagramSocket()
                 : new DatagramSocket(localPort);
@@ -63,7 +67,7 @@ public class UDPClient {
                 .name("udp-receiver")
                 .start(this::receiveLoop);
 
-        log.info("UDP client started → {}:{}", serverHost, serverPort);
+        log.info("UDP client started → {}:{} (admin → {}:{})", serverHost, serverPort, adminHost, serverPort);
     }
 
     public void stop() {
@@ -75,13 +79,22 @@ public class UDPClient {
     // ── Send ─────────────────────────────────────────────────────────────────
 
     public void send(Packet packet) {
+        sendTo(packet, serverAddr);
+    }
+
+    /** Sends the packet to the admin address (internal LAN IP). Use for all ADMIN_* packets. */
+    public void sendToAdmin(Packet packet) {
+        sendTo(packet, adminAddr);
+    }
+
+    private void sendTo(Packet packet, InetAddress addr) {
         if (socket == null || socket.isClosed()) {
             log.warn("Cannot send — socket is not open.");
             return;
         }
         try {
             byte[] data = PacketSerializer.serialize(packet);
-            socket.send(new DatagramPacket(data, data.length, serverAddr, serverPort));
+            socket.send(new DatagramPacket(data, data.length, addr, serverPort));
         } catch (Exception e) {
             log.error("Send error: {}", e.getMessage(), e);
         }

@@ -3,7 +3,6 @@ package com.game.client.ui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
-import com.game.client.BuildInfo;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
@@ -19,6 +18,7 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -26,15 +26,8 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.FileChooser;
-import javafx.stage.Window;
 import javafx.util.Duration;
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.function.Consumer;
 
 /**
@@ -53,16 +46,15 @@ public class AdminPanel {
 
     private Label     headerLabel;
     private Label     statusLabel;
-    private TextField rebootDelayField;
-    private TextField rebootMessageField;
-    private final ObservableList<PlayerRow> rows = FXCollections.observableArrayList();
+    private final ObservableList<PlayerRow> rows         = FXCollections.observableArrayList();
+    private final FilteredList<PlayerRow>   filteredRows = new FilteredList<>(rows, p -> true);
+    private TextField searchField;
+    private ComboBox<String> searchFieldCombo;
     private Timeline ticker;
-
-    /** Called with countdown seconds when the server is about to restart (deploy or restart). */
-    private Consumer<Integer> onServerRestart;
+    private GameSettingsPanel gameSettingsPanel;
 
     public void setRestartCallback(Consumer<Integer> callback) {
-        this.onServerRestart = callback;
+        if (gameSettingsPanel != null) gameSettingsPanel.setRestartCallback(callback);
     }
 
     public AdminPanel(UDPClient client) {
@@ -80,22 +72,10 @@ public class AdminPanel {
         statusLabel.setFont(Font.font("System", 12));
         statusLabel.getStyleClass().add("text-success");
 
-        Button deployBtn = new Button("Deploy & Restart");
-        deployBtn.getStyleClass().add("btn-deploy");
-        deployBtn.setOnAction(e -> confirmDeploy());
-
-        Button restartBtn = new Button("Restart");
-        restartBtn.getStyleClass().add("btn-restart");
-        restartBtn.setOnAction(e -> confirmRestart());
-
-        Button versionBtn = new Button("Compare Versions");
-        versionBtn.getStyleClass().add("btn-secondary");
-        versionBtn.setOnAction(e -> checkVersions());
-
         Region headerSpacer = new Region();
         HBox.setHgrow(headerSpacer, Priority.ALWAYS);
 
-        HBox header = new HBox(8, headerLabel, headerSpacer, versionBtn, deployBtn, restartBtn);
+        HBox header = new HBox(8, headerLabel, headerSpacer);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(10, 14, 6, 14));
         header.setSpacing(8);
@@ -105,189 +85,72 @@ public class AdminPanel {
         statusBar.setPadding(new Insets(2, 14, 4, 14));
         statusBar.getStyleClass().add("app-surface");
 
-        TableView<PlayerRow> table = new TableView<>(rows);
+        // ── Search bar ────────────────────────────────────────────────────────
+        searchField = new TextField();
+        searchField.setPromptText("Search…");
+        searchField.setPrefWidth(220);
+        searchField.getStyleClass().add("input-field");
+
+        searchFieldCombo = new ComboBox<>();
+        searchFieldCombo.getItems().addAll("Email", "Username", "Character Name", "IP");
+        searchFieldCombo.setValue("Username");
+        searchFieldCombo.getStyleClass().add("combo-dark");
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> applyFilter());
+        searchFieldCombo.valueProperty().addListener((obs, oldVal, newVal) -> applyFilter());
+
+        Button clearSearchBtn = new Button("✕");
+        clearSearchBtn.getStyleClass().add("btn-primary-sm");
+        clearSearchBtn.setOnAction(e -> searchField.clear());
+
+        HBox searchBar = new HBox(6, new Label("Search:"), searchFieldCombo, searchField, clearSearchBtn);
+        searchBar.setAlignment(Pos.CENTER_LEFT);
+        searchBar.setPadding(new Insets(6, 14, 4, 14));
+        searchBar.getStyleClass().add("app-surface");
+
+        // ── Table ─────────────────────────────────────────────────────────────
+        TableView<PlayerRow> table = new TableView<>(filteredRows);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         table.getStyleClass().add("dark-table");
         table.setPlaceholder(new Label("No players connected"));
 
         table.getColumns().addAll(
-                strCol("Email",          "email",         180),
-                strCol("Username",       "username",      130),
-                strCol("Character Name", "characterName", 130),
-                strCol("IP",             "ip",            120),
-                strCol("Connected", "connectedTime", 100),
-                strCol("Score",     "score",          55),
-                strCol("X",         "x",              45),
-                strCol("Y",         "y",              45),
+                strCol("Email",          "email",         160),
+                strCol("Username",       "username",      110),
+                strCol("Character Name", "characterName", 110),
+                strCol("IP",             "ip",            110),
+                strCol("Connected", "connectedTime",  85),
+                strCol("Score",     "score",           50),
+                strCol("X",         "x",               40),
+                strCol("Y",         "y",               40),
                 adminCol(),
+                devCol("Graphics", "graphicsDev"),
+                devCol("World",    "boardDev"),
+                devCol("Audio",    "audioDev"),
                 kickCol(),
                 banCol()
         );
 
-        // ── Connection settings ───────────────────────────────────────────────
-        VBox connSection = buildConnectionSection();
-
-        // ── Upload section ────────────────────────────────────────────────────
-        VBox uploadSection = buildUploadSection();
-
-        // ── Reboot settings ───────────────────────────────────────────────────
-        VBox rebootSection = buildRebootSection();
-
-        VBox root = new VBox(header, statusBar, connSection, uploadSection, rebootSection, table);
+        VBox playersPage = new VBox(header, statusBar, searchBar, table);
         VBox.setVgrow(table, Priority.ALWAYS);
-        root.getStyleClass().add("app-root");
+        playersPage.getStyleClass().add("app-root");
+
+        // ── Game Settings inner tab ───────────────────────────────────────────
+        gameSettingsPanel = new GameSettingsPanel(client);
+        javafx.scene.Node gameSettingsPage = gameSettingsPanel.buildView();
+
+        Tab playersTab     = new Tab("👥 Players",      playersPage);
+        Tab gameSettingsTab = new Tab("🎛 Game Settings", gameSettingsPage);
+        playersTab.setClosable(false);
+        gameSettingsTab.setClosable(false);
+
+        TabPane innerTabs = new TabPane(playersTab, gameSettingsTab);
+        innerTabs.getStyleClass().add("tab-pane-dark");
 
         ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
 
-        return root;
-    }
-
-    // ── Connection section ────────────────────────────────────────────────────
-
-    private VBox buildConnectionSection() {
-        Label hostLbl = new Label("Server Host");
-        hostLbl.setMinWidth(100);
-        hostLbl.getStyleClass().addAll("text-secondary", "font-12");
-
-        TextField hostField = new TextField(AppSettings.getServerHost());
-        hostField.setPrefWidth(200);
-        hostField.getStyleClass().add("input-field-sm");
-
-        Label portLbl = new Label("Server Port");
-        portLbl.setMinWidth(100);
-        portLbl.getStyleClass().addAll("text-secondary", "font-12");
-
-        TextField portField = new TextField(String.valueOf(AppSettings.getServerPort()));
-        portField.setPrefWidth(80);
-        portField.getStyleClass().add("input-field-sm");
-
-        Label connStatus = new Label();
-        connStatus.getStyleClass().add("font-11");
-
-        Button saveBtn = new Button("Save");
-        saveBtn.getStyleClass().add("btn-primary-sm");
-        saveBtn.setOnAction(e -> {
-            int port;
-            try { port = Integer.parseInt(portField.getText().trim()); }
-            catch (NumberFormatException ex) {
-                connStatus.setText("Invalid port.");
-                connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
-                return;
-            }
-            AppSettings.setServerHost(hostField.getText().trim());
-            AppSettings.setServerPort(port);
-            boolean ok = AppSettings.save();
-            connStatus.setText(ok ? "Saved. Restart to apply." : "Could not write settings file.");
-            connStatus.setStyle("-fx-font-size: 11; -fx-text-fill: " + (ok ? "-af-success;" : "-af-error;"));
-        });
-
-        HBox hostRow = new HBox(10, hostLbl, hostField);
-        hostRow.setAlignment(Pos.CENTER_LEFT);
-
-        HBox portRow = new HBox(10, portLbl, portField);
-        portRow.setAlignment(Pos.CENTER_LEFT);
-
-        HBox btnRow = new HBox(10, saveBtn, connStatus);
-        btnRow.setAlignment(Pos.CENTER_LEFT);
-
-        return buildSection("Connection", hostRow, portRow, btnRow);
-    }
-
-    // ── Upload section ───────────────────────────────────────────────────────
-
-    private VBox buildUploadSection() {
-        Label keyLbl = new Label("Upload Key");
-        keyLbl.setMinWidth(100);
-        keyLbl.getStyleClass().addAll("text-secondary", "font-12");
-
-        PasswordField keyField = new PasswordField();
-        keyField.setText(AppSettings.getUploadKey());
-        keyField.setPromptText("server upload key");
-        keyField.setPrefWidth(200);
-        keyField.getStyleClass().add("input-field-sm");
-
-        Label uploadStatus = new Label();
-        uploadStatus.getStyleClass().add("font-11");
-        uploadStatus.setWrapText(true);
-
-        Button clientJarBtn = new Button("Upload Client JAR");
-        clientJarBtn.getStyleClass().add("btn-info");
-        clientJarBtn.setOnAction(e -> pickAndUpload(
-                clientJarBtn.getScene().getWindow(),
-                "Select Client JAR",
-                keyField.getText().trim(),
-                AppSettings.getAssetUrl() + "/assets/client/game-client.jar",
-                "game-client.jar",
-                uploadStatus));
-
-        Button syncAppBtn = new Button("Upload Sync App");
-        syncAppBtn.getStyleClass().add("btn-info");
-        syncAppBtn.setOnAction(e -> pickAndUpload(
-                syncAppBtn.getScene().getWindow(),
-                "Select Sync App JAR",
-                keyField.getText().trim(),
-                AppSettings.getAssetUrl() + "/assets/sync/syncapp.jar",
-                "syncapp.jar",
-                uploadStatus));
-
-        HBox keyRow = new HBox(10, keyLbl, keyField);
-        keyRow.setAlignment(Pos.CENTER_LEFT);
-
-        HBox btnRow = new HBox(10, clientJarBtn, syncAppBtn, uploadStatus);
-        btnRow.setAlignment(Pos.CENTER_LEFT);
-
-        return buildSection("Uploads", keyRow, btnRow);
-    }
-
-    // ── Reboot section ────────────────────────────────────────────────────────
-
-    private VBox buildRebootSection() {
-        Label delayLbl = new Label("Delay (seconds)");
-        delayLbl.setMinWidth(130);
-        delayLbl.getStyleClass().addAll("text-secondary", "font-12");
-
-        rebootDelayField = new TextField("60");
-        rebootDelayField.setPrefWidth(60);
-        rebootDelayField.getStyleClass().add("input-field-sm");
-
-        Label msgLbl = new Label("Notice message");
-        msgLbl.setMinWidth(130);
-        msgLbl.getStyleClass().addAll("text-secondary", "font-12");
-
-        rebootMessageField = new TextField();
-        rebootMessageField.setPromptText("The server will reboot in %d seconds.");
-        rebootMessageField.setPrefWidth(300);
-        rebootMessageField.getStyleClass().add("input-field-sm");
-
-        Label hint = new Label("Leave message blank to use default. Use %d for the delay value.");
-        hint.getStyleClass().addAll("text-muted", "italic", "font-11");
-
-        HBox delayRow = new HBox(10, delayLbl, rebootDelayField);
-        delayRow.setAlignment(Pos.CENTER_LEFT);
-
-        HBox msgRow = new HBox(10, msgLbl, rebootMessageField);
-        msgRow.setAlignment(Pos.CENTER_LEFT);
-
-        return buildSection("Reboot Settings", delayRow, msgRow, hint);
-    }
-
-    private int getRebootDelay() {
-        try {
-            int d = Integer.parseInt(rebootDelayField.getText().trim());
-            return d > 0 ? d : 15;
-        } catch (NumberFormatException e) {
-            return 15;
-        }
-    }
-
-    private String getRebootMessage() {
-        if (rebootMessageField == null) return "";
-        String msg = rebootMessageField.getText().trim();
-        if (msg.isEmpty()) return "";
-        // Replace %d with the actual delay value
-        try { return String.format(msg, getRebootDelay()); }
-        catch (Exception e) { return msg; }
+        return innerTabs;
     }
 
     private VBox buildSection(String title, Node... children) {
@@ -304,57 +167,6 @@ public class AdminPanel {
         section.setPadding(new Insets(10, 14, 10, 14));
         section.getStyleClass().add("app-surface");
         return section;
-    }
-
-    private void pickAndUpload(Window owner, String title, String uploadKey,
-                               String uploadUrl, String displayName, Label statusLabel) {
-        if (uploadKey.isEmpty()) {
-            statusLabel.setText("Enter an upload key first.");
-            statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
-            return;
-        }
-
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle(title);
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR files", "*.jar"));
-        java.io.File selected = chooser.showOpenDialog(owner);
-        if (selected == null) return;
-
-        Path jar = selected.toPath();
-        statusLabel.setText("Uploading " + displayName + "…");
-        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-warning;");
-
-        Thread.ofVirtual().start(() -> {
-            try {
-                byte[] bytes = Files.readAllBytes(jar);
-                HttpURLConnection conn = (HttpURLConnection) URI.create(uploadUrl).toURL().openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("X-Upload-Key", uploadKey);
-                conn.setRequestProperty("Content-Type", "application/octet-stream");
-                conn.setDoOutput(true);
-                try (OutputStream out = conn.getOutputStream()) {
-                    out.write(bytes);
-                }
-                int code = conn.getResponseCode();
-                if (code == 200) {
-                    Platform.runLater(() -> {
-                        statusLabel.setText("Uploaded " + displayName + " (" + (bytes.length / 1024) + " KB)");
-                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-success;");
-                    });
-                } else {
-                    Platform.runLater(() -> {
-                        statusLabel.setText("Upload failed — HTTP " + code);
-                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
-                    });
-                }
-            } catch (Exception ex) {
-                log.error("Upload failed: {}", ex.getMessage(), ex);
-                Platform.runLater(() -> {
-                    statusLabel.setText("Upload error: " + ex.getMessage());
-                    statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
-                });
-            }
-        });
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -397,7 +209,10 @@ public class AdminPanel {
                                     p.get("x").asDouble(),
                                     p.get("y").asDouble(),
                                     p.get("score").asInt(),
-                                    p.has("isAdmin") && p.get("isAdmin").asBoolean()));
+                                    p.has("isAdmin")       && p.get("isAdmin").asBoolean(),
+                                    p.has("isGraphicsDev") && p.get("isGraphicsDev").asBoolean(),
+                                    p.has("isBoardDev")    && p.get("isBoardDev").asBoolean(),
+                                    p.has("isAudioDev")    && p.get("isAudioDev").asBoolean()));
                         }
                     }
                     headerLabel.setText(String.format("Admin Panel — %s  |  %d player%s online",
@@ -426,31 +241,48 @@ public class AdminPanel {
                         : "Admin change failed: " + packet.payload.get("message").asText();
                 showStatus(msg, ok);
             });
-            case ADMIN_RESTART_RESPONSE -> Platform.runLater(() -> {
-                boolean ok = packet.payload.get("success").asBoolean();
+            case ADMIN_SET_DEV_RESPONSE -> Platform.runLater(() -> {
+                boolean ok  = packet.payload.get("success").asBoolean();
+                String  msg;
                 if (ok) {
-                    int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
-                    statusLabel.setText("Server restarting in " + delay + "s…");
-                    statusLabel.setStyle("-fx-text-fill: -af-warning;");
-                    if (onServerRestart != null) onServerRestart.accept(delay);
+                    String role  = packet.payload.has("role")  ? packet.payload.get("role").asText()  : "dev";
+                    String user  = packet.payload.has("username") ? packet.payload.get("username").asText() : "?";
+                    boolean grant = packet.payload.has("grant") && packet.payload.get("grant").asBoolean();
+                    msg = (grant ? "Granted " : "Revoked ") + role + ": " + user;
                 } else {
-                    showStatus("Restart failed: " + packet.payload.get("message").asText(), false);
+                    msg = "Dev change failed: " + packet.payload.get("message").asText();
                 }
+                showStatus(msg, ok);
             });
-            case ADMIN_DEPLOY_RESPONSE -> Platform.runLater(() -> {
-                boolean ok = packet.payload.get("success").asBoolean();
-                if (ok) {
-                    int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
-                    showStatus("Deploying — pulling, rebuilding, restarting in " + delay + "s…", true);
-                    if (onServerRestart != null) onServerRestart.accept(delay + 60);
-                } else {
-                    showStatus("Deploy failed: " + packet.payload.get("message").asText(), false);
-                }
-            });
+            case ADMIN_RESTART_RESPONSE -> {
+                if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
+            }
+            case ADMIN_DEPLOY_RESPONSE -> {
+                if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
+            }
         }
     }
 
     // ── Table helpers ─────────────────────────────────────────────────────────
+
+    private void applyFilter() {
+        String query = searchField.getText().trim().toLowerCase();
+        String field = searchFieldCombo.getValue();
+        if (query.isEmpty()) {
+            filteredRows.setPredicate(p -> true);
+            return;
+        }
+        filteredRows.setPredicate(row -> {
+            String value = switch (field) {
+                case "Email"          -> row.email.get();
+                case "Username"       -> row.username.get();
+                case "Character Name" -> row.characterName.get();
+                case "IP"             -> row.ip.get();
+                default               -> row.username.get();
+            };
+            return value != null && value.toLowerCase().contains(query);
+        });
+    }
 
     private TableColumn<PlayerRow, String> strCol(String title, String field, double width) {
         TableColumn<PlayerRow, String> col = new TableColumn<>(title);
@@ -488,6 +320,31 @@ public class AdminPanel {
                 btn.getStyleClass().removeAll("btn-revoke", "btn-grant");
                 btn.getStyleClass().add(row.isAdmin ? "btn-revoke" : "btn-grant");
                 btn.setOnAction(e -> doSetAdmin(row.username.get(), !row.isAdmin));
+                setGraphic(btn);
+            }
+        });
+        return col;
+    }
+
+    private TableColumn<PlayerRow, Void> devCol(String label, String role) {
+        TableColumn<PlayerRow, Void> col = new TableColumn<>(label);
+        col.setPrefWidth(70);
+        col.setCellFactory(c -> new TableCell<>() {
+            private final Button btn = new Button();
+            @Override protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) { setGraphic(null); return; }
+                PlayerRow row = getTableView().getItems().get(getIndex());
+                boolean has = switch (role) {
+                    case "graphicsDev" -> row.isGraphicsDev;
+                    case "boardDev"    -> row.isBoardDev;
+                    case "audioDev"    -> row.isAudioDev;
+                    default            -> false;
+                };
+                btn.setText(has ? "Revoke" : "Grant");
+                btn.getStyleClass().removeAll("btn-revoke", "btn-grant");
+                btn.getStyleClass().add(has ? "btn-revoke" : "btn-grant");
+                btn.setOnAction(e -> doSetDev(row.username.get(), role, !has));
                 setGraphic(btn);
             }
         });
@@ -543,139 +400,36 @@ public class AdminPanel {
     private void requestPlayerList() {
         log.info("Sending ADMIN_USER_LIST_REQUEST (token={})",
                 SessionStore.getToken() != null ? SessionStore.getToken().substring(0, 8) + "…" : "null");
-        client.send(new Packet(PacketType.ADMIN_USER_LIST_REQUEST,
+        client.sendToAdmin(new Packet(PacketType.ADMIN_USER_LIST_REQUEST,
                 SessionStore.getToken(), PacketSerializer.emptyPayload()));
     }
 
     private void doKick(String username) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
-        client.send(new Packet(PacketType.ADMIN_KICK_REQUEST, SessionStore.getToken(), payload));
+        client.sendToAdmin(new Packet(PacketType.ADMIN_KICK_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void doSetAdmin(String username, boolean isAdmin) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
         payload.put("isAdmin",  isAdmin);
-        client.send(new Packet(PacketType.ADMIN_SET_ADMIN_REQUEST, SessionStore.getToken(), payload));
+        client.sendToAdmin(new Packet(PacketType.ADMIN_SET_ADMIN_REQUEST, SessionStore.getToken(), payload));
+    }
+
+    private void doSetDev(String username, String role, boolean grant) {
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("username", username);
+        payload.put("role",     role);
+        payload.put("grant",    grant);
+        client.sendToAdmin(new Packet(PacketType.ADMIN_SET_DEV_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void doBan(String username) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("username", username);
         payload.put("ban", true);
-        client.send(new Packet(PacketType.ADMIN_BAN_REQUEST, SessionStore.getToken(), payload));
-    }
-
-    private void checkVersions() {
-        String clientCommit    = BuildInfo.COMMIT;
-        String clientBuildTime = BuildInfo.BUILD_TIME;
-        String url = AppSettings.getAssetUrl() + "/build-info";
-
-        Thread.ofVirtual().start(() -> {
-            String serverCommit    = "unknown";
-            String serverBuildTime = "unknown";
-            String error           = null;
-            try {
-                java.net.HttpURLConnection conn =
-                        (java.net.HttpURLConnection) URI.create(url).toURL().openConnection();
-                conn.setConnectTimeout(4000);
-                conn.setReadTimeout(4000);
-                int code = conn.getResponseCode();
-                if (code == 200) {
-                    String body = new String(conn.getInputStream().readAllBytes(),
-                            java.nio.charset.StandardCharsets.UTF_8);
-                    com.fasterxml.jackson.databind.JsonNode json =
-                            PacketSerializer.mapper().readTree(body);
-                    serverCommit    = json.path("commit").asText("unknown");
-                    serverBuildTime = json.path("buildTime").asText("unknown");
-                } else if (code == 404) {
-                    error = "Server does not expose build info (HTTP 404).\nDeploy the latest server build first.";
-                } else {
-                    error = "HTTP " + code;
-                }
-            } catch (Exception ex) {
-                error = ex.getMessage();
-            }
-
-            final String sc = serverCommit, st = serverBuildTime, err = error;
-            Platform.runLater(() -> showVersionDialog(clientCommit, clientBuildTime, sc, st, err));
-        });
-    }
-
-    private void showVersionDialog(String clientCommit, String clientBuildTime,
-                                   String serverCommit, String serverBuildTime, String error) {
-        boolean match = clientCommit.equals(serverCommit) && !"unknown".equals(clientCommit);
-
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Version Comparison");
-        alert.setHeaderText(match ? "✓ Client and server are in sync" : "⚠ Version mismatch!");
-
-        String content;
-        if (error != null) {
-            content = "Could not reach server build-info endpoint:\n" + error
-                    + "\n\nClient commit:  " + clientCommit
-                    + "\nClient built:   " + clientBuildTime;
-        } else {
-            content = String.format(
-                    "Client commit:  %s\nClient built:   %s\n\nServer commit:  %s\nServer built:   %s",
-                    clientCommit, clientBuildTime, serverCommit, serverBuildTime);
-            if (match) content += "\n\nVersions are a Match.";
-            else        content += "\n\nThe server may need to be deployed.";
-        }
-        alert.setContentText(content);
-        styleAlert(alert);
-        alert.showAndWait();
-    }
-
-    private void confirmDeploy() {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Deploy & Restart");
-        alert.setHeaderText("Deploy latest code and restart?");
-        alert.setContentText("""
-                The server will:
-                  1. Commit and push any local changes
-                  2. Pull latest code from remote
-                  3. Rebuild the server JAR
-                  4. Restart automatically
-
-                All players will be disconnected.
-                Reconnect in approximately 1 minute.""");
-        styleAlert(alert);
-        alert.showAndWait().ifPresent(btn -> {
-            if (btn == javafx.scene.control.ButtonType.OK) {
-                ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-                payload.put("delay", getRebootDelay());
-                String msg = getRebootMessage();
-                if (!msg.isEmpty()) payload.put("message", msg);
-                client.send(new Packet(PacketType.ADMIN_DEPLOY_REQUEST, SessionStore.getToken(), payload));
-            }
-        });
-    }
-
-    private void confirmRestart() {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Restart Server");
-        alert.setHeaderText("Restart the game server?");
-        alert.setContentText("All connected players will be disconnected.\nThe server will restart automatically if launched via restart.sh.");
-        styleAlert(alert);
-        alert.showAndWait().ifPresent(btn -> {
-            if (btn == javafx.scene.control.ButtonType.OK) doRestart();
-        });
-    }
-
-    private void doRestart() {
-        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("delay",   getRebootDelay());
-        String msg = getRebootMessage();
-        if (!msg.isEmpty()) payload.put("message", msg);
-        client.send(new Packet(PacketType.ADMIN_RESTART_REQUEST, SessionStore.getToken(), payload));
-    }
-
-    private void styleAlert(Alert alert) {
-        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
-        alert.setOnShown(e -> alert.getDialogPane().lookupAll(".label")
-                .forEach(n -> n.setStyle("-fx-text-fill: #ffff00;")));
+        client.sendToAdmin(new Packet(PacketType.ADMIN_BAN_REQUEST, SessionStore.getToken(), payload));
     }
 
     private void showStatus(String msg, boolean ok) {
@@ -701,11 +455,18 @@ public class AdminPanel {
         final StringProperty  x             = new SimpleStringProperty();
         final StringProperty  y             = new SimpleStringProperty();
         volatile boolean      isAdmin;
+        volatile boolean      isGraphicsDev;
+        volatile boolean      isBoardDev;
+        volatile boolean      isAudioDev;
         final long            joinedAt;
 
-        PlayerRow(String username, String email, String characterName, String ip, long joinedAt, double x, double y, int score, boolean isAdmin) {
-            this.joinedAt = joinedAt;
-            this.isAdmin  = isAdmin;
+        PlayerRow(String username, String email, String characterName, String ip, long joinedAt, double x, double y, int score,
+                  boolean isAdmin, boolean isGraphicsDev, boolean isBoardDev, boolean isAudioDev) {
+            this.joinedAt      = joinedAt;
+            this.isAdmin       = isAdmin;
+            this.isGraphicsDev = isGraphicsDev;
+            this.isBoardDev    = isBoardDev;
+            this.isAudioDev    = isAudioDev;
             this.email.set(email);
             this.username.set(username);
             this.characterName.set(characterName);

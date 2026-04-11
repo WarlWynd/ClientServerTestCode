@@ -52,6 +52,7 @@ public class AdminPacketHandler {
             case ADMIN_KICK_REQUEST       -> handleKick(socket, packet, session, addr, port);
             case ADMIN_BAN_REQUEST        -> handleBan(socket, packet, session, addr, port);
             case ADMIN_SET_ADMIN_REQUEST  -> handleSetAdmin(socket, packet, session, addr, port);
+            case ADMIN_SET_DEV_REQUEST    -> handleSetDev(socket, packet, session, addr, port);
             case ADMIN_RESTART_REQUEST      -> handleRestart(socket, packet, session, addr, port);
             case ADMIN_DEPLOY_REQUEST       -> handleDeploy(socket, packet, session, addr, port);
             case ADMIN_SAVE_SETTINGS_REQUEST -> handleSaveSettings(socket, packet, session, addr, port);
@@ -79,7 +80,10 @@ public class AdminPacketHandler {
             node.put("x",            p.x);
             node.put("y",            p.y);
             node.put("score",        p.score);
-            node.put("isAdmin",      userRepo.isAdmin(p.username));
+            node.put("isAdmin",       userRepo.isAdmin(p.username));
+            node.put("isGraphicsDev", userRepo.isGraphicsDev(p.username));
+            node.put("isBoardDev",    userRepo.isBoardDev(p.username));
+            node.put("isAudioDev",    userRepo.isAudioDev(p.username));
         }
 
         out.put("success", true);
@@ -144,23 +148,96 @@ public class AdminPacketHandler {
         sendResponse(socket, out, PacketType.ADMIN_SET_ADMIN_RESPONSE, addr, port);
     }
 
+    private void handleSetDev(DatagramSocket socket, Packet in, Session session,
+                              InetAddress addr, int port) throws Exception {
+        String target = in.payload.get("username").asText();
+        String role   = in.payload.has("role") ? in.payload.get("role").asText("") : "";
+        boolean grant = in.payload.has("grant") && in.payload.get("grant").asBoolean();
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+
+        boolean updated = switch (role) {
+            case "graphicsDev" -> userRepo.setGraphicsDev(target, grant);
+            case "boardDev"    -> userRepo.setBoardDev(target, grant);
+            case "audioDev"    -> userRepo.setAudioDev(target, grant);
+            default            -> false;
+        };
+        if (updated) {
+            out.put("success",  true);
+            out.put("username", target);
+            out.put("role",     role);
+            out.put("grant",    grant);
+            log.info("ADMIN_SET_DEV  '{}' role={} grant={} by '{}'", target, role, grant, session.username());
+        } else {
+            out.put("success", false);
+            out.put("message", "User '" + target + "' not found or unknown role '" + role + "'.");
+        }
+        sendResponse(socket, out, PacketType.ADMIN_SET_DEV_RESPONSE, addr, port);
+    }
+
     private void handleSaveSettings(DatagramSocket socket, Packet in, Session session,
                                     InetAddress addr, int port) throws Exception {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
         try {
-            float gravity      = (float) in.payload.get("gravity").asDouble();
-            float jumpStrength = (float) in.payload.get("jumpStrength").asDouble();
-            float runSpeed     = (float) in.payload.get("runSpeed").asDouble();
+            float   gravity               = (float) in.payload.get("gravity").asDouble();
+            float   jumpStrength          = (float) in.payload.get("jumpStrength").asDouble();
+            float   runSpeed              = (float) in.payload.get("runSpeed").asDouble();
+            boolean allowRememberPassword = in.payload.has("allowRememberPassword")
+                                            && in.payload.get("allowRememberPassword").asBoolean();
+            boolean showTestNpc           = !in.payload.has("showTestNpc")
+                                            || in.payload.get("showTestNpc").asBoolean();
+            float   testNpcX              = in.payload.has("testNpcX")
+                                            ? (float) in.payload.get("testNpcX").asDouble() : 1200f;
+            float   testNpcY              = in.payload.has("testNpcY")
+                                            ? (float) in.payload.get("testNpcY").asDouble() : 0f;
+            String  localServerHost       = in.payload.has("localServerHost")
+                                            ? in.payload.get("localServerHost").asText("localhost") : "localhost";
+            int     localServerPort       = in.payload.has("localServerPort")
+                                            ? in.payload.get("localServerPort").asInt(9876) : 9876;
+            String  externalServerHost    = in.payload.has("externalServerHost")
+                                            ? in.payload.get("externalServerHost").asText("") : "";
+            int     externalServerPort    = in.payload.has("externalServerPort")
+                                            ? in.payload.get("externalServerPort").asInt(9876) : 9876;
+            boolean allowExternalAdmin    = in.payload.has("allowExternalAdmin")
+                                            && in.payload.get("allowExternalAdmin").asBoolean();
+            boolean allowExternalDev      = in.payload.has("allowExternalDev")
+                                            && in.payload.get("allowExternalDev").asBoolean();
+            int     rebootDelaySecs       = in.payload.has("rebootDelaySecs")
+                                            ? in.payload.get("rebootDelaySecs").asInt(60) : 60;
+            String  rebootMessage         = in.payload.has("rebootMessage")
+                                            ? in.payload.get("rebootMessage").asText("") : "";
 
-            boolean saved = settingsRepo.save(gravity, jumpStrength, runSpeed, session.username());
+            boolean saved = settingsRepo.save(gravity, jumpStrength, runSpeed,
+                    allowRememberPassword, showTestNpc, testNpcX, testNpcY,
+                    localServerHost, localServerPort,
+                    externalServerHost, externalServerPort,
+                    allowExternalAdmin, allowExternalDev,
+                    rebootDelaySecs, rebootMessage,
+                    session.username());
             if (saved) {
-                gameHandler.updateSettings(gravity, jumpStrength, runSpeed, socket);
-                out.put("success",      true);
-                out.put("gravity",      gravity);
-                out.put("jumpStrength", jumpStrength);
-                out.put("runSpeed",     runSpeed);
-                log.info("ADMIN_SAVE_SETTINGS by '{}': gravity={}, jump={}, runSpeed={}",
-                        session.username(), gravity, jumpStrength, runSpeed);
+                gameHandler.updateSettings(gravity, jumpStrength, runSpeed,
+                        allowRememberPassword, showTestNpc, testNpcX, testNpcY,
+                        localServerHost, localServerPort,
+                        externalServerHost, externalServerPort,
+                        allowExternalAdmin, allowExternalDev,
+                        rebootDelaySecs, rebootMessage,
+                        socket);
+                out.put("success",              true);
+                out.put("gravity",              gravity);
+                out.put("jumpStrength",         jumpStrength);
+                out.put("runSpeed",             runSpeed);
+                out.put("allowRememberPassword",allowRememberPassword);
+                out.put("showTestNpc",          showTestNpc);
+                out.put("testNpcX",             testNpcX);
+                out.put("testNpcY",             testNpcY);
+                out.put("localServerHost",      localServerHost);
+                out.put("localServerPort",      localServerPort);
+                out.put("externalServerHost",   externalServerHost);
+                out.put("externalServerPort",   externalServerPort);
+                out.put("allowExternalAdmin",   allowExternalAdmin);
+                out.put("allowExternalDev",     allowExternalDev);
+                out.put("rebootDelaySecs",      rebootDelaySecs);
+                out.put("rebootMessage",        rebootMessage);
+                log.info("ADMIN_SAVE_SETTINGS by '{}'", session.username());
             } else {
                 out.put("success", false);
                 out.put("message", "Failed to save settings to database.");
@@ -268,6 +345,7 @@ public class AdminPacketHandler {
             case ADMIN_KICK_REQUEST      -> PacketType.ADMIN_KICK_RESPONSE;
             case ADMIN_BAN_REQUEST       -> PacketType.ADMIN_BAN_RESPONSE;
             case ADMIN_SET_ADMIN_REQUEST -> PacketType.ADMIN_SET_ADMIN_RESPONSE;
+            case ADMIN_SET_DEV_REQUEST   -> PacketType.ADMIN_SET_DEV_RESPONSE;
             case ADMIN_RESTART_REQUEST        -> PacketType.ADMIN_RESTART_RESPONSE;
             case ADMIN_DEPLOY_REQUEST         -> PacketType.ADMIN_DEPLOY_RESPONSE;
             case ADMIN_SAVE_SETTINGS_REQUEST  -> PacketType.ADMIN_SAVE_SETTINGS_RESPONSE;

@@ -140,6 +140,7 @@ public class UDPServer {
                  ADMIN_KICK_REQUEST,
                  ADMIN_BAN_REQUEST,
                  ADMIN_SET_ADMIN_REQUEST,
+                 ADMIN_SET_DEV_REQUEST,
                  ADMIN_RESTART_REQUEST,
                  ADMIN_DEPLOY_REQUEST,
                  ADMIN_SAVE_SETTINGS_REQUEST -> adminHandler.dispatch(socket, packet, session, addr, port);

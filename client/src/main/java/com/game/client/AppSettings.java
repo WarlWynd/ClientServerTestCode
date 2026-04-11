@@ -27,8 +27,12 @@ public final class AppSettings {
     private static volatile String         programName     = "Adventure Friends";
     private static volatile String         corpName        = "Wynd Farm";
     private static volatile GameResolution resolution      = GameResolution.STANDARD;
-    private static volatile String         serverHost      = "localhost";
-    private static volatile int       serverPort      = 9876;
+    private static volatile String         serverHost              = "localhost";
+    private static volatile int            serverPort              = 9876;
+    private static volatile String         externalServerHost      = "localhost";
+    private static volatile int            externalServerPort      = 9876;
+    private static volatile boolean        allowExternalAdmin      = false;
+    private static volatile boolean        allowExternalDev        = false;
     private static volatile SoundMode soundMode       = SoundMode.HIGH;
     private static volatile boolean   keepScreenAwake = true;
     private static volatile double    hudOpacity      = 1.0;
@@ -57,6 +61,8 @@ public final class AppSettings {
     private static volatile boolean   showTestNpc      = true;
     private static volatile float     testNpcX         = 500f;
     private static volatile float     testNpcY         = 14f;
+    private static volatile int       rebootDelaySecs  = 60;
+    private static volatile String    rebootMessage    = "";
 
     static { load(); }
 
@@ -82,8 +88,12 @@ public final class AppSettings {
         programName     = merged.getProperty("ProgramName", programName);
         corpName        = merged.getProperty("CorpName",    corpName);
         resolution      = GameResolution.fromString(merged.getProperty("display.resolution", resolution.name()));
-        serverHost      = merged.getProperty("server.host", serverHost);
-        serverPort      = intOf(merged, "server.port", serverPort);
+        serverHost          = merged.getProperty("server.host",          serverHost);
+        serverPort          = intOf(merged,  "server.port",          serverPort);
+        externalServerHost  = merged.getProperty("server.external.host", externalServerHost);
+        externalServerPort  = intOf(merged,  "server.external.port", externalServerPort);
+        allowExternalAdmin  = boolOf(merged, "admin.allowExternalAdmin", allowExternalAdmin);
+        allowExternalDev    = boolOf(merged, "admin.allowExternalDev",   allowExternalDev);
         soundMode       = SoundMode.fromString(merged.getProperty("sound.mode",
                           merged.getProperty("sound.enabled", soundMode.name())));
         keepScreenAwake = boolOf(merged, "display.keepScreenAwake", keepScreenAwake);
@@ -112,6 +122,8 @@ public final class AppSettings {
         showTestNpc       = boolOf(merged, "gameplay.showTestNpc", showTestNpc);
         testNpcX          = floatOf(merged, "gameplay.testNpcX",   testNpcX);
         testNpcY          = floatOf(merged, "gameplay.testNpcY",   testNpcY);
+        rebootDelaySecs   = intOf(merged,   "server.rebootDelaySecs", rebootDelaySecs);
+        rebootMessage     = merged.getProperty("server.rebootMessage", rebootMessage);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -124,6 +136,10 @@ public final class AppSettings {
         Properties p = new Properties();
         p.setProperty("server.host",               serverHost);
         p.setProperty("server.port",               String.valueOf(serverPort));
+        p.setProperty("server.external.host",      externalServerHost);
+        p.setProperty("server.external.port",      String.valueOf(externalServerPort));
+        p.setProperty("admin.allowExternalAdmin",  String.valueOf(allowExternalAdmin));
+        p.setProperty("admin.allowExternalDev",    String.valueOf(allowExternalDev));
         p.setProperty("sound.mode",                soundMode.name());
         p.setProperty("display.resolution",        resolution.name());
         p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
@@ -151,6 +167,8 @@ public final class AppSettings {
         p.setProperty("gameplay.showTestNpc",      String.valueOf(showTestNpc));
         p.setProperty("gameplay.testNpcX",         String.valueOf(testNpcX));
         p.setProperty("gameplay.testNpcY",         String.valueOf(testNpcY));
+        p.setProperty("server.rebootDelaySecs",    String.valueOf(rebootDelaySecs));
+        p.setProperty("server.rebootMessage",      rebootMessage);
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -217,10 +235,22 @@ public final class AppSettings {
     public static void      setTestNpcX(float v)       { testNpcX = v; }
     public static float     getTestNpcY()              { return testNpcY; }
     public static void      setTestNpcY(float v)       { testNpcY = v; }
+    public static int       getRebootDelaySecs()       { return rebootDelaySecs; }
+    public static void      setRebootDelaySecs(int v)  { rebootDelaySecs = v; }
+    public static String    getRebootMessage()         { return rebootMessage; }
+    public static void      setRebootMessage(String v) { rebootMessage = v == null ? "" : v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
-    public static void setServerHost(String v)           { serverHost      = v; }
-    public static void setServerPort(int v)              { serverPort      = v; }
+    public static void      setServerHost(String v)            { serverHost           = v; }
+    public static void      setServerPort(int v)               { serverPort           = v; }
+    public static String    getExternalServerHost()            { return externalServerHost; }
+    public static void      setExternalServerHost(String v)    { externalServerHost   = v; }
+    public static int       getExternalServerPort()            { return externalServerPort; }
+    public static void      setExternalServerPort(int v)       { externalServerPort   = v; }
+    public static boolean   isAllowExternalAdmin()             { return allowExternalAdmin; }
+    public static void      setAllowExternalAdmin(boolean v)   { allowExternalAdmin   = v; }
+    public static boolean   isAllowExternalDev()               { return allowExternalDev; }
+    public static void      setAllowExternalDev(boolean v)     { allowExternalDev     = v; }
     public static void setSoundMode(SoundMode v)         { soundMode       = v; }
     public static void setKeepScreenAwake(boolean v)     { keepScreenAwake = v; }
     public static void setHudOpacity(double v)           { hudOpacity      = v; }

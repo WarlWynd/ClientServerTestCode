@@ -44,7 +44,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class PlayerAnimator {
 
-    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, GOTHIT02, GOTHIT03, STAFF_IDLE, SWORD_1H_IDLE, SWORD_2H_IDLE, AXE_1H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT, KIP_UP, FRONT_FLIP, CRAWL }
+    public enum State { IDLE, RUN, JUMP, FALL, GOTHIT01, GOTHIT02, GOTHIT03, STAFF_IDLE, SWORD_1H_IDLE, SWORD_2H_IDLE, AXE_1H_IDLE, AXE_2H_IDLE, DAGGER_IDLE, MORNING_STAR_IDLE, BOW_IDLE, KNOCKED_DOWN, CROUCH, SNEAK, CLIMB, PRONE, ROLL, SWIM, PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER, HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK, SHOOT, KIP_UP, FRONT_FLIP, CRAWL,
+        // ── Quadruped states ──────────────────────────────────────────────────
+        QUAD_IDLE, TROT, GALLOP, POUNCE, BITE, QUAD_DEATH }
 
     /**
      * Viewing direction for a pose.
@@ -267,6 +269,8 @@ public class PlayerAnimator {
         set.add(State.UPPERCUT); set.add(State.HAYMAKER);
         set.add(State.HEAD_KICK); set.add(State.LOW_KICK); set.add(State.BODY_KICK);
         set.add(State.SPINNING_BACK_KICK); set.add(State.SIDE_KICK); set.add(State.SHOOT);
+        // Quadruped one-shots
+        set.add(State.POUNCE); set.add(State.BITE); set.add(State.QUAD_DEATH);
         try {
             Path p = Paths.get(STATE_FLAGS_FILE);
             if (Files.exists(p)) {
@@ -452,8 +456,48 @@ public class PlayerAnimator {
             case BODY_KICK       -> BODY_KICK;
             case SPINNING_BACK_KICK -> SPINNING_BACK_KICK;
             case SIDE_KICK       -> SIDE_KICK;
-            case SHOOT           -> SHOOT;
+            case SHOOT      -> SHOOT;
+            case QUAD_IDLE  -> QUAD_IDLE;
+            case TROT       -> TROT;
+            case GALLOP     -> GALLOP;
+            case POUNCE     -> POUNCE;
+            case BITE       -> BITE;
+            case QUAD_DEATH -> QUAD_DEATH;
         };
+    }
+
+    /**
+     * Returns the built-in (hardcoded) frames for a state and direction.
+     * Unlike getDirectionalPoses(), this never returns null — it falls back
+     * to the base side-view frames. Used by SpriteEditorPanel to seed each
+     * direction's editable copy from the canonical built-in data.
+     */
+    public static double[][] getBuiltinFrames(State s, Direction d) {
+        if (d == Direction.FRONT) {
+            return switch (s) {
+                case KIP_UP     -> KIP_UP_FRONT_POSES;
+                case QUAD_IDLE  -> QUAD_IDLE_FRONT;
+                case TROT       -> TROT_FRONT;
+                case GALLOP     -> GALLOP_FRONT;
+                case POUNCE     -> POUNCE_FRONT;
+                case BITE       -> BITE_FRONT;
+                case QUAD_DEATH -> QUAD_DEATH_FRONT;
+                default         -> getFrames(s);
+            };
+        }
+        if (d == Direction.BACK) {
+            return switch (s) {
+                case KIP_UP     -> KIP_UP_BACK_POSES;
+                case QUAD_IDLE  -> QUAD_IDLE_BACK;
+                case TROT       -> TROT_BACK;
+                case GALLOP     -> GALLOP_BACK;
+                case POUNCE     -> POUNCE_BACK;
+                case BITE       -> BITE_BACK;
+                case QUAD_DEATH -> QUAD_DEATH_BACK;
+                default         -> getFrames(s);
+            };
+        }
+        return getFrames(s);
     }
 
     /**
@@ -461,6 +505,8 @@ public class PlayerAnimator {
      * Used by the Graphics Dev sprite preview.
      */
     public State getCurrentState() { return state; }
+
+    public State getState() { return state; }
 
     public void forceState(State s) {
         state         = s;
@@ -502,13 +548,12 @@ public class PlayerAnimator {
     public void draw(GraphicsContext gc, double cx, double canvasY, Color color, double scale, long nowMs) {
         advanceFrame(nowMs);
 
-        // ── Procedural path ───────────────────────────────────────────────────
         double[] pose = currentPose();
 
         gc.save();
         gc.translate(cx, canvasY);
         gc.scale(scale, scale);
-        if (shouldMirror()) gc.scale(-1, 1);   // mirror for left-facing when no LEFT override exists
+        if (shouldMirror()) gc.scale(-1, 1);
 
         gc.setFill(color);
         gc.setStroke(color);
@@ -516,7 +561,11 @@ public class PlayerAnimator {
         gc.setLineCap(StrokeLineCap.ROUND);
         gc.setLineJoin(StrokeLineJoin.ROUND);
 
-        drawPose(gc, pose);
+        if (MobCategory.of(state) == MobCategory.QUADRUPED)
+            drawPoseQuad(gc, pose);
+        else
+            drawPose(gc, pose);
+
         gc.restore();
     }
 
@@ -555,6 +604,12 @@ public class PlayerAnimator {
             case PUNCH, CROSS, HOOK, UPPERCUT, HAYMAKER,
                  HEAD_KICK, LOW_KICK, BODY_KICK, SPINNING_BACK_KICK, SIDE_KICK,
                  SHOOT -> ATTACK_MS;
+            case QUAD_IDLE  -> 700;
+            case TROT       -> 130;
+            case GALLOP     -> 70;
+            case POUNCE     -> 60;
+            case BITE       -> 70;
+            case QUAD_DEATH -> 100;
             default           -> OTHER_MS;
         };
         if (now - lastFrameMs >= interval) {
@@ -570,6 +625,33 @@ public class PlayerAnimator {
     }
 
     private int poseCount(State s) {
+        // Built-in direction-specific animations (take precedence over DIR_POSES overrides)
+        if (currentDirection() == Direction.FRONT) {
+            Integer n = switch (s) {
+                case KIP_UP     -> KIP_UP_FRONT_POSES.length;
+                case QUAD_IDLE  -> QUAD_IDLE_FRONT.length;
+                case TROT       -> TROT_FRONT.length;
+                case GALLOP     -> GALLOP_FRONT.length;
+                case POUNCE     -> POUNCE_FRONT.length;
+                case BITE       -> BITE_FRONT.length;
+                case QUAD_DEATH -> QUAD_DEATH_FRONT.length;
+                default         -> null;
+            };
+            if (n != null) return n;
+        }
+        if (currentDirection() == Direction.BACK) {
+            Integer n = switch (s) {
+                case KIP_UP     -> KIP_UP_BACK_POSES.length;
+                case QUAD_IDLE  -> QUAD_IDLE_BACK.length;
+                case TROT       -> TROT_BACK.length;
+                case GALLOP     -> GALLOP_BACK.length;
+                case POUNCE     -> POUNCE_BACK.length;
+                case BITE       -> BITE_BACK.length;
+                case QUAD_DEATH -> QUAD_DEATH_BACK.length;
+                default         -> null;
+            };
+            if (n != null) return n;
+        }
         // Check directional override first
         double[][] dirOverride = DIR_POSES.get(s.name() + "_" + currentDirection().name());
         if (dirOverride != null && dirOverride.length > 0) return dirOverride.length;
@@ -609,13 +691,46 @@ public class PlayerAnimator {
             case BODY_KICK       -> BODY_KICK.length;
             case SPINNING_BACK_KICK -> SPINNING_BACK_KICK.length;
             case SIDE_KICK       -> SIDE_KICK.length;
-            case SHOOT  -> SHOOT.length;
+            case SHOOT      -> SHOOT.length;
+            case QUAD_IDLE  -> QUAD_IDLE.length;
+            case TROT       -> TROT.length;
+            case GALLOP     -> GALLOP.length;
+            case POUNCE     -> POUNCE.length;
+            case BITE       -> BITE.length;
+            case QUAD_DEATH -> QUAD_DEATH.length;
         };
     }
 
     private double[] currentPose() {
-        // Check directional override first
         Direction dir = currentDirection();
+        // Built-in direction-specific animations (hardcoded, not stored in DIR_POSES)
+        if (dir == Direction.FRONT) {
+            double[][] poses = switch (state) {
+                case KIP_UP     -> KIP_UP_FRONT_POSES;
+                case QUAD_IDLE  -> QUAD_IDLE_FRONT;
+                case TROT       -> TROT_FRONT;
+                case GALLOP     -> GALLOP_FRONT;
+                case POUNCE     -> POUNCE_FRONT;
+                case BITE       -> BITE_FRONT;
+                case QUAD_DEATH -> QUAD_DEATH_FRONT;
+                default         -> null;
+            };
+            if (poses != null) return poses[frame % poses.length];
+        }
+        if (dir == Direction.BACK) {
+            double[][] poses = switch (state) {
+                case KIP_UP     -> KIP_UP_BACK_POSES;
+                case QUAD_IDLE  -> QUAD_IDLE_BACK;
+                case TROT       -> TROT_BACK;
+                case GALLOP     -> GALLOP_BACK;
+                case POUNCE     -> POUNCE_BACK;
+                case BITE       -> BITE_BACK;
+                case QUAD_DEATH -> QUAD_DEATH_BACK;
+                default         -> null;
+            };
+            if (poses != null) return poses[frame % poses.length];
+        }
+        // Directional override from SpriteEditor / dir_poses.json
         double[][] dirOverride = DIR_POSES.get(state.name() + "_" + dir.name());
         if (dirOverride != null && dirOverride.length > 0)
             return dirOverride[frame % dirOverride.length];
@@ -656,7 +771,13 @@ public class PlayerAnimator {
             case BODY_KICK       -> BODY_KICK[f];
             case SPINNING_BACK_KICK -> SPINNING_BACK_KICK[f];
             case SIDE_KICK       -> SIDE_KICK[f];
-            case SHOOT  -> SHOOT[f];
+            case SHOOT      -> SHOOT[f];
+            case QUAD_IDLE  -> QUAD_IDLE[f];
+            case TROT       -> TROT[f];
+            case GALLOP     -> GALLOP[f];
+            case POUNCE     -> POUNCE[f];
+            case BITE       -> BITE[f];
+            case QUAD_DEATH -> QUAD_DEATH[f];
         };
     }
 
@@ -700,6 +821,69 @@ public class PlayerAnimator {
         // Right leg: hip → knee → foot
         gc.strokeLine(rlhx, rlhy, rkx, rky);
         gc.strokeLine(rkx,  rky,  rfx, rfy);
+    }
+
+    /**
+     * Draw one quadruped pose frame.
+     *
+     * Quadruped pose array layout (40 values = 20 joints × 2 coords):
+     *   [0,1]   head centre        [2,3]   snout tip
+     *   [4,5]   neck base          [6,7]   front-shoulder (spine front)
+     *   [8,9]   mid-back           [10,11] rump
+     *   [12,13] tail base          [14,15] tail tip
+     *   [16,17] front-left upper   [18,19] front-left knee   [20,21] front-left paw
+     *   [22,23] front-right upper  [24,25] front-right knee  [26,27] front-right paw
+     *   [28,29] back-left hip      [30,31] back-left knee    [32,33] back-left foot
+     *   [34,35] back-right hip     [36,37] back-right knee   [38,39] back-right foot
+     */
+    private static void drawPoseQuad(GraphicsContext gc, double[] p) {
+        double hx   = p[0],  hy   = -p[1];   // head centre
+        double jx   = p[2],  jy   = -p[3];   // snout tip
+        double nkx  = p[4],  nky  = -p[5];   // neck base
+        double fsx  = p[6],  fsy  = -p[7];   // front-shoulder
+        double mbx  = p[8],  mby  = -p[9];   // mid-back
+        double rpx  = p[10], rpy  = -p[11];  // rump
+        double tbx  = p[12], tby  = -p[13];  // tail base
+        double ttx  = p[14], tty  = -p[15];  // tail tip
+        double flux = p[16], fluy = -p[17];  // front-left upper
+        double flkx = p[18], flky = -p[19];  // front-left knee
+        double flpx = p[20], flpy = -p[21];  // front-left paw
+        double frux = p[22], fruy = -p[23];  // front-right upper
+        double frkx = p[24], frky = -p[25];  // front-right knee
+        double frpx = p[26], frpy = -p[27];  // front-right paw
+        double blhx = p[28], blhy = -p[29];  // back-left hip
+        double blkx = p[30], blky = -p[31];  // back-left knee
+        double blfx = p[32], blfy = -p[33];  // back-left foot
+        double brhx = p[34], brhy = -p[35];  // back-right hip
+        double brkx = p[36], brky = -p[37];  // back-right knee
+        double brfx = p[38], brfy = -p[39];  // back-right foot
+
+        // Head (elongated oval)
+        double hr = HEAD_R * 0.9;
+        gc.fillOval(hx - hr * 1.3, hy - hr, hr * 2.6, hr * 2);
+        gc.strokeLine(hx, hy, jx, jy);          // snout
+        gc.strokeLine(hx, hy, nkx, nky);        // neck
+        gc.strokeLine(nkx, nky, fsx, fsy);      // neck → front-shoulder
+        gc.strokeLine(fsx, fsy, mbx, mby);      // spine
+        gc.strokeLine(mbx, mby, rpx, rpy);      // spine → rump
+        gc.strokeLine(rpx, rpy, tbx, tby);      // tail
+        gc.strokeLine(tbx, tby, ttx, tty);
+        // Front-left leg
+        gc.strokeLine(fsx, fsy, flux, fluy);
+        gc.strokeLine(flux, fluy, flkx, flky);
+        gc.strokeLine(flkx, flky, flpx, flpy);
+        // Front-right leg
+        gc.strokeLine(fsx, fsy, frux, fruy);
+        gc.strokeLine(frux, fruy, frkx, frky);
+        gc.strokeLine(frkx, frky, frpx, frpy);
+        // Back-left leg
+        gc.strokeLine(rpx, rpy, blhx, blhy);
+        gc.strokeLine(blhx, blhy, blkx, blky);
+        gc.strokeLine(blkx, blky, blfx, blfy);
+        // Back-right leg
+        gc.strokeLine(rpx, rpy, brhx, brhy);
+        gc.strokeLine(brhx, brhy, brkx, brky);
+        gc.strokeLine(brkx, brky, brfx, brfy);
     }
 
     // ── Pose data ─────────────────────────────────────────────────────────────
@@ -4083,6 +4267,102 @@ public class PlayerAnimator {
            3,21,   4,11,    6, 0 }
     };
 
+    // ── KIP_UP — Front view (character faces camera) ─────────────────────────
+    // 20 frames mirroring the side-view key poses but adapted for head-on perspective.
+    // X is symmetric around 0; Y rises as the figure springs up.
+    // Wrapped in a method to avoid pushing <clinit> past the JVM 64 KB limit.
+    private static double[][] mkKipUpFront() { return new double[][] {
+        // F0  — flat on back, arms spread, legs at floor
+        {  0, 4,  0, 8,  0,13,  -6,10,-14, 7,-22, 5,   6,10, 14, 7, 22, 5,  -3,13, -3, 6, -4, 0,   3,13,  3, 6,  4, 0 },
+        // F1  — candlestick loading (legs swinging up)
+        {  0, 7,  0,11,  0,15,  -6,11,-14, 8,-20, 6,   6,11, 14, 8, 20, 6,  -3,15, -4,26, -5,38,   3,15,  4,26,  5,38 },
+        // F2  — candlestick peak
+        {  0, 8,  0,12,  0,16,  -5,12,-12, 9,-18, 6,   5,12, 12, 9, 18, 6,  -3,16, -4,29, -5,42,   3,16,  4,29,  5,42 },
+        // F3  — tight tuck
+        {  0,12,  0,16,  0,20,  -4,15, -8,10,-12, 6,   4,15,  8,10, 12, 6,  -3,20, -6,30, -4,24,   3,20,  6,30,  4,24 },
+        // F4  — tight tuck (held)
+        {  0,12,  0,16,  0,20,  -4,15, -8,10,-12, 6,   4,15,  8,10, 12, 6,  -3,20, -6,30, -4,24,   3,20,  6,30,  4,24 },
+        // F5  — explosive kick (legs thrust forward/down)
+        {  0,24,  0,27,  0,28,  -5,25,-10,19,-12,13,   5,25, 10,19, 12,13,  -3,27, -5,17, -6, 4,   3,27,  5,17,  6, 4 },
+        // F6  — explosive kick (held)
+        {  0,24,  0,27,  0,28,  -5,25,-10,19,-12,13,   5,25, 10,19, 12,13,  -3,27, -5,17, -6, 4,   3,27,  5,17,  6, 4 },
+        // F7  — tight tuck (second rotation)
+        {  0,12,  0,16,  0,20,  -4,15, -8,10,-12, 6,   4,15,  8,10, 12, 6,  -3,20, -6,30, -4,24,   3,20,  6,30,  4,24 },
+        // F8  — tight tuck (held)
+        {  0,12,  0,16,  0,20,  -4,15, -8,10,-12, 6,   4,15,  8,10, 12, 6,  -3,20, -6,30, -4,24,   3,20,  6,30,  4,24 },
+        // F9  — candlestick again
+        {  0, 7,  0,11,  0,15,  -6,11,-14, 8,-20, 6,   6,11, 14, 8, 20, 6,  -3,15, -4,26, -5,38,   3,15,  4,26,  5,38 },
+        // F10 — candlestick (held)
+        {  0, 8,  0,12,  0,16,  -5,12,-12, 9,-18, 6,   5,12, 12, 9, 18, 6,  -3,16, -4,29, -5,42,   3,16,  4,29,  5,42 },
+        // F11 — nearly standing (body rising)
+        {  0,40,  0,32,  0,21,  -7,29,-13,21,-12,14,   7,29, 13,21, 12,14,  -4,21, -5,11, -6, 0,   4,21,  5,11,  6, 0 },
+        // F12 — nearly standing (same)
+        {  0,40,  0,32,  0,21,  -7,29,-13,21,-12,14,   7,29, 13,21, 12,14,  -4,21, -5,11, -6, 0,   4,21,  5,11,  6, 0 },
+        // F13 — airborne back arch
+        {  0,34,  0,28,  0,22,  -8,26,-16,20,-18,14,   8,26, 16,20, 18,14,  -4,22, -6,12, -8, 3,   4,22,  6,12,  8, 3 },
+        // F14 — airborne back arch (peak)
+        {  0,34,  0,28,  0,22,  -8,26,-16,20,-18,14,   8,26, 16,20, 18,14,  -4,22, -6,12, -8, 3,   4,22,  6,12,  8, 3 },
+        // F15 — backward lean landing
+        {  0,40,  0,32,  0,21,  -7,30,-14,22,-16,15,   7,30, 14,22, 16,15,  -4,21, -5,11, -6, 0,   4,21,  5,11,  6, 0 },
+        // F16 — backward lean (held)
+        {  0,40,  0,32,  0,21,  -7,30,-14,22,-16,15,   7,30, 14,22, 16,15,  -4,21, -5,11, -6, 0,   4,21,  5,11,  6, 0 },
+        // F17 — deep squat
+        {  0,30,  0,24,  0,16,  -5,23, -8,17, -4,13,   5,23,  8,17,  4,13,  -4,16, -7, 8, -4, 0,   4,16,  7, 8,  4, 0 },
+        // F18 — deep squat (held)
+        {  0,30,  0,24,  0,16,  -5,23, -8,17, -4,13,   5,23,  8,17,  4,13,  -4,16, -7, 8, -4, 0,   4,16,  7, 8,  4, 0 },
+        // F19 — standing upright (matches IDLE_FRONT)
+        {  0,47,  0,38,  0,22,  -7,35,-13,26,-12,17,   7,35, 13,26, 12,17,  -4,22, -5,11, -6, 0,   4,22,  5,11,  6, 0 }
+    }; }
+
+    // ── KIP_UP — Back view (character's back to camera) ──────────────────────
+    // X-mirror of KIP_UP_FRONT: left/right sides swapped to reflect back-facing orientation.
+    private static double[][] mkKipUpBack() { return new double[][] {
+        // F0  — flat on back (back to camera), arms spread
+        {  0, 4,  0, 8,  0,13,   6,10, 14, 7, 22, 5,  -6,10,-14, 7,-22, 5,   3,13,  3, 6,  4, 0,  -3,13, -3, 6, -4, 0 },
+        // F1  — candlestick loading
+        {  0, 7,  0,11,  0,15,   6,11, 14, 8, 20, 6,  -6,11,-14, 8,-20, 6,   3,15,  4,26,  5,38,  -3,15, -4,26, -5,38 },
+        // F2  — candlestick peak
+        {  0, 8,  0,12,  0,16,   5,12, 12, 9, 18, 6,  -5,12,-12, 9,-18, 6,   3,16,  4,29,  5,42,  -3,16, -4,29, -5,42 },
+        // F3  — tight tuck
+        {  0,12,  0,16,  0,20,   4,15,  8,10, 12, 6,  -4,15, -8,10,-12, 6,   3,20,  6,30,  4,24,  -3,20, -6,30, -4,24 },
+        // F4  — tight tuck (held)
+        {  0,12,  0,16,  0,20,   4,15,  8,10, 12, 6,  -4,15, -8,10,-12, 6,   3,20,  6,30,  4,24,  -3,20, -6,30, -4,24 },
+        // F5  — explosive kick
+        {  0,24,  0,27,  0,28,   5,25, 10,19, 12,13,  -5,25,-10,19,-12,13,   3,27,  5,17,  6, 4,  -3,27, -5,17, -6, 4 },
+        // F6  — explosive kick (held)
+        {  0,24,  0,27,  0,28,   5,25, 10,19, 12,13,  -5,25,-10,19,-12,13,   3,27,  5,17,  6, 4,  -3,27, -5,17, -6, 4 },
+        // F7  — tight tuck (second rotation)
+        {  0,12,  0,16,  0,20,   4,15,  8,10, 12, 6,  -4,15, -8,10,-12, 6,   3,20,  6,30,  4,24,  -3,20, -6,30, -4,24 },
+        // F8  — tight tuck (held)
+        {  0,12,  0,16,  0,20,   4,15,  8,10, 12, 6,  -4,15, -8,10,-12, 6,   3,20,  6,30,  4,24,  -3,20, -6,30, -4,24 },
+        // F9  — candlestick again
+        {  0, 7,  0,11,  0,15,   6,11, 14, 8, 20, 6,  -6,11,-14, 8,-20, 6,   3,15,  4,26,  5,38,  -3,15, -4,26, -5,38 },
+        // F10 — candlestick (held)
+        {  0, 8,  0,12,  0,16,   5,12, 12, 9, 18, 6,  -5,12,-12, 9,-18, 6,   3,16,  4,29,  5,42,  -3,16, -4,29, -5,42 },
+        // F11 — nearly standing
+        {  0,40,  0,32,  0,21,   7,29, 13,21, 12,14,  -7,29,-13,21,-12,14,   4,21,  5,11,  6, 0,  -4,21, -5,11, -6, 0 },
+        // F12 — nearly standing (same)
+        {  0,40,  0,32,  0,21,   7,29, 13,21, 12,14,  -7,29,-13,21,-12,14,   4,21,  5,11,  6, 0,  -4,21, -5,11, -6, 0 },
+        // F13 — airborne back arch
+        {  0,34,  0,28,  0,22,   8,26, 16,20, 18,14,  -8,26,-16,20,-18,14,   4,22,  6,12,  8, 3,  -4,22, -6,12, -8, 3 },
+        // F14 — airborne back arch (peak)
+        {  0,34,  0,28,  0,22,   8,26, 16,20, 18,14,  -8,26,-16,20,-18,14,   4,22,  6,12,  8, 3,  -4,22, -6,12, -8, 3 },
+        // F15 — backward lean landing
+        {  0,40,  0,32,  0,21,   7,30, 14,22, 16,15,  -7,30,-14,22,-16,15,   4,21,  5,11,  6, 0,  -4,21, -5,11, -6, 0 },
+        // F16 — backward lean (held)
+        {  0,40,  0,32,  0,21,   7,30, 14,22, 16,15,  -7,30,-14,22,-16,15,   4,21,  5,11,  6, 0,  -4,21, -5,11, -6, 0 },
+        // F17 — deep squat
+        {  0,30,  0,24,  0,16,   5,23,  8,17,  4,13,  -5,23, -8,17, -4,13,   4,16,  7, 8,  4, 0,  -4,16, -7, 8, -4, 0 },
+        // F18 — deep squat (held)
+        {  0,30,  0,24,  0,16,   5,23,  8,17,  4,13,  -5,23, -8,17, -4,13,   4,16,  7, 8,  4, 0,  -4,16, -7, 8, -4, 0 },
+        // F19 — standing (matches IDLE_BACK)
+        {  0,47,  0,38,  0,22,   7,35, 13,26, 12,17,  -7,35,-13,26,-12,17,   4,22,  5,11,  6, 0,  -4,22, -5,11, -6, 0 }
+    }; }
+
+    // Cached built-in FRONT/BACK poses — initialized via factory methods to stay within JVM clinit limit.
+    private static final double[][] KIP_UP_FRONT_POSES = mkKipUpFront();
+    private static final double[][] KIP_UP_BACK_POSES  = mkKipUpBack();
+
     // ── Crawl ─────────────────────────────────────────────────────────────────
     // Six-frame looping crawl cycle on hands and knees.
     // Body is roughly horizontal (hips ~y=20, shoulders ~y=20).
@@ -4126,4 +4406,172 @@ public class PlayerAnimator {
           -4,20, -8,10,-14, 1,    // left knee pulled back
            2,20,  8,10, 14, 1 }   // right knee forward
     };
+
+    // ── Quadruped pose data ───────────────────────────────────────────────────
+    // Quadruped pose array layout (40 values = 20 joints × 2 coords):
+    //   [0,1]   head centre        [2,3]   snout tip
+    //   [4,5]   neck base          [6,7]   front-shoulder
+    //   [8,9]   mid-back           [10,11] rump
+    //   [12,13] tail base          [14,15] tail tip
+    //   [16,17] FL-upper  [18,19] FL-knee  [20,21] FL-paw
+    //   [22,23] FR-upper  [24,25] FR-knee  [26,27] FR-paw
+    //   [28,29] BL-hip    [30,31] BL-knee  [32,33] BL-foot
+    //   [34,35] BR-hip    [36,37] BR-knee  [38,39] BR-foot
+    //
+    // Wolf is ~55 units tall at shoulder, ~70 units long, facing right.
+    // All 6 states start with the same neutral standing pose — edit in Pose Editor.
+
+    // Standing wolf base pose (shared seed for all 6 states)
+    private static final double[] WOLF_STAND = {
+        38,42,  50,36,  26,36,  16,34,   0,37, -18,33, -24,35, -36,46,
+        18,32,  20,16,  20, 0,  13,31,  15,15,  15, 0,
+       -16,31, -18,15, -16, 0, -13,30, -15,14, -13, 0
+    };
+
+    private static final double[][] QUAD_IDLE  = { WOLF_STAND };
+    private static final double[][] TROT       = { WOLF_STAND };
+    private static final double[][] GALLOP     = { WOLF_STAND };
+    private static final double[][] POUNCE     = { WOLF_STAND };
+    private static final double[][] BITE       = { WOLF_STAND };
+    private static final double[][] QUAD_DEATH = { WOLF_STAND };
+
+    // ── Quadruped — Front view (animal faces camera, body foreshortened) ──────
+    // 40 values per frame: head,snout, neck, front-shoulder, mid-back, rump,
+    //   tail-base, tail-tip, FL-upper/knee/paw, FR-upper/knee/paw,
+    //   BL-hip/knee/foot, BR-hip/knee/foot. All factory methods to stay within clinit limit.
+
+    private static double[][] mkQuadFrontIdle() { return new double[][] {
+        // F0 — standing, facing camera, neutral
+        {  0,36,  0,42,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -10,24, -12,14, -12, 0,    10,24,  12,14,  12, 0,
+           -6,12,  -8, 7,  -7, 0,     6,12,   8, 7,   7, 0 },
+        // F1 — slight inhale (body +1)
+        {  0,37,  0,43,  0,31,  0,25,  0,19,  0,13,  2, 9,  6, 4,
+          -10,25, -12,14, -12, 0,    10,25,  12,14,  12, 0,
+           -6,13,  -8, 7,  -7, 0,     6,13,   8, 7,   7, 0 }
+    }; }
+
+    private static double[][] mkQuadFrontTrot() { return new double[][] {
+        // F0 — FL+BR up
+        {  0,36,  0,42,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -12,27, -16,18, -18, 5,    10,24,  12,14,  12, 0,
+           -6,12,  -8, 7,  -7, 0,     6,15,   9, 9,   8, 0 },
+        // F1 — FR+BL up
+        {  0,36,  0,42,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -10,24, -12,14, -12, 0,    12,27,  16,18,  18, 5,
+           -6,15,  -9, 9,  -8, 0,     6,12,   8, 7,   7, 0 }
+    }; }
+
+    private static double[][] mkQuadFrontGallop() { return new double[][] {
+        // F0 — both fronts up, body rises
+        {  0,38,  0,44,  0,32,  0,26,  0,20,  0,13,  2, 9,  6, 4,
+          -14,28, -18,20, -20, 5,    14,28,  18,20,  20, 5,
+           -6,12,  -8, 6,  -7, 0,     6,12,   8, 6,   7, 0 },
+        // F1 — both fronts down, backs kick up
+        {  0,36,  0,42,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -10,24, -12,14, -12, 0,    10,24,  12,14,  12, 0,
+           -8,16, -12,10, -10, 0,     8,16,  12,10,  10, 0 }
+    }; }
+
+    private static double[][] mkQuadFrontPounce() { return new double[][] {
+        // F0 — mid-leap, front legs reaching toward camera
+        {  0,36,  0,45,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -14,26, -18,18, -20, 4,    14,26,  18,18,  20, 4,
+           -8,12, -10, 6,  -8, 0,     8,12,  10, 6,   8, 0 }
+    }; }
+
+    private static double[][] mkQuadFrontBite() { return new double[][] {
+        // F0 — jaws open wide (snout drops)
+        {  0,34,  0,44,  0,28,  0,22,  0,16,  0,10,  2, 6,  6, 2,
+          -10,22, -12,12, -12, 0,    10,22,  12,12,  12, 0,
+           -6,10,  -8, 6,  -7, 0,     6,10,   8, 6,   7, 0 },
+        // F1 — jaws snapping shut (snout rises back)
+        {  0,36,  0,40,  0,30,  0,24,  0,18,  0,12,  2, 8,  6, 3,
+          -10,24, -12,14, -12, 0,    10,24,  12,14,  12, 0,
+           -6,12,  -8, 7,  -7, 0,     6,12,   8, 7,   7, 0 }
+    }; }
+
+    private static double[][] mkQuadFrontDeath() { return new double[][] {
+        // F0 — slumped/fallen, legs splayed
+        { -2,16, -6,20,  0,12,  0, 9,  0, 6,  0, 3,  2, 1,  4, 0,
+          -14,12, -18, 6, -20, 0,    10,12,  14, 6,  16, 0,
+           -8, 5, -12, 2, -14, 0,     6, 5,  10, 2,  12, 0 }
+    }; }
+
+    // Cached front-view quadruped pose arrays
+    private static final double[][] QUAD_IDLE_FRONT  = mkQuadFrontIdle();
+    private static final double[][] TROT_FRONT        = mkQuadFrontTrot();
+    private static final double[][] GALLOP_FRONT      = mkQuadFrontGallop();
+    private static final double[][] POUNCE_FRONT      = mkQuadFrontPounce();
+    private static final double[][] BITE_FRONT        = mkQuadFrontBite();
+    private static final double[][] QUAD_DEATH_FRONT  = mkQuadFrontDeath();
+
+    // ── Quadruped — Rear view (tail/rump toward camera, head far away) ────────
+    // Back legs spread wide (closest), front legs narrower (farther), tail prominent.
+
+    private static double[][] mkQuadRearIdle() { return new double[][] {
+        // F0 — standing, rear-facing, neutral
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -5,20,  -6,12,  -6, 0,     5,20,   6,12,   6, 0,
+          -10,10, -12, 6, -12, 0,    10,10,  12, 6,  12, 0 },
+        // F1 — slight inhale
+        {  0,29,  0,33,  0,25,  0,21,  0,17,  0,11,  1, 7,  3, 1,
+           -5,21,  -6,12,  -6, 0,     5,21,   6,12,   6, 0,
+          -10,11, -12, 7, -12, 0,    10,11,  12, 7,  12, 0 }
+    }; }
+
+    private static double[][] mkQuadRearTrot() { return new double[][] {
+        // F0 — BL+FR up
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -5,20,  -6,12,  -6, 0,     7,22,   8,14,   9, 4,
+          -13,13, -17, 8, -18, 3,    10,10,  12, 6,  12, 0 },
+        // F1 — BR+FL up
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -7,22,  -8,14,  -9, 4,     5,20,   6,12,   6, 0,
+          -10,10, -12, 6, -12, 0,    13,13,  17, 8,  18, 3 }
+    }; }
+
+    private static double[][] mkQuadRearGallop() { return new double[][] {
+        // F0 — both back legs airborne/high
+        {  0,30,  0,34,  0,26,  0,22,  0,18,  0,12,  1, 8,  3, 2,
+           -5,22,  -6,13,  -6, 0,     5,22,   6,13,   6, 0,
+          -14,17, -18,10, -16, 2,    14,17,  18,10,  16, 2 },
+        // F1 — back legs pushing off, front legs reaching
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -7,22,  -9,14,  -8, 2,     7,22,   9,14,   8, 2,
+          -10,10, -12, 6, -12, 0,    10,10,  12, 6,  12, 0 }
+    }; }
+
+    private static double[][] mkQuadRearPounce() { return new double[][] {
+        // F0 — haunches coiled, back legs driving launch
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -6,22,  -8,14,  -8, 2,     6,22,   8,14,   8, 2,
+          -14,14, -17, 8, -14, 0,    14,14,  17, 8,  14, 0 }
+    }; }
+
+    private static double[][] mkQuadRearBite() { return new double[][] {
+        // F0 — neutral rear stance
+        {  0,28,  0,32,  0,24,  0,20,  0,16,  0,10,  1, 6,  3, 0,
+           -5,20,  -6,12,  -6, 0,     5,20,   6,12,   6, 0,
+          -10,10, -12, 6, -12, 0,    10,10,  12, 6,  12, 0 },
+        // F1 — head dips/lunges (visible as small head dropping)
+        {  0,25,  0,34,  0,22,  0,19,  0,15,  0,10,  1, 6,  3, 0,
+           -5,20,  -6,12,  -6, 0,     5,20,   6,12,   6, 0,
+          -10,10, -12, 6, -12, 0,    10,10,  12, 6,  12, 0 }
+    }; }
+
+    private static double[][] mkQuadRearDeath() { return new double[][] {
+        // F0 — fallen, rear view, legs splayed outward
+        {  0,14,  0,18,  0,11,  0, 8,  0, 6,  0, 3,  2, 1,  4,-2,
+          -12,10, -16, 5, -18, 0,    12,10,  16, 5,  18, 0,
+           -8, 4, -12, 2, -14, 0,     8, 4,  12, 2,  14, 0 }
+    }; }
+
+    // Cached rear-view quadruped pose arrays
+    private static final double[][] QUAD_IDLE_BACK   = mkQuadRearIdle();
+    private static final double[][] TROT_BACK         = mkQuadRearTrot();
+    private static final double[][] GALLOP_BACK       = mkQuadRearGallop();
+    private static final double[][] POUNCE_BACK       = mkQuadRearPounce();
+    private static final double[][] BITE_BACK         = mkQuadRearBite();
+    private static final double[][] QUAD_DEATH_BACK   = mkQuadRearDeath();
 }

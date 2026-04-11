@@ -112,14 +112,21 @@ public class AudioDevScreen {
         musicToggle.setToggleGroup(categoryToggle);
         sfxToggle.setToggleGroup(categoryToggle);
         musicToggle.setSelected(true);
-        styleToggleButton(musicToggle);
-        styleToggleButton(sfxToggle);
 
         HBox toggleBar = new HBox(4, musicToggle, sfxToggle);
 
         categoryToggle.selectedToggleProperty().addListener((obs, o, n) -> {
-            if (n != null) refreshLists();
+            if (n == null) { categoryToggle.selectToggle(o); return; } // prevent full deselection
+            boolean sfx = (n == sfxToggle);
+            musicList.setVisible(!sfx);
+            sfxList.setVisible(sfx);
+            applyToggleStyle(musicToggle, !sfx);
+            applyToggleStyle(sfxToggle, sfx);
+            refreshLists();
         });
+        // Initial selected style
+        applyToggleStyle(musicToggle, true);
+        applyToggleStyle(sfxToggle, false);
 
         // Music list
         musicList = new ListView<>();
@@ -137,9 +144,6 @@ public class AudioDevScreen {
             else onFileSelected(sfxList, SFX_DIR);
         });
 
-        // Show/hide lists based on toggle
-        musicToggle.setOnAction(e -> { musicList.setVisible(true); sfxList.setVisible(false); });
-        sfxToggle.setOnAction(e -> { musicList.setVisible(false); sfxList.setVisible(true); });
         sfxList.setVisible(false);
 
         StackPane listPane = new StackPane(musicList, sfxList);
@@ -228,12 +232,18 @@ public class AudioDevScreen {
         Label sfxVolLabel = styledLabel("🔊 SFX  ", 12, false);
         sfxVolSlider = new Slider(0, 1, audio.getSfxVolume());
         sfxVolSlider.setMaxWidth(Double.MAX_VALUE);
-        sfxVolSlider.valueProperty().addListener((obs, o, n) ->
-                audio.setSfxVolume(n.doubleValue()));
+        sfxVolSlider.valueProperty().addListener((obs, o, n) -> {
+            audio.setSfxVolume(n.doubleValue());
+            if (previewPlayer != null && !isMusic()) previewPlayer.setVolume(n.doubleValue());
+        });
 
         CheckBox sfxMuteCheck = new CheckBox("Mute");
         styleCheck(sfxMuteCheck);
-        sfxMuteCheck.setOnAction(e -> audio.setSfxMuted(sfxMuteCheck.isSelected()));
+        sfxMuteCheck.setOnAction(e -> {
+            audio.setSfxMuted(sfxMuteCheck.isSelected());
+            if (previewPlayer != null && !isMusic())
+                previewPlayer.setVolume(sfxMuteCheck.isSelected() ? 0 : sfxVolSlider.getValue());
+        });
 
         HBox sfxVolRow = new HBox(8, sfxVolLabel, sfxVolSlider, sfxMuteCheck);
         sfxVolRow.setAlignment(Pos.CENTER_LEFT);
@@ -352,7 +362,9 @@ public class AudioDevScreen {
         try {
             Media media = new Media(file.toURI().toString());
             previewPlayer = new MediaPlayer(media);
-            previewPlayer.setVolume(musicVolSlider.getValue());
+            boolean sfx = !isMusic();
+            double vol  = sfx ? sfxVolSlider.getValue() : musicVolSlider.getValue();
+            previewPlayer.setVolume(audio.isSfxMuted() && sfx ? 0 : vol);
 
             previewPlayer.setOnReady(() -> {
                 Duration total = previewPlayer.getTotalDuration();
@@ -503,11 +515,10 @@ public class AudioDevScreen {
         list.setPrefHeight(200);
     }
 
-    private void styleToggleButton(ToggleButton b) {
-        b.setStyle("-fx-background-color: #0f3460;" +
-                   "-fx-text-fill: white;" +
-                   "-fx-background-radius: 4;" +
-                   "-fx-font-size: 11;");
+    private void applyToggleStyle(ToggleButton b, boolean selected) {
+        b.setStyle(selected
+                ? "-fx-background-color: #e94560; -fx-text-fill: white; -fx-background-radius: 4; -fx-font-size: 11; -fx-font-weight: bold;"
+                : "-fx-background-color: #0f3460; -fx-text-fill: #c8c8e0; -fx-background-radius: 4; -fx-font-size: 11;");
         b.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(b, Priority.ALWAYS);
     }

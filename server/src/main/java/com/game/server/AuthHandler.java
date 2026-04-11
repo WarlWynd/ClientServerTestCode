@@ -66,12 +66,13 @@ public class AuthHandler {
             out.put("isAdmin",       user.get().isAdmin());
             out.put("isGraphicsDev", user.get().isGraphicsDev());
             out.put("isBoardDev",    user.get().isBoardDev());
+            out.put("isAudioDev",    user.get().isAudioDev());
             String charName = charRepo.getCharacterName(user.get().id());
             out.put("hasCharacter",   charName != null);
             if (charName != null) out.put("characterName", charName);
-            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} boardDev={} from {}:{}",
+            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} boardDev={} audioDev={} from {}:{}",
                     user.get().username(), user.get().isAdmin(), user.get().isGraphicsDev(), user.get().isBoardDev(),
-                    addr.getHostAddress(), port);
+                    user.get().isAudioDev(), addr.getHostAddress(), port);
         } else {
             out.put("success", false);
             out.put("message", "Invalid username or password.");

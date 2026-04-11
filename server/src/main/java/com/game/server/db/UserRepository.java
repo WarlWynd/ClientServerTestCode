@@ -40,7 +40,7 @@ public class UserRepository {
      * @return the User if credentials are correct.
      */
     public Optional<User> authenticate(String email, String plainPassword) {
-        String sql = "SELECT id, username, password_hash, is_admin, is_graphics_dev, is_board_dev " +
+        String sql = "SELECT id, username, password_hash, is_admin, is_graphics_dev, is_board_dev, is_audio_dev " +
                      "FROM users WHERE emailaddress = ?";
 
         try (Connection conn = db.getConnection();
@@ -56,7 +56,8 @@ public class UserRepository {
                                 rs.getString("username"),
                                 rs.getBoolean("is_admin"),
                                 rs.getBoolean("is_graphics_dev"),
-                                rs.getBoolean("is_board_dev")
+                                rs.getBoolean("is_board_dev"),
+                                rs.getBoolean("is_audio_dev")
                         ));
                     }
                 }
@@ -76,6 +77,57 @@ public class UserRepository {
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new RuntimeException("setGraphicsDev() failed", e);
+        }
+    }
+
+    public boolean setAudioDev(String username, boolean isAudioDev) {
+        String sql = "UPDATE users SET is_audio_dev = ? WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, isAudioDev);
+            ps.setString(2, username);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new RuntimeException("setAudioDev() failed", e);
+        }
+    }
+
+    public boolean isAudioDev(String username) {
+        String sql = "SELECT is_audio_dev FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("is_audio_dev");
+            }
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public boolean isGraphicsDev(String username) {
+        String sql = "SELECT is_graphics_dev FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("is_graphics_dev");
+            }
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public boolean isBoardDev(String username) {
+        String sql = "SELECT is_board_dev FROM users WHERE username = ?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() && rs.getBoolean("is_board_dev");
+            }
+        } catch (SQLException e) {
+            return false;
         }
     }
 

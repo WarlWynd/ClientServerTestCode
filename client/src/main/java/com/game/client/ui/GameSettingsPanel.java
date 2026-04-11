@@ -2,11 +2,14 @@ package com.game.client.ui;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
+import com.game.client.BuildInfo;
 import com.game.client.SessionStore;
 import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -14,6 +17,16 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
+import javafx.stage.Window;
+import javafx.util.Duration;
+
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
  * Admin-only Game Settings panel — shown as a tab in GameScreen for admin users.
@@ -22,9 +35,46 @@ import javafx.scene.text.FontWeight;
 public class GameSettingsPanel {
 
     private final UDPClient client;
+    private TextField rebootDelayField;
+    private TextField rebootMessageField;
+    private Label     rebootStatusLabel;
+    private Consumer<Integer> onServerRestart;
 
     public GameSettingsPanel(UDPClient client) {
         this.client = client;
+    }
+
+    public void setRestartCallback(Consumer<Integer> callback) {
+        this.onServerRestart = callback;
+    }
+
+    /** Called by AdminPanel to forward RESTART/DEPLOY packet responses here. */
+    public void onPacket(Packet packet) {
+        Platform.runLater(() -> {
+            switch (packet.type) {
+                case ADMIN_RESTART_RESPONSE -> {
+                    boolean ok = packet.payload.get("success").asBoolean();
+                    if (ok) {
+                        int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
+                        showRebootStatus("Server restarting in " + delay + "s…", true);
+                        if (onServerRestart != null) onServerRestart.accept(delay);
+                    } else {
+                        showRebootStatus("Restart failed: " + packet.payload.get("message").asText(), false);
+                    }
+                }
+                case ADMIN_DEPLOY_RESPONSE -> {
+                    boolean ok = packet.payload.get("success").asBoolean();
+                    if (ok) {
+                        int delay = packet.payload.has("delay") ? packet.payload.get("delay").asInt(15) : 15;
+                        showRebootStatus("Deploying — pulling, rebuilding, restarting in " + delay + "s…", true);
+                        if (onServerRestart != null) onServerRestart.accept(delay + 60);
+                    } else {
+                        showRebootStatus("Deploy failed: " + packet.payload.get("message").asText(), false);
+                    }
+                }
+                default -> {}
+            }
+        });
     }
 
     public Node buildView() {
@@ -153,6 +203,99 @@ public class GameSettingsPanel {
 
         VBox gameplaySection = section("Gameplay", testNpcCheck, npcXRow, npcYRow, testNpcNote);
 
+        // ── Connection ────────────────────────────────────────────────────────
+        int labelW = 180;
+
+        Label localHostLbl = new Label("Local Server Host:");
+        localHostLbl.setMinWidth(labelW);
+        localHostLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField localHostField = new TextField(AppSettings.getServerHost());
+        localHostField.setPrefWidth(200);
+        localHostField.getStyleClass().add("input-field-md");
+
+        Label localPortLbl = new Label("Local Server Port:");
+        localPortLbl.setMinWidth(labelW);
+        localPortLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField localPortField = new TextField(String.valueOf(AppSettings.getServerPort()));
+        localPortField.setPrefWidth(80);
+        localPortField.getStyleClass().add("input-field-md");
+
+        Label extHostLbl = new Label("External Server Host:");
+        extHostLbl.setMinWidth(labelW);
+        extHostLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField extHostField = new TextField(AppSettings.getExternalServerHost());
+        extHostField.setPrefWidth(200);
+        extHostField.getStyleClass().add("input-field-md");
+
+        Label extPortLbl = new Label("External Server Port:");
+        extPortLbl.setMinWidth(labelW);
+        extPortLbl.getStyleClass().addAll("text-secondary", "font-12");
+        TextField extPortField = new TextField(String.valueOf(AppSettings.getExternalServerPort()));
+        extPortField.setPrefWidth(80);
+        extPortField.getStyleClass().add("input-field-md");
+
+        CheckBox allowExtAdminBox = new CheckBox("Allow external admin connections");
+        allowExtAdminBox.setSelected(AppSettings.isAllowExternalAdmin());
+        allowExtAdminBox.getStyleClass().add("check-secondary");
+
+        CheckBox allowExtDevBox = new CheckBox("Allow external developer connections");
+        allowExtDevBox.setSelected(AppSettings.isAllowExternalDev());
+        allowExtDevBox.getStyleClass().add("check-secondary");
+
+        HBox localHostRow = new HBox(12, localHostLbl, localHostField); localHostRow.setAlignment(Pos.CENTER_LEFT);
+        HBox localPortRow = new HBox(12, localPortLbl, localPortField); localPortRow.setAlignment(Pos.CENTER_LEFT);
+        HBox extHostRow   = new HBox(12, extHostLbl,   extHostField);   extHostRow.setAlignment(Pos.CENTER_LEFT);
+        HBox extPortRow   = new HBox(12, extPortLbl,   extPortField);   extPortRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label connNote = new Label("Connection changes take effect after restarting the client.");
+        connNote.getStyleClass().addAll("text-muted", "font-11");
+        connNote.setWrapText(true);
+
+        VBox connectionSection = section("Connection", localHostRow, localPortRow, extHostRow, extPortRow,
+                allowExtAdminBox, allowExtDevBox, connNote);
+
+        // ── Reboot Settings ───────────────────────────────────────────────────
+        Label delayLbl = new Label("Delay (seconds):");
+        delayLbl.setMinWidth(labelW);
+        delayLbl.getStyleClass().addAll("text-secondary", "font-12");
+        rebootDelayField = new TextField(String.valueOf(AppSettings.getRebootDelaySecs()));
+        rebootDelayField.setPrefWidth(70);
+        rebootDelayField.getStyleClass().add("input-field-md");
+
+        Label msgLbl = new Label("Notice message:");
+        msgLbl.setMinWidth(labelW);
+        msgLbl.getStyleClass().addAll("text-secondary", "font-12");
+        rebootMessageField = new TextField(AppSettings.getRebootMessage());
+        rebootMessageField.setPromptText("The server will reboot in %d seconds.");
+        rebootMessageField.setPrefWidth(300);
+        rebootMessageField.getStyleClass().add("input-field-md");
+
+        Label rebootHint = new Label("Leave message blank to use default. Use %d for the delay value.");
+        rebootHint.getStyleClass().addAll("text-muted", "font-11");
+        rebootHint.setWrapText(true);
+
+        rebootStatusLabel = new Label();
+        rebootStatusLabel.getStyleClass().add("font-11");
+
+        Button versionBtn = new Button("Compare Versions");
+        versionBtn.getStyleClass().add("btn-secondary");
+        versionBtn.setOnAction(e -> checkVersions());
+
+        Button restartBtn = new Button("Restart");
+        restartBtn.getStyleClass().add("btn-restart");
+        restartBtn.setOnAction(e -> confirmRestart());
+
+        Button deployBtn = new Button("Deploy & Restart");
+        deployBtn.getStyleClass().add("btn-deploy");
+        deployBtn.setOnAction(e -> confirmDeploy());
+
+        HBox delayRow  = new HBox(12, delayLbl,  rebootDelayField);  delayRow.setAlignment(Pos.CENTER_LEFT);
+        HBox msgRow    = new HBox(12, msgLbl,    rebootMessageField); msgRow.setAlignment(Pos.CENTER_LEFT);
+        HBox actionRow = new HBox(10, versionBtn, restartBtn, deployBtn, rebootStatusLabel);
+        actionRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox rebootSection = section("Reboot Settings", delayRow, msgRow, rebootHint, actionRow);
+
         // ── Save / status ─────────────────────────────────────────────────────
         Label statusLabel = new Label();
         statusLabel.getStyleClass().add("font-11");
@@ -176,16 +319,46 @@ public class GameSettingsPanel {
         commitBtn.getStyleClass().add("btn-warning");
         commitBtn.setOnAction(e -> {
             float[] vals = parseFields(gravityField, jumpField, speedField, statusLabel);
+            int localPort, extPort;
+            try { localPort = Integer.parseInt(localPortField.getText().trim()); }
+            catch (NumberFormatException ex) { setStatus(statusLabel, "Invalid local port.", false); return; }
+            try { extPort = Integer.parseInt(extPortField.getText().trim()); }
+            catch (NumberFormatException ex) { setStatus(statusLabel, "Invalid external port.", false); return; }
             if (vals != null) {
                 AppSettings.setGravity(vals[0]);
                 AppSettings.setJumpStrength(vals[1]);
                 AppSettings.setRunSpeed(vals[2]);
+                AppSettings.setAllowRememberPassword(allowRememberPassBox.isSelected());
+                AppSettings.setShowTestNpc(testNpcCheck.isSelected());
+                try { AppSettings.setTestNpcX(Float.parseFloat(npcXField.getText().trim())); } catch (NumberFormatException ignored) {}
+                try { AppSettings.setTestNpcY(Float.parseFloat(npcYField.getText().trim())); } catch (NumberFormatException ignored) {}
+                AppSettings.setServerHost(localHostField.getText().trim());
+                AppSettings.setServerPort(localPort);
+                AppSettings.setExternalServerHost(extHostField.getText().trim());
+                AppSettings.setExternalServerPort(extPort);
+                AppSettings.setAllowExternalAdmin(allowExtAdminBox.isSelected());
+                AppSettings.setAllowExternalDev(allowExtDevBox.isSelected());
+                int rebootDelay = getRebootDelay();
+                AppSettings.setRebootDelaySecs(rebootDelay);
+                AppSettings.setRebootMessage(rebootMessageField.getText().trim());
                 AppSettings.save();
                 ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-                payload.put("gravity",      vals[0]);
-                payload.put("jumpStrength", vals[1]);
-                payload.put("runSpeed",     vals[2]);
-                client.send(new Packet(PacketType.ADMIN_SAVE_SETTINGS_REQUEST,
+                payload.put("gravity",               vals[0]);
+                payload.put("jumpStrength",          vals[1]);
+                payload.put("runSpeed",              vals[2]);
+                payload.put("allowRememberPassword", allowRememberPassBox.isSelected());
+                payload.put("showTestNpc",           testNpcCheck.isSelected());
+                payload.put("testNpcX",              AppSettings.getTestNpcX());
+                payload.put("testNpcY",              AppSettings.getTestNpcY());
+                payload.put("localServerHost",       localHostField.getText().trim());
+                payload.put("localServerPort",       localPort);
+                payload.put("externalServerHost",    extHostField.getText().trim());
+                payload.put("externalServerPort",    extPort);
+                payload.put("allowExternalAdmin",    allowExtAdminBox.isSelected());
+                payload.put("allowExternalDev",      allowExtDevBox.isSelected());
+                payload.put("rebootDelaySecs",       rebootDelay);
+                payload.put("rebootMessage",         rebootMessageField.getText().trim());
+                client.sendToAdmin(new Packet(PacketType.ADMIN_SAVE_SETTINGS_REQUEST,
                         SessionStore.getToken(), payload));
                 setStatus(statusLabel, "Sending to server…", true);
             }
@@ -195,7 +368,48 @@ public class GameSettingsPanel {
         buttons.setAlignment(Pos.CENTER_LEFT);
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
-        VBox content = new VBox(gravitySection, jumpSection, speedSection, rememberPassSection, gameplaySection, buttons);
+        // ── Uploads ───────────────────────────────────────────────────────────
+        Label keyLbl = new Label("Upload Key:");
+        keyLbl.setMinWidth(labelW);
+        keyLbl.getStyleClass().addAll("text-secondary", "font-12");
+        PasswordField keyField = new PasswordField();
+        keyField.setText(AppSettings.getUploadKey());
+        keyField.setPromptText("server upload key");
+        keyField.setPrefWidth(200);
+        keyField.getStyleClass().add("input-field-md");
+
+        Label uploadStatus = new Label();
+        uploadStatus.getStyleClass().add("font-11");
+        uploadStatus.setWrapText(true);
+
+        Button clientJarBtn = new Button("Upload Client JAR");
+        clientJarBtn.getStyleClass().add("btn-info");
+        clientJarBtn.setOnAction(e -> pickAndUpload(
+                clientJarBtn.getScene().getWindow(),
+                "Select Client JAR",
+                keyField.getText().trim(),
+                AppSettings.getAssetUrl() + "/assets/client/game-client.jar",
+                "game-client.jar",
+                uploadStatus));
+
+        Button syncAppBtn = new Button("Upload Sync App");
+        syncAppBtn.getStyleClass().add("btn-info");
+        syncAppBtn.setOnAction(e -> pickAndUpload(
+                syncAppBtn.getScene().getWindow(),
+                "Select Sync App JAR",
+                keyField.getText().trim(),
+                AppSettings.getAssetUrl() + "/assets/sync/syncapp.jar",
+                "syncapp.jar",
+                uploadStatus));
+
+        HBox keyRow    = new HBox(12, keyLbl, keyField);    keyRow.setAlignment(Pos.CENTER_LEFT);
+        HBox uploadRow = new HBox(10, clientJarBtn, syncAppBtn, uploadStatus);
+        uploadRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox uploadSection = section("Uploads", keyRow, uploadRow);
+
+        VBox content = new VBox(gravitySection, jumpSection, speedSection,
+                rememberPassSection, gameplaySection, connectionSection, rebootSection, uploadSection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
@@ -253,5 +467,182 @@ public class GameSettingsPanel {
     private static void setStatus(Label label, String msg, boolean success) {
         label.setText(msg);
         label.setStyle("-fx-font-size: 11; -fx-text-fill: " + (success ? "-af-success;" : "-af-error;"));
+    }
+
+    // ── Reboot helpers ────────────────────────────────────────────────────────
+
+    private int getRebootDelay() {
+        try {
+            int d = Integer.parseInt(rebootDelayField.getText().trim());
+            return d > 0 ? d : 15;
+        } catch (NumberFormatException e) {
+            return 15;
+        }
+    }
+
+    private String getRebootMessage() {
+        String msg = rebootMessageField.getText().trim();
+        if (msg.isEmpty()) return "";
+        try { return String.format(msg, getRebootDelay()); }
+        catch (Exception e) { return msg; }
+    }
+
+    private void confirmDeploy() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Deploy & Restart");
+        alert.setHeaderText("Deploy latest code and restart?");
+        alert.setContentText("""
+                The server will:
+                  1. Commit and push any local changes
+                  2. Pull latest code from remote
+                  3. Rebuild the server JAR
+                  4. Restart automatically
+
+                All players will be disconnected.
+                Reconnect in approximately 1 minute.""");
+        styleAlert(alert);
+        alert.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.OK) {
+                ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+                payload.put("delay", getRebootDelay());
+                String msg = getRebootMessage();
+                if (!msg.isEmpty()) payload.put("message", msg);
+                client.sendToAdmin(new Packet(PacketType.ADMIN_DEPLOY_REQUEST, SessionStore.getToken(), payload));
+            }
+        });
+    }
+
+    private void confirmRestart() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Restart Server");
+        alert.setHeaderText("Restart the game server?");
+        alert.setContentText("All connected players will be disconnected.\nThe server will restart automatically if launched via restart.sh.");
+        styleAlert(alert);
+        alert.showAndWait().ifPresent(btn -> {
+            if (btn == ButtonType.OK) {
+                ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+                payload.put("delay", getRebootDelay());
+                String msg = getRebootMessage();
+                if (!msg.isEmpty()) payload.put("message", msg);
+                client.sendToAdmin(new Packet(PacketType.ADMIN_RESTART_REQUEST, SessionStore.getToken(), payload));
+            }
+        });
+    }
+
+    private void checkVersions() {
+        String clientCommit    = BuildInfo.COMMIT;
+        String clientBuildTime = BuildInfo.BUILD_TIME;
+        String url = AppSettings.getAssetUrl() + "/build-info";
+        Thread.ofVirtual().start(() -> {
+            String serverCommit = "unknown", serverBuildTime = "unknown";
+            String error = null;
+            try {
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) URI.create(url).toURL().openConnection();
+                conn.setConnectTimeout(4000);
+                conn.setReadTimeout(4000);
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    String body = new String(conn.getInputStream().readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    com.fasterxml.jackson.databind.JsonNode json =
+                            PacketSerializer.mapper().readTree(body);
+                    serverCommit    = json.path("commit").asText("unknown");
+                    serverBuildTime = json.path("buildTime").asText("unknown");
+                } else if (code == 404) {
+                    error = "Server does not expose build info (HTTP 404).\nDeploy the latest server build first.";
+                } else {
+                    error = "HTTP " + code;
+                }
+            } catch (Exception ex) {
+                error = ex.getMessage();
+            }
+            final String sc = serverCommit, st = serverBuildTime, err = error;
+            Platform.runLater(() -> showVersionDialog(clientCommit, clientBuildTime, sc, st, err));
+        });
+    }
+
+    private void showVersionDialog(String clientCommit, String clientBuildTime,
+                                   String serverCommit, String serverBuildTime, String error) {
+        boolean match = clientCommit.equals(serverCommit) && !"unknown".equals(clientCommit);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Version Comparison");
+        alert.setHeaderText(match ? "✓ Client and server are in sync" : "⚠ Version mismatch!");
+        String content;
+        if (error != null) {
+            content = "Could not reach server build-info endpoint:\n" + error
+                    + "\n\nClient commit:  " + clientCommit
+                    + "\nClient built:   " + clientBuildTime;
+        } else {
+            content = String.format(
+                    "Client commit:  %s\nClient built:   %s\n\nServer commit:  %s\nServer built:   %s",
+                    clientCommit, clientBuildTime, serverCommit, serverBuildTime);
+            content += match ? "\n\nVersions are a Match." : "\n\nThe server may need to be deployed.";
+        }
+        alert.setContentText(content);
+        styleAlert(alert);
+        alert.showAndWait();
+    }
+
+    private void showRebootStatus(String msg, boolean ok) {
+        if (rebootStatusLabel == null) return;
+        rebootStatusLabel.setText(msg);
+        rebootStatusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: " + (ok ? "-af-warning;" : "-af-error;"));
+        PauseTransition clear = new PauseTransition(Duration.seconds(6));
+        clear.setOnFinished(e -> { rebootStatusLabel.setText(""); rebootStatusLabel.setStyle(""); });
+        clear.play();
+    }
+
+    // ── Upload helper ─────────────────────────────────────────────────────────
+
+    private void pickAndUpload(Window owner, String uploadKey, String title,
+                               String uploadUrl, String displayName, Label statusLabel) {
+        if (uploadKey.isEmpty()) {
+            statusLabel.setText("Enter an upload key first.");
+            statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
+            return;
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JAR files", "*.jar"));
+        java.io.File selected = chooser.showOpenDialog(owner);
+        if (selected == null) return;
+        Path jar = selected.toPath();
+        statusLabel.setText("Uploading " + displayName + "…");
+        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-warning;");
+        Thread.ofVirtual().start(() -> {
+            try {
+                byte[] bytes = Files.readAllBytes(jar);
+                HttpURLConnection conn = (HttpURLConnection) URI.create(uploadUrl).toURL().openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("X-Upload-Key", uploadKey);
+                conn.setRequestProperty("Content-Type", "application/octet-stream");
+                conn.setDoOutput(true);
+                try (OutputStream out = conn.getOutputStream()) { out.write(bytes); }
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("Uploaded " + displayName + " (" + (bytes.length / 1024) + " KB)");
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-success;");
+                    });
+                } else {
+                    Platform.runLater(() -> {
+                        statusLabel.setText("Upload failed — HTTP " + code);
+                        statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
+                    });
+                }
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    statusLabel.setText("Upload error: " + ex.getMessage());
+                    statusLabel.setStyle("-fx-font-size: 11; -fx-text-fill: -af-error;");
+                });
+            }
+        });
+    }
+
+    private static void styleAlert(Alert alert) {
+        alert.getDialogPane().setStyle("-fx-background-color: #1a1a2e;");
+        alert.setOnShown(e -> alert.getDialogPane().lookupAll(".label")
+                .forEach(n -> n.setStyle("-fx-text-fill: #ffff00;")));
     }
 }

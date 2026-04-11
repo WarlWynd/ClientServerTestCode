@@ -171,6 +171,7 @@ public final class DatabaseManager {
             addColumnIfMissing(conn, "users", "is_admin",        "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "is_graphics_dev", "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "is_board_dev",    "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "users", "is_audio_dev",    "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "users", "emailaddress",    "VARCHAR(255) NOT NULL DEFAULT ''");
             stmt.execute(DDL_SERVER_CHANGES);
             stmt.execute(DDL_GAME_VERSIONS);
@@ -186,6 +187,18 @@ public final class DatabaseManager {
             addColumnIfMissing(conn, "characters", "stat_dex",  "INT NOT NULL DEFAULT 1");
             addColumnIfMissing(conn, "characters", "stat_luk",  "INT NOT NULL DEFAULT 1");
             stmt.execute(DDL_SERVER_SETTINGS);
+            addColumnIfMissing(conn, "ServerSettings", "allow_remember_password", "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "ServerSettings", "show_test_npc",           "TINYINT(1)   NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "ServerSettings", "test_npc_x",              "FLOAT        NOT NULL DEFAULT 1200");
+            addColumnIfMissing(conn, "ServerSettings", "test_npc_y",              "FLOAT        NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "ServerSettings", "local_server_host",       "VARCHAR(255) NOT NULL DEFAULT 'localhost'");
+            addColumnIfMissing(conn, "ServerSettings", "local_server_port",       "INT          NOT NULL DEFAULT 9876");
+            addColumnIfMissing(conn, "ServerSettings", "external_server_host",    "VARCHAR(255) NOT NULL DEFAULT ''");
+            addColumnIfMissing(conn, "ServerSettings", "external_server_port",    "INT          NOT NULL DEFAULT 9876");
+            addColumnIfMissing(conn, "ServerSettings", "allow_external_admin",    "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "ServerSettings", "allow_external_dev",      "TINYINT(1)   NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "ServerSettings", "reboot_delay_secs",       "INT          NOT NULL DEFAULT 60");
+            addColumnIfMissing(conn, "ServerSettings", "reboot_message",          "VARCHAR(500) NOT NULL DEFAULT ''");
             stmt.execute(DDL_BOARDS);
             stmt.execute(DDL_BOARD_PROGRESS);
         } catch (SQLException e) {

@@ -92,12 +92,17 @@ public class SpriteEditorPanel {
     private EquipSlot  previewSlot       = EquipSlot.TWO_HANDED;
     private Color      previewTint       = Color.web("#8B4513");
 
+    // ── Category / body type ──────────────────────────────────────────────────
+    private MobCategory currentCategory = MobCategory.HUMANOID;
+
     // ── UI references ─────────────────────────────────────────────────────────
     private GraphicsContext gc;
     private TextArea        codeArea;
     private Label           frameLabel;
     private Label           saveStatusLabel;
     private AnimationTimer  playTimer;
+    private HBox            weaponToolbar;   // hidden for non-humanoid categories
+    private HBox            legendWrapper;   // replaced when category changes
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -107,10 +112,10 @@ public class SpriteEditorPanel {
         for (PlayerAnimator.Direction d : dirs) {
             double[][][] poses = new double[states.length][][];
             for (PlayerAnimator.State s : states) {
-                // Seed each direction with either the saved override (if any) or the base frames
+                // Seed each direction with either the saved override (if any) or the built-in frames for that direction
                 double[][] override = PlayerAnimator.getDirectionalPoses(s, d);
                 double[][] src = (override != null && override.length > 0)
-                        ? override : PlayerAnimator.getFrames(s);
+                        ? override : PlayerAnimator.getBuiltinFrames(s, d);
                 double[][] copy = new double[src.length][];
                 for (int i = 0; i < src.length; i++) copy[i] = src[i].clone();
                 poses[s.ordinal()] = copy;
@@ -124,13 +129,18 @@ public class SpriteEditorPanel {
     public Node build() {
 
         // ── Toolbar ───────────────────────────────────────────────────────────
+
+        // Body-type / category selector
+        Label catHdr = styledLabel("Body Type:", 12, false);
+        ComboBox<MobCategory> categoryBox = new ComboBox<>();
+        categoryBox.getItems().addAll(MobCategory.values());
+        categoryBox.setValue(currentCategory);
+        styleCombo(categoryBox);
+
         Label stateHdr = styledLabel("State:", 12, false);
 
         ComboBox<PlayerAnimator.State> stateBox = new ComboBox<>();
-        java.util.List<PlayerAnimator.State> sortedStates = java.util.Arrays.stream(PlayerAnimator.State.values())
-                .sorted(java.util.Comparator.comparing(Enum::name))
-                .collect(java.util.stream.Collectors.toList());
-        stateBox.getItems().addAll(sortedStates);
+        stateBox.getItems().addAll(currentCategory.sortedStates());
         stateBox.setValue(currentState);
         styleCombo(stateBox);
 
@@ -234,10 +244,31 @@ public class SpriteEditorPanel {
             }
         });
 
+        // ── Category change wires state list + legend ─────────────────────────
+        categoryBox.setOnAction(e -> {
+            if (categoryBox.getValue() == null) return;
+            currentCategory = categoryBox.getValue();
+            // Reset joint visibility
+            java.util.Arrays.fill(groupVisible, true);
+            // Repopulate state list
+            stateBox.getItems().setAll(currentCategory.sortedStates());
+            currentState = currentCategory.sortedStates().get(0);
+            stateBox.setValue(currentState);
+            currentFrame = 0;
+            // Show/hide weapon toolbar
+            weaponToolbar.setVisible(currentCategory == MobCategory.HUMANOID);
+            weaponToolbar.setManaged(currentCategory == MobCategory.HUMANOID);
+            // Swap legend
+            legendWrapper.getChildren().setAll(buildLegendFor(currentCategory));
+            refreshFrameLabel(); redraw(); refreshCode();
+        });
+
         Label hint = new Label("Drag the coloured circles to reposition joints");
         hint.setStyle("-fx-text-fill: #606080; -fx-font-size: 11;");
 
-        HBox toolbar = new HBox(10, stateHdr, stateBox, addStateBtn, renameStateBtn, removeStateBtn,
+        HBox toolbar = new HBox(10, catHdr, categoryBox,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                stateHdr, stateBox, addStateBtn, renameStateBtn, removeStateBtn,
                 new Separator(javafx.geometry.Orientation.VERTICAL), dirBar,
                 new Separator(javafx.geometry.Orientation.VERTICAL), oneShotCheck,
                 new Separator(javafx.geometry.Orientation.VERTICAL), prev, frameLabel, next, playPauseBtn,
@@ -351,9 +382,10 @@ public class SpriteEditorPanel {
         VBox codePanel = new VBox(4, codeHdr, codeArea, saveStatusLabel);
         codePanel.setPadding(new Insets(6, 12, 10, 12));
 
-        // ── Legend ────────────────────────────────────────────────────────────
-        HBox legend = buildLegendWithToggles();
-        legend.setPadding(new Insets(2, 12, 6, 12));
+        // ── Legend (swappable by category) ───────────────────────────────────
+        legendWrapper = new HBox();
+        legendWrapper.setPadding(new Insets(2, 12, 6, 12));
+        legendWrapper.getChildren().add(buildLegendFor(currentCategory));
 
         // ── Frame management toolbar ──────────────────────────────────────────
         Button addFrameBtn    = toolBtn("+ Add Frame");
@@ -469,7 +501,7 @@ public class SpriteEditorPanel {
         Label wepHint = styledLabel("Weapon drawn at current pose's weapon joints — drag gold/orange/teal handles to reposition.", 11, false);
         wepHint.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
 
-        HBox weaponToolbar = new HBox(10, wepHdr,
+        weaponToolbar = new HBox(10, wepHdr,
                 weaponBox, slotBox,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 tintHdr, tintBox,
@@ -486,7 +518,7 @@ public class SpriteEditorPanel {
                 weaponToolbar,
                 new Separator(),
                 canvas,
-                legend,
+                legendWrapper,
                 new Separator(),
                 codePanel);
         root.setStyle("-fx-background-color: #1a1a2e;");
@@ -524,7 +556,7 @@ public class SpriteEditorPanel {
         double[] pose = frames()[currentFrame];
         int    best = -1;
         double bestD = HANDLE_R * 3.0;
-        for (int i = 0; i < JOINTS; i++) {
+        for (int i = 0; i < jointCount(); i++) {
             double jcx = FEET_CX + pose[i * 2] * SCALE;
             double jcy = FEET_CY - pose[i * 2 + 1] * SCALE;
             double d   = Math.hypot(mx - jcx, my - jcy);
@@ -588,43 +620,44 @@ public class SpriteEditorPanel {
         gc.setLineWidth(LINE_W);
         gc.setLineCap(StrokeLineCap.ROUND);
         gc.setLineJoin(StrokeLineJoin.ROUND);
-        drawPoseScaled(gc, pose, groupVisible);
+        if (currentCategory == MobCategory.QUADRUPED)
+            drawPoseQuadScaled(gc, pose, groupVisible);
+        else
+            drawPoseScaled(gc, pose, groupVisible);
         gc.restore();
 
-        // Weapon preview — behind-body pass (drawn before body)
-        if (previewWeaponType != WeaponType.NONE && previewWeaponType.rendersBehindBody()) {
-            drawWeaponPreview(gc, scaledCanvasPose(pose));
-        }
-
-        // Weapon attachment lines (drawn from hand to weapon tip, dashed)
-        if (pose.length >= 36) {
-            double rhcx = FEET_CX + pose[16] * SCALE, rhcy = FEET_CY - pose[17] * SCALE;
-            double lhcx = FEET_CX + pose[10] * SCALE, lhcy = FEET_CY - pose[11] * SCALE;
-            double w1cx = FEET_CX + pose[30] * SCALE, w1cy = FEET_CY - pose[31] * SCALE;
-            double shcx = FEET_CX + pose[32] * SCALE, shcy = FEET_CY - pose[33] * SCALE;
-            double w2cx = FEET_CX + pose[34] * SCALE, w2cy = FEET_CY - pose[35] * SCALE;
-            gc.setLineDashes(6, 4);
-            gc.setLineWidth(2.5);
-            gc.setLineCap(StrokeLineCap.ROUND);
-            if (groupVisible[5]) { gc.setStroke(Color.web("#ffe033")); gc.strokeLine(rhcx, rhcy, w1cx, w1cy); }
-            if (groupVisible[6]) { gc.setStroke(Color.web("#00ddcc")); gc.strokeLine(lhcx, lhcy, shcx, shcy); }
-            if (groupVisible[7]) { gc.setStroke(Color.web("#ff7700")); gc.strokeLine(lhcx, lhcy, w2cx, w2cy);
-                                                                        gc.strokeLine(rhcx, rhcy, w2cx, w2cy); }
-            gc.setLineDashes();
-        }
-
-        // Weapon preview — in-front pass (drawn after body, before joint handles)
-        if (previewWeaponType != WeaponType.NONE && !previewWeaponType.rendersBehindBody()) {
-            drawWeaponPreview(gc, scaledCanvasPose(pose));
+        // Weapon preview and attachment lines — humanoid only
+        if (currentCategory == MobCategory.HUMANOID) {
+            if (previewWeaponType != WeaponType.NONE && previewWeaponType.rendersBehindBody()) {
+                drawWeaponPreview(gc, scaledCanvasPose(pose));
+            }
+            if (pose.length >= 36) {
+                double rhcx = FEET_CX + pose[16] * SCALE, rhcy = FEET_CY - pose[17] * SCALE;
+                double lhcx = FEET_CX + pose[10] * SCALE, lhcy = FEET_CY - pose[11] * SCALE;
+                double w1cx = FEET_CX + pose[30] * SCALE, w1cy = FEET_CY - pose[31] * SCALE;
+                double shcx = FEET_CX + pose[32] * SCALE, shcy = FEET_CY - pose[33] * SCALE;
+                double w2cx = FEET_CX + pose[34] * SCALE, w2cy = FEET_CY - pose[35] * SCALE;
+                gc.setLineDashes(6, 4);
+                gc.setLineWidth(2.5);
+                gc.setLineCap(StrokeLineCap.ROUND);
+                if (groupVisible[5]) { gc.setStroke(Color.web("#ffe033")); gc.strokeLine(rhcx, rhcy, w1cx, w1cy); }
+                if (groupVisible[6]) { gc.setStroke(Color.web("#00ddcc")); gc.strokeLine(lhcx, lhcy, shcx, shcy); }
+                if (groupVisible[7]) { gc.setStroke(Color.web("#ff7700")); gc.strokeLine(lhcx, lhcy, w2cx, w2cy);
+                                                                            gc.strokeLine(rhcx, rhcy, w2cx, w2cy); }
+                gc.setLineDashes();
+            }
+            if (previewWeaponType != WeaponType.NONE && !previewWeaponType.rendersBehindBody()) {
+                drawWeaponPreview(gc, scaledCanvasPose(pose));
+            }
         }
 
         // Joint handles
-        for (int i = 0; i < JOINTS; i++) {
-            if (!groupVisible[jointGroup(i)]) continue;
+        for (int i = 0; i < jointCount(); i++) {
+            if (!groupVisible[getJointGroup(i)]) continue;
             double jcx = FEET_CX + pose[i * 2] * SCALE;
             double jcy = FEET_CY - pose[i * 2 + 1] * SCALE;
             boolean sel = (i == dragJoint);
-            Color c = jointColor(i);
+            Color c = getJointColor(i);
 
             gc.setFill(sel ? Color.web("#f0a030") : c.deriveColor(0, 1, 1.2, 1));
             gc.fillOval(jcx - HANDLE_R, jcy - HANDLE_R, HANDLE_R * 2, HANDLE_R * 2);
@@ -632,12 +665,11 @@ public class SpriteEditorPanel {
             gc.setLineWidth(sel ? 2 : 1);
             gc.strokeOval(jcx - HANDLE_R, jcy - HANDLE_R, HANDLE_R * 2, HANDLE_R * 2);
 
-            // Show name + coords on selected joint, or just index
             gc.setFont(Font.font("System", FontWeight.BOLD, sel ? 10 : 9));
             gc.setFill(sel ? Color.WHITE : c);
             if (sel) {
                 String coords = String.format("(%s, %s)", fmt(pose[i*2]), fmt(pose[i*2+1]));
-                gc.fillText(JOINT_NAMES[i], jcx + 9, jcy - 5);
+                gc.fillText(getJointName(i), jcx + 9, jcy - 5);
                 gc.fillText(coords, jcx + 9, jcy + 6);
             } else {
                 gc.fillText(String.valueOf(i), jcx + 7, jcy + 4);
@@ -667,6 +699,63 @@ public class SpriteEditorPanel {
                       gc.strokeLine(rkx,rky,rfx,rfy); }             // right leg
     }
 
+    // ── Category-aware joint helpers ─────────────────────────────────────────
+
+    private int jointCount() {
+        return currentCategory == MobCategory.QUADRUPED ? 20 : 18;
+    }
+
+    private String getJointName(int i) {
+        if (currentCategory == MobCategory.QUADRUPED) return QUAD_JOINT_NAMES[i];
+        return i < JOINT_NAMES.length ? JOINT_NAMES[i] : "J" + i;
+    }
+
+    private int getJointGroup(int i) {
+        if (currentCategory == MobCategory.QUADRUPED) {
+            return switch (i) {
+                case 0, 1, 2, 3, 4, 5 -> 0;  // Red:    head + spine
+                case 6, 7              -> 5;  // Gold:   tail
+                case 8, 9, 10          -> 1;  // Blue:   front-left leg
+                case 11, 12, 13        -> 2;  // Green:  front-right leg
+                case 14, 15, 16        -> 3;  // Amber:  back-left leg
+                default                -> 4;  // Purple: back-right leg
+            };
+        }
+        return switch (i) {
+            case 15 -> 5;
+            case 16 -> 6;
+            case 17 -> 7;
+            default -> i / 3;
+        };
+    }
+
+    private Color getJointColor(int i) {
+        if (currentCategory == MobCategory.QUADRUPED) {
+            return switch (getJointGroup(i)) {
+                case 0  -> Color.web("#e94560");  // red:    head/spine
+                case 1  -> Color.web("#53c0f0");  // blue:   front-left
+                case 2  -> Color.web("#50c050");  // green:  front-right
+                case 3  -> Color.web("#f0a030");  // amber:  back-left
+                case 4  -> Color.web("#bd10e0");  // purple: back-right
+                default -> Color.web("#ffe033");  // gold:   tail
+            };
+        }
+        return switch (i) {
+            case 15 -> Color.web("#ffe033");
+            case 16 -> Color.web("#00ddcc");
+            case 17 -> Color.web("#ff7700");
+            default -> switch (i / 3) {
+                case 0  -> Color.web("#e94560");
+                case 1  -> Color.web("#53c0f0");
+                case 2  -> Color.web("#50c050");
+                case 3  -> Color.web("#f0a030");
+                default -> Color.web("#bd10e0");
+            };
+        };
+    }
+
+    // ── Static joint metadata (humanoid) ──────────────────────────────────────
+
     private static int jointGroup(int i) {
         return switch (i) {
             case 15 -> 5;  // Gold  — 1H weapon tip
@@ -690,6 +779,16 @@ public class SpriteEditorPanel {
             };
         };
     }
+
+    private static final String[] QUAD_JOINT_NAMES = {
+        "Head", "Snout", "Neck",
+        "Front-Shoulder", "Mid-Back", "Rump",
+        "Tail-Base", "Tail-Tip",
+        "FL-Upper", "FL-Knee", "FL-Paw",
+        "FR-Upper", "FR-Knee", "FR-Paw",
+        "BL-Hip",   "BL-Knee", "BL-Foot",
+        "BR-Hip",   "BR-Knee", "BR-Foot"
+    };
 
     // ── Code generation ───────────────────────────────────────────────────────
 
@@ -1233,6 +1332,76 @@ public class SpriteEditorPanel {
                    "-fx-background-radius: 3; -fx-font-size: 11; -fx-padding: 3 8 3 8;" +
                    "-fx-font-weight: bold;");
         return b;
+    }
+
+    /** Draws quadruped pose using editor SCALE (gc translated to feet origin). */
+    private static void drawPoseQuadScaled(GraphicsContext gc, double[] p, boolean[] vis) {
+        double s = SCALE;
+        double hx   = p[0]*s,  hy   = -p[1]*s;
+        double jx   = p[2]*s,  jy   = -p[3]*s;
+        double nkx  = p[4]*s,  nky  = -p[5]*s;
+        double fsx  = p[6]*s,  fsy  = -p[7]*s;
+        double mbx  = p[8]*s,  mby  = -p[9]*s;
+        double rpx  = p[10]*s, rpy  = -p[11]*s;
+        double tbx  = p[12]*s, tby  = -p[13]*s;
+        double ttx  = p[14]*s, tty  = -p[15]*s;
+        double flux = p[16]*s, fluy = -p[17]*s;
+        double flkx = p[18]*s, flky = -p[19]*s;
+        double flpx = p[20]*s, flpy = -p[21]*s;
+        double frux = p[22]*s, fruy = -p[23]*s;
+        double frkx = p[24]*s, frky = -p[25]*s;
+        double frpx = p[26]*s, frpy = -p[27]*s;
+        double blhx = p[28]*s, blhy = -p[29]*s;
+        double blkx = p[30]*s, blky = -p[31]*s;
+        double blfx = p[32]*s, blfy = -p[33]*s;
+        double brhx = p[34]*s, brhy = -p[35]*s;
+        double brkx = p[36]*s, brky = -p[37]*s;
+        double brfx = p[38]*s, brfy = -p[39]*s;
+
+        if (vis[0]) {  // head + spine
+            double hr = HEAD_R * 0.9;
+            gc.fillOval(hx - hr * 1.3, hy - hr, hr * 2.6, hr * 2);
+            gc.strokeLine(hx, hy, jx, jy);
+            gc.strokeLine(hx, hy, nkx, nky);
+            gc.strokeLine(nkx, nky, fsx, fsy);
+            gc.strokeLine(fsx, fsy, mbx, mby);
+            gc.strokeLine(mbx, mby, rpx, rpy);
+        }
+        if (vis[5]) { gc.strokeLine(rpx, rpy, tbx, tby); gc.strokeLine(tbx, tby, ttx, tty); }  // tail
+        if (vis[1]) { gc.strokeLine(fsx, fsy, flux, fluy); gc.strokeLine(flux, fluy, flkx, flky); gc.strokeLine(flkx, flky, flpx, flpy); }  // FL
+        if (vis[2]) { gc.strokeLine(fsx, fsy, frux, fruy); gc.strokeLine(frux, fruy, frkx, frky); gc.strokeLine(frkx, frky, frpx, frpy); }  // FR
+        if (vis[3]) { gc.strokeLine(rpx, rpy, blhx, blhy); gc.strokeLine(blhx, blhy, blkx, blky); gc.strokeLine(blkx, blky, blfx, blfy); }  // BL
+        if (vis[4]) { gc.strokeLine(rpx, rpy, brhx, brhy); gc.strokeLine(brhx, brhy, brkx, brky); gc.strokeLine(brkx, brky, brfx, brfy); }  // BR
+    }
+
+    private HBox buildLegendFor(MobCategory cat) {
+        return cat == MobCategory.QUADRUPED ? buildLegendQuad() : buildLegendWithToggles();
+    }
+
+    private HBox buildLegendQuad() {
+        String[] parts  = { "Body/Spine", "Front-Left", "Front-Right", "Back-Left", "Back-Right", "Tail" };
+        Color[]  colors = {
+            Color.web("#e94560"), Color.web("#53c0f0"), Color.web("#50c050"),
+            Color.web("#f0a030"), Color.web("#bd10e0"), Color.web("#ffe033")
+        };
+        int[]    groups = { 0, 1, 2, 3, 4, 5 };
+        HBox box = new HBox(12);
+        box.setAlignment(Pos.CENTER_LEFT);
+        for (int i = 0; i < parts.length; i++) {
+            final int g = groups[i];
+            javafx.scene.shape.Circle dot = new javafx.scene.shape.Circle(5, colors[i]);
+            CheckBox cb = new CheckBox(parts[i]);
+            cb.setSelected(groupVisible[g]);
+            cb.setStyle(
+                "-fx-text-fill: #9090b0; -fx-font-size: 11;" +
+                "-fx-mark-color: " + toHex(colors[i]) + ";" +
+                "-fx-focus-color: transparent; -fx-faint-focus-color: transparent;");
+            cb.selectedProperty().addListener((obs, o, n) -> { groupVisible[g] = n; redraw(); });
+            HBox entry = new HBox(5, dot, cb);
+            entry.setAlignment(Pos.CENTER_LEFT);
+            box.getChildren().add(entry);
+        }
+        return box;
     }
 
     private HBox buildLegendWithToggles() {

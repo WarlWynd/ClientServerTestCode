@@ -2,7 +2,6 @@ package com.game.client.ui;
 
 import com.game.client.AppSettings;
 import com.game.client.GameResolution;
-import com.game.client.SessionStore;
 import com.game.client.SoundMode;
 import com.game.client.ThemeManager;
 import javafx.geometry.Insets;
@@ -216,36 +215,7 @@ public class SettingsPanel {
         Button resetBtn = new Button("Reset to Defaults");
         resetBtn.getStyleClass().add("btn-secondary");
 
-        // ── Admin: Connection ─────────────────────────────────────────────────
-        VBox connectionSection = null;
-        TextField hostField = null;
-        TextField portField = null;
-
-        if (SessionStore.isAdmin()) {
-            hostField = styledField(AppSettings.getServerHost());
-            portField = styledField(String.valueOf(AppSettings.getServerPort()));
-
-            Label restartNote = new Label("Connection changes take effect on next launch.");
-            restartNote.getStyleClass().addAll("text-muted", "italic", "font-11");
-
-            connectionSection = section("Connection (Admin)",
-                    row("Server Host:", hostField),
-                    row("Server Port:", portField),
-                    row(restartNote));
-        }
-
-        final TextField finalHostField = hostField;
-        final TextField finalPortField = portField;
-
         saveBtn.setOnAction(e -> {
-            if (SessionStore.isAdmin() && finalHostField != null) {
-                String host = finalHostField.getText().trim();
-                if (!host.isEmpty()) AppSettings.setServerHost(host);
-                try {
-                    int p = Integer.parseInt(finalPortField.getText().trim());
-                    if (p > 0 && p < 65536) AppSettings.setServerPort(p);
-                } catch (NumberFormatException ignored) {}
-            }
             boolean ok = AppSettings.save();
             setStatus(statusLabel, ok ? "Settings saved." : "Could not write settings file.", ok);
         });
@@ -259,8 +229,6 @@ public class SettingsPanel {
             boolean leftNow = "LEFT".equalsIgnoreCase(AppSettings.getTabSide());
             tabTop.setSelected(!leftNow);
             tabLeft.setSelected(leftNow);
-            if (finalHostField != null) finalHostField.setText(AppSettings.getServerHost());
-            if (finalPortField != null) finalPortField.setText(String.valueOf(AppSettings.getServerPort()));
             setStatus(statusLabel, "Reset to current saved values.", true);
         });
 
@@ -304,9 +272,7 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(audioSection, displaySection, controlsSection, accountSection);
-        if (connectionSection != null) content.getChildren().add(connectionSection);
-        content.getChildren().add(buttons);
+        VBox content = new VBox(audioSection, displaySection, controlsSection, accountSection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);

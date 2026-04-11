@@ -348,7 +348,14 @@ public class BoardDevScreen {
         VBox.setVgrow(main, Priority.ALWAYS);
         rootVBox.setStyle("-fx-background-color: #0f0f1e;");
 
-        return rootVBox;
+        Tab boardTab = new Tab("🗺 Board Editor", rootVBox);
+        Tab spawnTab = new Tab("📍 Map Spawns",   new MobManagerPanel().buildSpawnView());
+        boardTab.setClosable(false);
+        spawnTab.setClosable(false);
+
+        javafx.scene.control.TabPane tabs = new javafx.scene.control.TabPane(boardTab, spawnTab);
+        tabs.getStyleClass().add("tab-pane-dark");
+        return tabs;
     }
 
     // ── Drawing ───────────────────────────────────────────────────────────────

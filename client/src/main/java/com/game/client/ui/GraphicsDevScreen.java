@@ -106,182 +106,35 @@ public class GraphicsDevScreen {
 
     /** Live animated preview of every PlayerAnimator state — 4 direction rows. */
     // States that make sense facing the camera — shown in the Front View row only.
-    private static final java.util.Set<PlayerAnimator.State> FRONT_STATES = java.util.EnumSet.of(
-        PlayerAnimator.State.IDLE,
-        PlayerAnimator.State.STAFF_IDLE,
-        PlayerAnimator.State.SWORD_1H_IDLE, PlayerAnimator.State.SWORD_2H_IDLE,
-        PlayerAnimator.State.AXE_1H_IDLE, PlayerAnimator.State.AXE_2H_IDLE,
-        PlayerAnimator.State.DAGGER_IDLE,
-        PlayerAnimator.State.MORNING_STAR_IDLE, PlayerAnimator.State.BOW_IDLE,
-        PlayerAnimator.State.CROUCH, PlayerAnimator.State.PRONE,
-        PlayerAnimator.State.KNOCKED_DOWN,
-        PlayerAnimator.State.JUMP, PlayerAnimator.State.FALL
-    );
 
     private Node buildSpritePreview() {
-        PlayerAnimator.State[]     states = PlayerAnimator.State.values();
-        PlayerAnimator.Direction[] dirs   = PlayerAnimator.Direction.values(); // FRONT, LEFT, RIGHT, BACK
+        // ── Category selector ─────────────────────────────────────────────────
+        ToggleGroup catGroup = new ToggleGroup();
+        ToggleButton humanoidBtn  = previewCatBtn("🧍 Humanoid",  catGroup);
+        ToggleButton quadrupedBtn = previewCatBtn("🐾 Quadruped", catGroup);
+        humanoidBtn.setSelected(true);
 
-        int n = states.length;
+        HBox catBar = new HBox(8, humanoidBtn, quadrupedBtn);
+        catBar.setAlignment(Pos.CENTER_LEFT);
+        catBar.setPadding(new Insets(8, 14, 8, 14));
+        catBar.setStyle("-fx-background-color: #16213e;");
 
-        // 4 rows × n states — animators[row][col]
-        PlayerAnimator[][] animators       = new PlayerAnimator[4][n];
-        WeaponRenderer[][]  weaponRenderers = new WeaponRenderer[4][n];
-        for (int row = 0; row < 4; row++) {
-            PlayerAnimator.Direction dir = dirs[row];
-            for (int i = 0; i < n; i++) {
-                animators[row][i] = new PlayerAnimator();
-                animators[row][i].forceState(states[i]);
-                animators[row][i].setForcedDirection(dir);
-                // LEFT direction mirrors (no LEFT-specific poses = auto-mirror default IDLE)
-                if (dir == PlayerAnimator.Direction.LEFT) animators[row][i].setFacingRight(false);
+        // ── Per-category grids ────────────────────────────────────────────────
+        Node humanoidGrid  = buildSpriteGrid(MobCategory.HUMANOID);
+        Node quadrupedGrid = buildSpriteGrid(MobCategory.QUADRUPED);
+        quadrupedGrid.setVisible(false);
+        quadrupedGrid.setManaged(false);
 
-                weaponRenderers[row][i] = new WeaponRenderer();
-                if (states[i] == PlayerAnimator.State.STAFF_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.WOODEN_STAFF);
-                else if (states[i] == PlayerAnimator.State.SWORD_1H_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_SWORD);
-                else if (states[i] == PlayerAnimator.State.SWORD_2H_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_SWORD);
-                else if (states[i] == PlayerAnimator.State.AXE_1H_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.HATCHET);
-                else if (states[i] == PlayerAnimator.State.AXE_2H_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_AXE);
-                else if (states[i] == PlayerAnimator.State.DAGGER_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_DAGGER);
-                else if (states[i] == PlayerAnimator.State.MORNING_STAR_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.MORNING_STAR);
-                else if (states[i] == PlayerAnimator.State.BOW_IDLE)
-                    weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.LONG_BOW);
-            }
-        }
+        StackPane gridHolder = new StackPane(humanoidGrid, quadrupedGrid);
 
-        // Palette — one colour per state (wraps if new states added)
-        Color[] palette = {
-            Color.web("#e0e0ff"),  // IDLE       — soft white-blue
-            Color.web("#53c0f0"),  // RUN        — info blue
-            Color.web("#50c050"),  // JUMP       — success green
-            Color.web("#f0a030"),  // FALL       — warning amber
-            Color.web("#e94560"),  // GOTHIT01   — accent red
-            Color.web("#c8a020"),  // STAFF_IDLE    — gold
-            Color.web("#d0e8ff"),  // SWORD_1H_IDLE — light steel
-            Color.web("#c0d8ff"),  // SWORD_2H_IDLE — steel blue
-            Color.web("#d09050"),  // AXE_1H_IDLE   — light amber
-            Color.web("#c08030"),  // AXE_2H_IDLE   — iron amber
-            Color.web("#88aacc"),  // DAGGER_IDLE        — steel grey-blue
-            Color.web("#aaaaaa"),  // MORNING_STAR_IDLE  — iron grey
-            Color.web("#44bb88"),  // BOW_IDLE           — forest green
-            Color.web("#bd10e0"),  // KNOCKED            — purple
-            Color.web("#e0e0e0"),  // CROUCH             — light grey
-            Color.web("#70b0d0"),  // SNEAK              — muted teal
-            Color.web("#d0a060"),  // CLIMB              — sandy brown
-            Color.web("#a06040"),  // PRONE              — earth brown
-            Color.web("#ff8844"),  // ROLL               — orange
-            Color.web("#4488ff"),  // SWIM               — ocean blue
-            Color.web("#ff4488"),  // PUNCH              — hot pink
-            Color.web("#ff2266"),  // CROSS              — deep rose
-            Color.web("#ff66aa"),  // HOOK               — coral pink
-            Color.web("#ffaacc"),  // UPPERCUT           — light pink
-            Color.web("#cc0044"),  // HAYMAKER           — crimson
-            Color.web("#ff6600"),  // HEAD_KICK          — bright orange
-            Color.web("#ffaa00"),  // LOW_KICK           — golden orange
-            Color.web("#ff8800"),  // BODY_KICK          — amber orange
-            Color.web("#dd4400"),  // SPINNING_BACK_KICK — burnt orange
-            Color.web("#ff9955"),  // SIDE_KICK          — peach
-            Color.web("#88ff44")   // SHOOT              — lime green
-        };
-
-        // Layout constants
-        int    colW     = 110;
-        int    rowH     = 195;   // pixels per direction row (figure + label)
-        int    figH     = 155;   // feet sit this many px from top of each row band
-        int    labelH   = 15;    // row direction label height
-        int    hdrH     = 20;    // header band above figure area
-        int    canvasW  = n * colW + 20;
-        int    canvasH  = 4 * (rowH + hdrH) + 10;
-
-        Canvas canvas = new Canvas(canvasW, canvasH);
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-
-        String[] dirLabels = { "⬤  Front View", "◀  Left View", "▶  Right View", "⬛  Back View" };
-        Color[]  dirColors = {
-            Color.web("#4488ff"),   // Front — blue
-            Color.web("#ff8844"),   // Left  — orange
-            Color.web("#44cc44"),   // Right — green
-            Color.web("#aa66ff")    // Back  — purple
-        };
-
-        // ── AnimationTimer drives the canvas ─────────────────────────────────
-        AnimationTimer timer = new AnimationTimer() {
-            @Override public void handle(long now) {
-                gc.setFill(Color.web("#0f0f1e"));
-                gc.fillRect(0, 0, canvasW, canvasH);
-
-                for (int row = 0; row < 4; row++) {
-                    int    bandTop = row * (rowH + hdrH);
-                    double feetY   = bandTop + hdrH + figH;
-
-                    // Direction header bar
-                    gc.setFill(dirColors[row].deriveColor(0, 1, 0.25, 1));
-                    gc.fillRect(0, bandTop, canvasW, hdrH);
-                    gc.setFill(dirColors[row]);
-                    gc.setFont(javafx.scene.text.Font.font("System",
-                            javafx.scene.text.FontWeight.BOLD, 12));
-                    gc.fillText(dirLabels[row], 8, bandTop + 14);
-
-                    // Grid lines for this row
-                    gc.setStroke(Color.web("#22224a"));
-                    gc.setLineWidth(1);
-                    for (int x = 0; x <= canvasW; x += colW) {
-                        gc.strokeLine(x, bandTop + hdrH, x, bandTop + hdrH + rowH);
-                    }
-                    gc.setStroke(dirColors[row].deriveColor(0, 0.6, 0.5, 0.4));
-                    gc.strokeLine(0, feetY, canvasW, feetY);  // floor line
-
-                    for (int i = 0; i < n; i++) {
-                        // Front View: skip states that don't make sense facing the camera
-                        if (dirs[row] == PlayerAnimator.Direction.FRONT && !FRONT_STATES.contains(states[i]))
-                            continue;
-
-                        double cx = 10 + i * colW + colW / 2.0;
-
-                        // Shadow ellipse at feet
-                        gc.setFill(Color.color(0, 0, 0, 0.3));
-                        gc.fillOval(cx - 16, feetY - 4, 32, 8);
-
-                        Color c = palette[i % palette.length];
-                        // Restart one-shot animations so they loop in the preview
-                        if (animators[row][i].isOneShotDone()) {
-                            animators[row][i].forceState(states[i]);
-                        }
-                        weaponRenderers[row][i].drawBehindBody(gc, animators[row][i], cx, feetY, c);
-                        animators[row][i].draw(gc, cx, feetY, c);
-                        weaponRenderers[row][i].draw(gc, animators[row][i], cx, feetY, c);
-
-                        // State name label
-                        gc.setFill(c.deriveColor(0, 1, 1.3, 1));
-                        gc.setFont(javafx.scene.text.Font.font("System",
-                                javafx.scene.text.FontWeight.BOLD, 10));
-                        String name = states[i].name();
-                        gc.fillText(name, cx - name.length() * 2.9, feetY + 22);
-                    }
-                }
-            }
-        };
-        timer.start();
-
-        // Keep the canvas at a fixed size inside a scroll pane
-        StackPane canvasWrap = new StackPane(canvas);
-        canvasWrap.setStyle("-fx-background-color: #0f0f1e;");
-        canvasWrap.setAlignment(javafx.geometry.Pos.TOP_LEFT);
-
-        ScrollPane scroll = new ScrollPane(canvasWrap);
-        scroll.setFitToWidth(false);
-        scroll.setFitToHeight(false);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setStyle("-fx-background: #0f0f1e; -fx-background-color: #0f0f1e;");
-        scroll.setPrefViewportHeight(Math.min(canvasH + 20, 750));
+        humanoidBtn.setOnAction(e -> {
+            humanoidGrid.setVisible(true);  humanoidGrid.setManaged(true);
+            quadrupedGrid.setVisible(false); quadrupedGrid.setManaged(false);
+        });
+        quadrupedBtn.setOnAction(e -> {
+            humanoidGrid.setVisible(false); humanoidGrid.setManaged(false);
+            quadrupedGrid.setVisible(true);  quadrupedGrid.setManaged(true);
+        });
 
         // ── Export button ─────────────────────────────────────────────────────
         Path outDir = Paths.get("client/src/main/resources/graphics/sprites");
@@ -298,7 +151,6 @@ public class GraphicsDevScreen {
         HBox exportRow = new HBox(12, exportBtn, exportStatus);
         exportRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Auto-export on first load if sprites don't exist yet
         Platform.runLater(() -> {
             File spritesDir = outDir.toFile();
             boolean hasFiles = spritesDir.exists()
@@ -315,10 +167,157 @@ public class GraphicsDevScreen {
         Label desc = new Label("Live preview of all animation states across all 4 viewing directions.");
         desc.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
 
-        VBox root = new VBox(12, scroll, desc, exportRow);
-        root.setPadding(new Insets(14));
+        VBox root = new VBox(0, catBar, gridHolder, desc, exportRow);
+        VBox.setMargin(desc,      new Insets(10, 14, 0, 14));
+        VBox.setMargin(exportRow, new Insets(4,  14, 14, 14));
         root.setStyle("-fx-background-color: #1a1a2e;");
         return root;
+    }
+
+    /** Builds the animated sprite grid for one body-type category. */
+    private Node buildSpriteGrid(MobCategory cat) {
+        PlayerAnimator.State[]     states = cat.sortedStates().toArray(new PlayerAnimator.State[0]);
+        PlayerAnimator.Direction[] dirs   = PlayerAnimator.Direction.values();
+
+        int n = states.length;
+
+        PlayerAnimator[][] animators       = new PlayerAnimator[4][n];
+        WeaponRenderer[][]  weaponRenderers = new WeaponRenderer[4][n];
+        for (int row = 0; row < 4; row++) {
+            PlayerAnimator.Direction dir = dirs[row];
+            for (int i = 0; i < n; i++) {
+                animators[row][i] = new PlayerAnimator();
+                animators[row][i].forceState(states[i]);
+                animators[row][i].setForcedDirection(dir);
+                if (dir == PlayerAnimator.Direction.LEFT) animators[row][i].setFacingRight(false);
+
+                weaponRenderers[row][i] = new WeaponRenderer();
+                if (cat == MobCategory.HUMANOID) {
+                    if (states[i] == PlayerAnimator.State.STAFF_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.WOODEN_STAFF);
+                    else if (states[i] == PlayerAnimator.State.SWORD_1H_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_SWORD);
+                    else if (states[i] == PlayerAnimator.State.SWORD_2H_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_SWORD);
+                    else if (states[i] == PlayerAnimator.State.AXE_1H_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.HATCHET);
+                    else if (states[i] == PlayerAnimator.State.AXE_2H_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.GREAT_AXE);
+                    else if (states[i] == PlayerAnimator.State.DAGGER_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.IRON_DAGGER);
+                    else if (states[i] == PlayerAnimator.State.MORNING_STAR_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.MAIN_HAND, Weapon.MORNING_STAR);
+                    else if (states[i] == PlayerAnimator.State.BOW_IDLE)
+                        weaponRenderers[row][i].equip(EquipSlot.TWO_HANDED, Weapon.LONG_BOW);
+                }
+            }
+        }
+
+        Color[] palette = {
+            Color.web("#e0e0ff"), Color.web("#53c0f0"), Color.web("#50c050"),
+            Color.web("#f0a030"), Color.web("#e94560"), Color.web("#c8a020"),
+            Color.web("#d0e8ff"), Color.web("#c0d8ff"), Color.web("#d09050"),
+            Color.web("#c08030"), Color.web("#88aacc"), Color.web("#aaaaaa"),
+            Color.web("#44bb88"), Color.web("#bd10e0"), Color.web("#e0e0e0"),
+            Color.web("#70b0d0"), Color.web("#d0a060"), Color.web("#a06040"),
+            Color.web("#ff8844"), Color.web("#4488ff"), Color.web("#ff4488"),
+            Color.web("#ff2266"), Color.web("#ff66aa"), Color.web("#ffaacc"),
+            Color.web("#cc0044"), Color.web("#ff6600"), Color.web("#ffaa00"),
+            Color.web("#ff8800"), Color.web("#dd4400"), Color.web("#ff9955"),
+            Color.web("#88ff44")
+        };
+
+        int    colW    = 110;
+        int    rowH    = 195;
+        int    figH    = 155;
+        int    hdrH    = 20;
+        int    canvasW = n * colW + 20;
+        int    canvasH = 4 * (rowH + hdrH) + 10;
+
+        Canvas canvas = new Canvas(canvasW, canvasH);
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        String[] dirLabels = { "⬤  Front View", "◀  Left View", "▶  Right View", "⬛  Back View" };
+        Color[]  dirColors = {
+            Color.web("#4488ff"), Color.web("#ff8844"),
+            Color.web("#44cc44"), Color.web("#aa66ff")
+        };
+
+        AnimationTimer timer = new AnimationTimer() {
+            @Override public void handle(long now) {
+                gc.setFill(Color.web("#0f0f1e"));
+                gc.fillRect(0, 0, canvasW, canvasH);
+
+                for (int row = 0; row < 4; row++) {
+                    int    bandTop = row * (rowH + hdrH);
+                    double feetY   = bandTop + hdrH + figH;
+
+                    gc.setFill(dirColors[row].deriveColor(0, 1, 0.25, 1));
+                    gc.fillRect(0, bandTop, canvasW, hdrH);
+                    gc.setFill(dirColors[row]);
+                    gc.setFont(javafx.scene.text.Font.font("System",
+                            javafx.scene.text.FontWeight.BOLD, 12));
+                    gc.fillText(dirLabels[row], 8, bandTop + 14);
+
+                    gc.setStroke(Color.web("#22224a"));
+                    gc.setLineWidth(1);
+                    for (int x = 0; x <= canvasW; x += colW)
+                        gc.strokeLine(x, bandTop + hdrH, x, bandTop + hdrH + rowH);
+                    gc.setStroke(dirColors[row].deriveColor(0, 0.6, 0.5, 0.4));
+                    gc.strokeLine(0, feetY, canvasW, feetY);
+
+                    for (int i = 0; i < n; i++) {
+
+                        double cx = 10 + i * colW + colW / 2.0;
+
+                        gc.setFill(Color.color(0, 0, 0, 0.3));
+                        gc.fillOval(cx - 16, feetY - 4, 32, 8);
+
+                        Color c = palette[i % palette.length];
+                        if (animators[row][i].isOneShotDone())
+                            animators[row][i].forceState(states[i]);
+
+                        weaponRenderers[row][i].drawBehindBody(gc, animators[row][i], cx, feetY, c);
+                        animators[row][i].draw(gc, cx, feetY, c);
+                        weaponRenderers[row][i].draw(gc, animators[row][i], cx, feetY, c);
+
+                        gc.setFill(c.deriveColor(0, 1, 1.3, 1));
+                        gc.setFont(javafx.scene.text.Font.font("System",
+                                javafx.scene.text.FontWeight.BOLD, 10));
+                        String name = states[i].name();
+                        gc.fillText(name, cx - name.length() * 2.9, feetY + 22);
+                    }
+                }
+            }
+        };
+        timer.start();
+
+        StackPane canvasWrap = new StackPane(canvas);
+        canvasWrap.setStyle("-fx-background-color: #0f0f1e;");
+        canvasWrap.setAlignment(javafx.geometry.Pos.TOP_LEFT);
+
+        ScrollPane scroll = new ScrollPane(canvasWrap);
+        scroll.setFitToWidth(false);
+        scroll.setFitToHeight(false);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setStyle("-fx-background: #0f0f1e; -fx-background-color: #0f0f1e;");
+        scroll.setPrefViewportHeight(Math.min(canvasH + 20, 750));
+        return scroll;
+    }
+
+    private static ToggleButton previewCatBtn(String text, ToggleGroup group) {
+        ToggleButton b = new ToggleButton(text);
+        b.setToggleGroup(group);
+        b.setStyle("-fx-background-color: #16213e; -fx-text-fill: #a0a0c0;" +
+                   "-fx-background-radius: 4; -fx-border-color: #3a3a6a;" +
+                   "-fx-border-radius: 4; -fx-padding: 5 14 5 14; -fx-font-size: 12;");
+        b.selectedProperty().addListener((obs, o, sel) ->
+            b.setStyle(b.getStyle()
+                .replace("-fx-text-fill: #a0a0c0;", sel ? "-fx-text-fill: #ffffff;" : "-fx-text-fill: #a0a0c0;")
+                .replace("-fx-background-color: #16213e;", sel ? "-fx-background-color: #0f3460;" : "-fx-background-color: #16213e;"))
+        );
+        return b;
     }
 
     private void runExport(Path outDir, Button exportBtn, Label exportStatus) {
