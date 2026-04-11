@@ -36,12 +36,35 @@ public class ItemRegistryPanel {
             Paths.get("client/src/main/resources/graphics/sprites/item-registry.json");
 
     // ── Item category ─────────────────────────────────────────────────────────
-    public enum ItemCategory { WEAPON, ARMOR, CONSUMABLE, MATERIAL, QUEST, MISC }
+    public enum ItemCategory { WEAPON, ARMOR, JEWELRY, CONSUMABLE, MATERIAL, QUEST, MISC }
+
+    // ── Armor / jewelry equipment slot ────────────────────────────────────────
+    public enum ArmorSlot {
+        NONE, HEAD, NECK, SHOULDERS, CHEST, BACK, WRISTS, HANDS, WAIST, LEGS, FEET, RING, TRINKET;
+        public String label() {
+            return switch (this) {
+                case NONE      -> "—";
+                case HEAD      -> "Head";
+                case NECK      -> "Neck";
+                case SHOULDERS -> "Shoulders";
+                case CHEST     -> "Chest";
+                case BACK      -> "Back";
+                case WRISTS    -> "Wrists";
+                case HANDS     -> "Hands";
+                case WAIST     -> "Waist";
+                case LEGS      -> "Legs";
+                case FEET      -> "Feet";
+                case RING      -> "Ring";
+                case TRINKET   -> "Trinket";
+            };
+        }
+    }
 
     // ── Data model ────────────────────────────────────────────────────────────
     public static class ItemDef {
         String       name;
         ItemCategory category;
+        ArmorSlot    armorSlot = ArmorSlot.NONE;
         String       description;
         int          statHp, statMana;
         int          statInt, statStr, statWis, statCha;
@@ -61,6 +84,7 @@ public class ItemRegistryPanel {
     private ListView<String>  itemList;
     private TextField         nameField;
     private ComboBox<String>  categoryCombo;
+    private ComboBox<String>  slotCombo;
     private TextArea          descField;
     private Spinner<Integer>  spHp, spMana;
     private Spinner<Integer>  spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue;
@@ -118,27 +142,29 @@ public class ItemRegistryPanel {
             items.stream().filter(it -> it.name.equals(bare)).findFirst().ifPresent(this::loadIntoForm);
         });
 
-        Button addWeaponBtn = btn("+ Weapon",    "#3a1a1a");
-        Button addArmorBtn  = btn("+ Armor",     "#1a2a3a");
-        Button addConsBtn   = btn("+ Consumable","#1a3a1a");
-        Button addMatBtn    = btn("+ Material",  "#2a2a1a");
-        Button addMiscBtn   = btn("+ Misc",      "#2a1a3a");
-        Button delBtn       = btn("Delete",      "#7b241c");
-        Button dupBtn       = btn("Duplicate",   "#1e3a5f");
+        Button addWeaponBtn  = btn("+ Weapon",    "#3a1a1a");
+        Button addArmorBtn   = btn("+ Armor",     "#1a2a3a");
+        Button addJewelryBtn = btn("+ Jewelry",   "#2a1a3a");
+        Button addConsBtn    = btn("+ Consumable","#1a3a1a");
+        Button addMatBtn     = btn("+ Material",  "#2a2a1a");
+        Button addMiscBtn    = btn("+ Misc",      "#2a1a2a");
+        Button delBtn        = btn("Delete",      "#7b241c");
+        Button dupBtn        = btn("Duplicate",   "#1e3a5f");
 
-        addWeaponBtn.setOnAction(e -> addNew(ItemCategory.WEAPON));
-        addArmorBtn.setOnAction(e  -> addNew(ItemCategory.ARMOR));
-        addConsBtn.setOnAction(e   -> addNew(ItemCategory.CONSUMABLE));
-        addMatBtn.setOnAction(e    -> addNew(ItemCategory.MATERIAL));
-        addMiscBtn.setOnAction(e   -> addNew(ItemCategory.MISC));
-        delBtn.setOnAction(e       -> deleteSelected());
-        dupBtn.setOnAction(e       -> duplicateSelected());
+        addWeaponBtn.setOnAction(e  -> addNew(ItemCategory.WEAPON));
+        addArmorBtn.setOnAction(e   -> addNew(ItemCategory.ARMOR));
+        addJewelryBtn.setOnAction(e -> addNew(ItemCategory.JEWELRY));
+        addConsBtn.setOnAction(e    -> addNew(ItemCategory.CONSUMABLE));
+        addMatBtn.setOnAction(e     -> addNew(ItemCategory.MATERIAL));
+        addMiscBtn.setOnAction(e    -> addNew(ItemCategory.MISC));
+        delBtn.setOnAction(e        -> deleteSelected());
+        dupBtn.setOnAction(e        -> duplicateSelected());
 
         VBox leftCol = vbox(6, listTitle, searchField, itemList,
-                new HBox(4, addWeaponBtn, addArmorBtn),
-                new HBox(4, addConsBtn,   addMatBtn),
-                new HBox(4, addMiscBtn,   dupBtn),
-                new HBox(4, delBtn));
+                new HBox(4, addWeaponBtn,  addArmorBtn),
+                new HBox(4, addJewelryBtn, addConsBtn),
+                new HBox(4, addMatBtn,     addMiscBtn),
+                new HBox(4, dupBtn,        delBtn));
         leftCol.setPrefWidth(210);
 
         // ── Centre: editor ────────────────────────────────────────────────────
@@ -157,6 +183,15 @@ public class ItemRegistryPanel {
         categoryCombo.setOnAction(e -> {
             if (selected != null && categoryCombo.getValue() != null)
                 selected.category = ItemCategory.valueOf(categoryCombo.getValue());
+        });
+
+        slotCombo = new ComboBox<>();
+        for (ArmorSlot s : ArmorSlot.values()) slotCombo.getItems().add(s.name());
+        slotCombo.getStyleClass().add("combo-dark");
+        slotCombo.setMaxWidth(Double.MAX_VALUE);
+        slotCombo.setOnAction(e -> {
+            if (selected != null && slotCombo.getValue() != null)
+                selected.armorSlot = ArmorSlot.valueOf(slotCombo.getValue());
         });
 
         descField = new TextArea();
@@ -225,6 +260,7 @@ public class ItemRegistryPanel {
                 lbl("Item Configuration", 13, true),
                 new VBox(4, lbl("Name:",        11, false), nameField),
                 new VBox(4, lbl("Category:",    11, false), categoryCombo),
+                new VBox(4, lbl("Equip Slot (Armor/Jewelry):", 11, false), slotCombo),
                 new VBox(4, lbl("Description:", 11, false), descField),
                 valueRow,
                 lbl("Stat Bonuses  (negative = penalty):", 11, true),
@@ -305,6 +341,7 @@ public class ItemRegistryPanel {
     private void duplicateSelected() {
         if (selected == null) return;
         ItemDef dup = new ItemDef(selected.name + " (copy)", selected.category);
+        dup.armorSlot   = selected.armorSlot;
         dup.description = selected.description;
         dup.statHp   = selected.statHp;  dup.statMana = selected.statMana;
         dup.statInt  = selected.statInt; dup.statStr  = selected.statStr;
@@ -328,6 +365,7 @@ public class ItemRegistryPanel {
         selected = it;
         nameField.setText(it.name);
         categoryCombo.setValue(it.category.name());
+        slotCombo.setValue(it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
         descField.setText(it.description);
         spHp.getValueFactory().setValue(it.statHp);
         spMana.getValueFactory().setValue(it.statMana);
@@ -382,11 +420,43 @@ public class ItemRegistryPanel {
         return switch (cat) {
             case WEAPON     -> "⚔";
             case ARMOR      -> "🛡";
+            case JEWELRY    -> "💍";
             case CONSUMABLE -> "🧪";
             case MATERIAL   -> "🪨";
             case QUEST      -> "📜";
             case MISC       -> "📦";
         };
+    }
+
+    /**
+     * Loads item-registry.json and returns a name→ItemDef map.
+     * Useful for cross-referencing item categories/slots in other panels
+     * (e.g., InventoryPanel's Armor tab) without holding a full panel instance.
+     */
+    public static java.util.Map<String, ItemDef> loadItemMap() {
+        java.util.Map<String, ItemDef> map = new java.util.LinkedHashMap<>();
+        if (!java.nio.file.Files.exists(SAVE_FILE)) return map;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            for (com.fasterxml.jackson.databind.JsonNode n : om.readTree(SAVE_FILE.toFile())) {
+                ItemCategory cat;
+                try { cat = ItemCategory.valueOf(n.path("category").asText("MISC")); }
+                catch (IllegalArgumentException e) { cat = ItemCategory.MISC; }
+                ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
+                try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
+                catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
+                it.description = n.path("description").asText("");
+                it.value       = n.path("value").asInt(0);
+                com.fasterxml.jackson.databind.JsonNode stats = n.path("stats");
+                it.statHp   = stats.path("HP").asInt(0);   it.statMana = stats.path("MANA").asInt(0);
+                it.statInt  = stats.path("INT").asInt(0);  it.statStr  = stats.path("STR").asInt(0);
+                it.statWis  = stats.path("WIS").asInt(0);  it.statCha  = stats.path("CHA").asInt(0);
+                it.statSta  = stats.path("STA").asInt(0);  it.statAgi  = stats.path("AGI").asInt(0);
+                it.statDex  = stats.path("DEX").asInt(0);  it.statLuk  = stats.path("LUK").asInt(0);
+                map.put(it.name, it);
+            }
+        } catch (Exception ignored) {}
+        return map;
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────
@@ -399,6 +469,7 @@ public class ItemRegistryPanel {
                 ObjectNode n = om.createObjectNode();
                 n.put("name",        it.name);
                 n.put("category",    it.category.name());
+                n.put("armorSlot",   it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
                 n.put("description", it.description);
                 n.put("value",       it.value);
                 ObjectNode stats = om.createObjectNode();
@@ -428,6 +499,8 @@ public class ItemRegistryPanel {
             for (JsonNode n : om.readTree(SAVE_FILE.toFile())) {
                 ItemCategory cat = ItemCategory.valueOf(n.path("category").asText("MISC"));
                 ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
+                try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
+                catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 JsonNode stats = n.path("stats");
@@ -463,6 +536,22 @@ public class ItemRegistryPanel {
         // Boss drops
         addMissing("Boss Trophy",   ItemCategory.MISC,       "Proof of a great victory.",                       0,0,  1,1,1,1,1,1,1,1, 50);
         addMissing("Rare Equipment",ItemCategory.ARMOR,      "Finely crafted gear.",                           10,5,  0,3,0,0,2,0,2,0,100);
+
+        // Default armor pieces
+        addMissingArmor("Iron Helmet",     ItemCategory.ARMOR,   ArmorSlot.HEAD,      "Basic iron helmet.",            0,0, 0,1,0,0,2,0,0,0, 30);
+        addMissingArmor("Iron Pauldrons",  ItemCategory.ARMOR,   ArmorSlot.SHOULDERS, "Iron shoulder guards.",         0,0, 0,1,0,0,2,0,0,0, 25);
+        addMissingArmor("Chain Hauberk",   ItemCategory.ARMOR,   ArmorSlot.CHEST,     "Chainmail chest armor.",        5,0, 0,2,0,0,4,0,0,0, 80);
+        addMissingArmor("Leather Cloak",   ItemCategory.ARMOR,   ArmorSlot.BACK,      "A sturdy traveling cloak.",     0,0, 0,0,0,0,1,1,0,0, 20);
+        addMissingArmor("Iron Bracers",    ItemCategory.ARMOR,   ArmorSlot.WRISTS,    "Iron wrist guards.",            0,0, 0,1,0,0,1,0,1,0, 18);
+        addMissingArmor("Mail Gauntlets",  ItemCategory.ARMOR,   ArmorSlot.HANDS,     "Chainmail gloves.",             0,0, 0,1,0,0,1,0,1,0, 22);
+        addMissingArmor("Leather Belt",    ItemCategory.ARMOR,   ArmorSlot.WAIST,     "A reinforced leather belt.",    0,0, 0,0,0,0,1,1,0,0, 15);
+        addMissingArmor("Iron Greaves",    ItemCategory.ARMOR,   ArmorSlot.LEGS,      "Iron leg armor.",               0,0, 0,1,0,0,3,0,0,0, 55);
+        addMissingArmor("Iron Boots",      ItemCategory.ARMOR,   ArmorSlot.FEET,      "Heavy iron boots.",             0,0, 0,1,0,0,2,0,0,0, 35);
+
+        // Default jewelry
+        addMissingArmor("Gold Ring",       ItemCategory.JEWELRY, ArmorSlot.RING,      "A simple gold ring.",           0,0, 0,0,0,1,0,0,0,2, 40);
+        addMissingArmor("Silver Necklace", ItemCategory.JEWELRY, ArmorSlot.NECK,      "A delicate silver necklace.",   0,5, 2,0,1,1,0,0,0,0, 60);
+        addMissingArmor("Lucky Charm",     ItemCategory.JEWELRY, ArmorSlot.TRINKET,   "Trinket that improves luck.",   0,0, 0,0,0,0,0,0,0,5, 75);
     }
 
     private void addMissing(String name, ItemCategory cat, String desc,
@@ -472,6 +561,21 @@ public class ItemRegistryPanel {
         if (items.stream().anyMatch(it -> it.name.equals(name))) return;
         ItemDef it = new ItemDef(name, cat);
         it.description = desc;
+        it.statHp   = HP;   it.statMana = MANA;
+        it.statInt  = INT;  it.statStr  = STR;  it.statWis = WIS; it.statCha = CHA;
+        it.statSta  = STA;  it.statAgi  = AGI;  it.statDex = DEX; it.statLuk = LUK;
+        it.value = value;
+        items.add(it);
+    }
+
+    private void addMissingArmor(String name, ItemCategory cat, ArmorSlot slot, String desc,
+                                 int HP, int MANA,
+                                 int INT, int STR, int WIS, int CHA,
+                                 int STA, int AGI, int DEX, int LUK, int value) {
+        if (items.stream().anyMatch(it -> it.name.equals(name))) return;
+        ItemDef it = new ItemDef(name, cat);
+        it.armorSlot    = slot;
+        it.description  = desc;
         it.statHp   = HP;   it.statMana = MANA;
         it.statInt  = INT;  it.statStr  = STR;  it.statWis = WIS; it.statCha = CHA;
         it.statSta  = STA;  it.statAgi  = AGI;  it.statDex = DEX; it.statLuk = LUK;

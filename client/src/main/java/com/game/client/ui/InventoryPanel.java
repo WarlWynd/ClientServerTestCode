@@ -16,9 +16,9 @@ import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Inventory panel — shows the current character's inventory fetched from the server.
@@ -40,6 +40,11 @@ public class InventoryPanel {
     private Label silverLabel;
     private Label bronzeLabel;
     private Runnable onCurrencyUpdated; // optional callback to notify GameScreen
+
+    // Armor tab — slot labels keyed by ArmorSlot
+    private final java.util.EnumMap<ItemRegistryPanel.ArmorSlot, Label> slotLabels =
+            new java.util.EnumMap<>(ItemRegistryPanel.ArmorSlot.class);
+    private Label armorStatSummary;
 
     // ── Row model ─────────────────────────────────────────────────────────────
 
@@ -75,10 +80,7 @@ public class InventoryPanel {
     // ── Build ─────────────────────────────────────────────────────────────────
 
     public Node build() {
-        Label title = new Label("Inventory");
-        title.setStyle("-fx-text-fill: #e0e0e0; -fx-font-size: 16; -fx-font-weight: bold;");
-
-        // ── Currency bar ──────────────────────────────────────────────────────
+        // ── Currency bar (shared across tabs) ─────────────────────────────────
         platinumLabel = coinLabel("0", "#b8d4e8");
         goldLabel     = coinLabel("0", "#ffd700");
         silverLabel   = coinLabel("0", "#c0c0c0");
@@ -93,7 +95,7 @@ public class InventoryPanel {
         currencyBar.setPadding(new Insets(6, 10, 6, 10));
         currencyBar.setStyle("-fx-background-color: #11112a; -fx-background-radius: 4;");
 
-        // ── Table ─────────────────────────────────────────────────────────────
+        // ── Items tab ─────────────────────────────────────────────────────────
         TableColumn<InventoryRow, String>  nameCol     = new TableColumn<>("Item");
         TableColumn<InventoryRow, Integer> qtyCol      = new TableColumn<>("Qty");
         TableColumn<InventoryRow, String>  equippedCol = new TableColumn<>("Equipped");
@@ -117,11 +119,10 @@ public class InventoryPanel {
         table.setPlaceholder(new Label("No items in inventory."));
         VBox.setVgrow(table, Priority.ALWAYS);
 
-        // ── Buttons ───────────────────────────────────────────────────────────
-        Button refreshBtn = btn("Refresh",       "#1e3a5f");
+        Button refreshBtn = btn("Refresh",         "#1e3a5f");
         Button equipBtn   = btn("Equip / Unequip", "#1e5f3a");
-        Button dropOneBtn = btn("Drop (1)",       "#5f1e1e");
-        Button dropAllBtn = btn("Drop All",       "#7b241c");
+        Button dropOneBtn = btn("Drop (1)",        "#5f1e1e");
+        Button dropAllBtn = btn("Drop All",        "#7b241c");
 
         refreshBtn.setOnAction(e -> requestInventory());
         equipBtn.setOnAction(e   -> toggleEquip());
@@ -141,12 +142,148 @@ public class InventoryPanel {
         hint.setStyle("-fx-text-fill: #5a5a7a; -fx-font-size: 11;");
         hint.setWrapText(true);
 
-        VBox root = new VBox(10, title, currencyBar, table, btnRow, statusLabel, hint);
-        root.setPadding(new Insets(14));
+        VBox itemsContent = new VBox(10, table, btnRow, statusLabel, hint);
+        itemsContent.setPadding(new Insets(10));
+        itemsContent.setStyle("-fx-background-color: #1a1a2e;");
+        VBox.setVgrow(table, Priority.ALWAYS);
+
+        Tab itemsTab = new Tab("Items", itemsContent);
+        itemsTab.setClosable(false);
+
+        // ── Armor tab ─────────────────────────────────────────────────────────
+        Tab armorTab = new Tab("Armor", buildArmorTab());
+        armorTab.setClosable(false);
+
+        // Rebuild armor view whenever the armor tab is selected
+        armorTab.setOnSelectionChanged(e -> {
+            if (armorTab.isSelected()) refreshArmorTab();
+        });
+
+        TabPane subTabs = new TabPane(itemsTab, armorTab);
+        subTabs.setStyle("-fx-background-color: #1a1a2e; -fx-tab-min-width: 80;");
+        VBox.setVgrow(subTabs, Priority.ALWAYS);
+
+        VBox root = new VBox(0, currencyBar, subTabs);
         root.setStyle("-fx-background-color: #1a1a2e;");
+        VBox.setVgrow(subTabs, Priority.ALWAYS);
 
         requestInventory();
         return root;
+    }
+
+    // ── Armor tab ─────────────────────────────────────────────────────────────
+
+    private static final ItemRegistryPanel.ArmorSlot[][] SLOT_GRID = {
+        { ItemRegistryPanel.ArmorSlot.HEAD,      ItemRegistryPanel.ArmorSlot.NECK      },
+        { ItemRegistryPanel.ArmorSlot.SHOULDERS,  ItemRegistryPanel.ArmorSlot.CHEST     },
+        { ItemRegistryPanel.ArmorSlot.BACK,       ItemRegistryPanel.ArmorSlot.WRISTS    },
+        { ItemRegistryPanel.ArmorSlot.HANDS,      ItemRegistryPanel.ArmorSlot.WAIST     },
+        { ItemRegistryPanel.ArmorSlot.LEGS,       ItemRegistryPanel.ArmorSlot.FEET      },
+        { ItemRegistryPanel.ArmorSlot.RING,       ItemRegistryPanel.ArmorSlot.TRINKET   },
+    };
+
+    private Node buildArmorTab() {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(14));
+
+        for (int r = 0; r < SLOT_GRID.length; r++) {
+            for (int c = 0; c < SLOT_GRID[r].length; c++) {
+                ItemRegistryPanel.ArmorSlot slot = SLOT_GRID[r][c];
+                if (slot == null) continue;
+                VBox cell = buildSlotCell(slot);
+                grid.add(cell, c, r);
+                GridPane.setHgrow(cell, Priority.ALWAYS);
+            }
+        }
+
+        armorStatSummary = new Label("");
+        armorStatSummary.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+        armorStatSummary.setWrapText(true);
+
+        Label statsTitle = new Label("Equipped Stat Totals");
+        statsTitle.setStyle("-fx-text-fill: #a0a0c0; -fx-font-size: 12; -fx-font-weight: bold;");
+
+        VBox content = new VBox(12, grid, statsTitle, armorStatSummary);
+        content.setPadding(new Insets(4, 10, 10, 10));
+        content.setStyle("-fx-background-color: #1a1a2e;");
+
+        ScrollPane sp = new ScrollPane(content);
+        sp.setFitToWidth(true);
+        sp.setStyle("-fx-background-color: #1a1a2e; -fx-background: #1a1a2e;");
+        return sp;
+    }
+
+    private VBox buildSlotCell(ItemRegistryPanel.ArmorSlot slot) {
+        Label slotName = new Label(slot.label());
+        slotName.setStyle("-fx-text-fill: #7080a0; -fx-font-size: 10; -fx-font-weight: bold;");
+
+        Label itemLabel = new Label("(empty)");
+        itemLabel.setStyle("-fx-text-fill: #505060; -fx-font-size: 12; -fx-font-style: italic;");
+        itemLabel.setMaxWidth(Double.MAX_VALUE);
+        itemLabel.setWrapText(true);
+
+        VBox cell = new VBox(3, slotName, itemLabel);
+        cell.setPadding(new Insets(8, 10, 8, 10));
+        cell.setMinWidth(160);
+        cell.setPrefWidth(200);
+        cell.setStyle(
+            "-fx-background-color: #0f0f1e;" +
+            "-fx-border-color: #2a2a4a;" +
+            "-fx-border-radius: 4;" +
+            "-fx-background-radius: 4;");
+
+        slotLabels.put(slot, itemLabel);
+        return cell;
+    }
+
+    private void refreshArmorTab() {
+        // Clear all slots
+        for (Label lbl : slotLabels.values()) {
+            lbl.setText("(empty)");
+            lbl.setStyle("-fx-text-fill: #505060; -fx-font-size: 12; -fx-font-style: italic;");
+        }
+
+        Map<String, ItemRegistryPanel.ItemDef> itemMap = ItemRegistryPanel.loadItemMap();
+
+        // Stat totals
+        int[] totals = new int[10]; // HP,MANA,INT,STR,WIS,CHA,STA,AGI,DEX,LUK
+
+        for (InventoryRow row : rows) {
+            if (!row.isEquipped()) continue;
+            ItemRegistryPanel.ItemDef def = itemMap.get(row.getItemName());
+            if (def == null) continue;
+            if (def.category != ItemRegistryPanel.ItemCategory.ARMOR &&
+                def.category != ItemRegistryPanel.ItemCategory.JEWELRY) continue;
+
+            ItemRegistryPanel.ArmorSlot slot = def.armorSlot != null
+                    ? def.armorSlot : ItemRegistryPanel.ArmorSlot.NONE;
+
+            Label lbl = slotLabels.get(slot);
+            if (lbl != null) {
+                lbl.setText(row.getItemName());
+                lbl.setStyle("-fx-text-fill: #d0d8e0; -fx-font-size: 12; -fx-font-style: normal;");
+            }
+
+            totals[0] += def.statHp;   totals[1] += def.statMana;
+            totals[2] += def.statInt;  totals[3] += def.statStr;
+            totals[4] += def.statWis;  totals[5] += def.statCha;
+            totals[6] += def.statSta;  totals[7] += def.statAgi;
+            totals[8] += def.statDex;  totals[9] += def.statLuk;
+        }
+
+        if (armorStatSummary != null) {
+            String[] names = {"HP","MANA","INT","STR","WIS","CHA","STA","AGI","DEX","LUK"};
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 10; i++) {
+                if (totals[i] != 0) {
+                    if (sb.length() > 0) sb.append("   ");
+                    sb.append(names[i]).append(": ").append(totals[i] > 0 ? "+" : "").append(totals[i]);
+                }
+            }
+            armorStatSummary.setText(sb.length() == 0 ? "No bonuses from equipped armor." : sb.toString());
+        }
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -217,6 +354,7 @@ public class InventoryPanel {
                     if (silverLabel   != null) silverLabel  .setText(String.valueOf(sv));
                     if (bronzeLabel   != null) bronzeLabel  .setText(String.valueOf(br));
                     if (onCurrencyUpdated != null) onCurrencyUpdated.run();
+                    refreshArmorTab();
                 });
             }
             case INVENTORY_EQUIP_RESPONSE -> {
@@ -230,6 +368,7 @@ public class InventoryPanel {
                             table.refresh();
                         });
                         setStatus(equipped ? "Item equipped." : "Item unequipped.");
+                        refreshArmorTab();
                     });
                 } else {
                     Platform.runLater(() -> setStatus("Equip failed."));
