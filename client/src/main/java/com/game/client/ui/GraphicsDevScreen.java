@@ -545,10 +545,9 @@ public class GraphicsDevScreen {
                         if (lastTickMs[0] == 0) lastTickMs[0] = nowMs;
                         if (nowMs - lastTickMs[0] >= intervalMs) {
                             int next = sharedSpriteIdx[0] + 1;
-                            boolean oneShot = PlayerAnimator.isOneShot(s);
-                            sharedSpriteIdx[0] = (oneShot && next >= sprites.length)
+                            sharedSpriteIdx[0] = (next >= sprites.length)
                                     ? (repeat[0] ? 0 : sprites.length - 1)
-                                    : next % sprites.length;
+                                    : next;
                             lastTickMs[0] = nowMs;
                         }
                         drawCurrentFrame.run();
