@@ -315,15 +315,18 @@ public class GameScreen {
         VBox gameTabRoot = new VBox(systemMsgBar, gameContent);
         gameTabRoot.getStyleClass().add("app-root");
 
-        gameTab = new Tab("🎮 Game", gameTabRoot);
+        String serverIp = client.getServerHost();
+        gameTab = new Tab("🎮 Game " + serverIp, gameTabRoot);
         gameTab.setClosable(false);
+        gameTab.getProperties().put("connectionIp", serverIp);
 
         // ── Settings tab (all users) ──────────────────────────────────────────
-        Tab settingsTab = new Tab("⚙ Settings", new SettingsPanel(this::doRestart,
+        Tab settingsTab = new Tab("⚙ Settings " + serverIp, new SettingsPanel(this::doRestart,
                 side -> tabPane.setSide(side),
                 iconOnly -> applyTabLabels(iconOnly),
                 this::doLogout).buildView());
         settingsTab.setClosable(false);
+        settingsTab.getProperties().put("connectionIp", serverIp);
 
         // ── Role-gated tabs ───────────────────────────────────────────────────
         java.util.List<Tab> tabs = new java.util.ArrayList<>();
@@ -331,29 +334,43 @@ public class GameScreen {
         tabs.add(settingsTab);
 
         if (SessionStore.isAdmin()) {
+            Tab isAdminTab = new Tab("Is Admin " + client.getAdminHost(), buildIsAdminView());
+            isAdminTab.setClosable(false);
+            isAdminTab.getProperties().put("connectionIp", client.getAdminHost());
+            tabs.add(isAdminTab);
+
             adminPanel = new AdminPanel(client);
             adminPanel.setRestartCallback(this::startReconnectCountdown);
-            Tab adminTab = new Tab("🛡 Admin", adminPanel.buildView());
+            String adminIp = client.getAdminHost();
+            Tab adminTab = new Tab("🛡 Admin " + adminIp, withIpBanner(adminPanel.buildView(), adminIp));
             adminTab.setClosable(false);
-            Tab audioTab = new Tab("🎵 Audio Dev", new AudioDevScreen(stage).build());
+            adminTab.getProperties().put("connectionIp", adminIp);
+            Tab audioTab = new Tab("🎵 Audio Dev " + adminIp, withIpBanner(new AudioDevScreen(stage).build(), adminIp));
             audioTab.setClosable(false);
-            Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
+            audioTab.getProperties().put("connectionIp", adminIp);
+            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage).build(), adminIp));
             graphicsTab.setClosable(false);
-            Tab boardTab = new Tab("🗺 Board Dev", new BoardDevScreen(stage,
-                    () -> tabPane.getSelectionModel().select(gameTab)).build());
+            graphicsTab.getProperties().put("connectionIp", adminIp);
+            Tab boardTab = new Tab("🗺 Board Dev " + adminIp, withIpBanner(new BoardDevScreen(stage,
+                    () -> tabPane.getSelectionModel().select(gameTab)).build(), adminIp));
             boardTab.setClosable(false);
+            boardTab.getProperties().put("connectionIp", adminIp);
             tabs.add(adminTab);
             tabs.add(audioTab);
             tabs.add(graphicsTab);
             tabs.add(boardTab);
         } else if (SessionStore.isGraphicsDev()) {
-            Tab graphicsTab = new Tab("🎨 Graphics Dev", new GraphicsDevScreen(stage).build());
+            String adminIp = client.getAdminHost();
+            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage).build(), adminIp));
             graphicsTab.setClosable(false);
+            graphicsTab.getProperties().put("connectionIp", adminIp);
             tabs.add(graphicsTab);
         } else if (SessionStore.isBoardDev()) {
-            Tab boardTab = new Tab("🗺 Board Dev", new BoardDevScreen(stage,
-                    () -> tabPane.getSelectionModel().select(gameTab)).build());
+            String adminIp = client.getAdminHost();
+            Tab boardTab = new Tab("🗺 Board Dev " + adminIp, withIpBanner(new BoardDevScreen(stage,
+                    () -> tabPane.getSelectionModel().select(gameTab)).build(), adminIp));
             boardTab.setClosable(false);
+            boardTab.getProperties().put("connectionIp", adminIp);
             tabs.add(boardTab);
         }
 
@@ -390,10 +407,12 @@ public class GameScreen {
         // Update window title to reflect the active tab
         tabPane.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
             if (n != null) stage.setTitle(AppSettings.getProgramName()
-                    + " v" + com.game.shared.GameVersion.VERSION + " — " + tabFullName(n));
+                    + " v" + com.game.shared.GameVersion.VERSION + " — " + tabFullName(n)
+                    + " -- " + tabConnectionIp(n));
         });
         stage.setTitle(AppSettings.getProgramName() + " v" + com.game.shared.GameVersion.VERSION
-                + " — " + tabFullName(tabPane.getSelectionModel().getSelectedItem()));
+                + " — " + tabFullName(tabPane.getSelectionModel().getSelectedItem())
+                + " -- " + tabConnectionIp(tabPane.getSelectionModel().getSelectedItem()));
         stage.setScene(scene);
         stage.show();
 
@@ -1058,6 +1077,11 @@ public class GameScreen {
         return label.replaceAll("[^\\p{ASCII}]", "").trim();
     }
 
+    private static String tabConnectionIp(Tab t) {
+        Object ip = t.getProperties().get("connectionIp");
+        return ip != null ? ip.toString() : "";
+    }
+
     private void doLogout() {
         if (gameLoopRunning) { gameLoop.stop(); gameLoopRunning = false; }
         pingTimer.stop();
@@ -1192,6 +1216,37 @@ public class GameScreen {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Builds the content for the "Is Admin" confirmation tab. */
+    private javafx.scene.Node buildIsAdminView() {
+        Label title = new Label("Admin Access Confirmed");
+        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #4caf50;");
+
+        Label user  = new Label("User:        " + SessionStore.getUsername());
+        Label role  = new Label("Role:        Administrator");
+        Label admIp = new Label("Admin Host:  " + client.getAdminHost());
+
+        for (Label l : new Label[]{user, role, admIp}) {
+            l.setStyle("-fx-font-size: 13px; -fx-text-fill: #cccccc; -fx-font-family: monospace;");
+        }
+
+        VBox box = new VBox(12, title, user, role, admIp);
+        box.setPadding(new Insets(24));
+        box.setStyle("-fx-background-color: #1e1e1e;");
+        return box;
+    }
+
+    /** Wraps a tab's content node with a small IP/connection banner at the very top. */
+    private static javafx.scene.Node withIpBanner(javafx.scene.Node content, String ip) {
+        Label banner = new Label("Connects to: " + ip);
+        banner.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-padding: 3 8 3 8;"
+                + " -fx-background-color: #1e1e1e; -fx-border-color: #333333;"
+                + " -fx-border-width: 0 0 1 0;");
+        banner.setMaxWidth(Double.MAX_VALUE);
+        VBox wrapper = new VBox(banner, content);
+        VBox.setVgrow(content, Priority.ALWAYS);
+        return wrapper;
+    }
 
     private void sendPacket(PacketType type, ObjectNode payload) {
         client.send(new Packet(type, SessionStore.getToken(), payload));

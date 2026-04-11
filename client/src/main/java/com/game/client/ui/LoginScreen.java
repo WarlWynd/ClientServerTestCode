@@ -146,8 +146,9 @@ public class LoginScreen {
         statusLabel.setText("Connecting…");
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("email",    email);
-        payload.put("password", password);
+        payload.put("email",      email);
+        payload.put("password",   password);
+        payload.put("localAdmin", client.isAdminHostLocal());
         client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
     }
 
@@ -163,6 +164,9 @@ public class LoginScreen {
                         boolean isGraphicsDev = packet.payload.has("isGraphicsDev") && packet.payload.get("isGraphicsDev").asBoolean();
                         boolean isBoardDev    = packet.payload.has("isBoardDev")    && packet.payload.get("isBoardDev").asBoolean();
                         boolean isAudioDev    = packet.payload.has("isAudioDev")    && packet.payload.get("isAudioDev").asBoolean();
+                        // Tab visibility is driven purely by MySQL role flags. Security for
+                        // admin/dev actions is enforced at the network level — sendToAdmin()
+                        // routes to the internal LAN IP which external users cannot reach.
                         SessionStore.set(token, username, isAdmin, isGraphicsDev, isBoardDev, isAudioDev);
                         AppSettings.setRememberUsername(pendingRemember);
                         AppSettings.setLastUsername(pendingRemember ? emailField.getText().trim() : "");

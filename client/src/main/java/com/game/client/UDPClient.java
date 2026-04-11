@@ -8,7 +8,11 @@ import org.slf4j.LoggerFactory;
 
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 import java.util.function.Consumer;
 
 /**
@@ -125,5 +129,42 @@ public class UDPClient {
     /** Register a callback invoked for every inbound packet (on receiver thread). */
     public void setPacketListener(Consumer<Packet> listener) {
         this.listener = listener;
+    }
+
+    public String getServerHost() { return serverHost; }
+    public String getAdminHost()  { return adminHost; }
+
+    /**
+     * Returns true if this machine has a network interface on the same IPv4 subnet
+     * as the configured admin host — meaning it can physically reach the admin endpoint.
+     * Loopback addresses are always considered reachable.
+     */
+    public boolean isAdminHostLocal() {
+        if (adminAddr == null) return false;
+        if (adminAddr.isLoopbackAddress()) return true;
+        byte[] adminBytes = adminAddr.getAddress();
+        if (adminBytes.length != 4) return false;
+        int adminInt = toInt(adminBytes);
+        try {
+            Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+            if (nics == null) return false;
+            while (nics.hasMoreElements()) {
+                NetworkInterface nic = nics.nextElement();
+                if (!nic.isUp() || nic.isLoopback()) continue;
+                for (InterfaceAddress ia : nic.getInterfaceAddresses()) {
+                    if (!(ia.getAddress() instanceof Inet4Address)) continue;
+                    int prefix = ia.getNetworkPrefixLength();
+                    if (prefix < 0 || prefix > 32) continue;
+                    int mask   = prefix == 0 ? 0 : (0xFFFFFFFF << (32 - prefix));
+                    int nicInt = toInt(ia.getAddress().getAddress());
+                    if ((adminInt & mask) == (nicInt & mask)) return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static int toInt(byte[] b) {
+        return ((b[0] & 0xFF) << 24) | ((b[1] & 0xFF) << 16) | ((b[2] & 0xFF) << 8) | (b[3] & 0xFF);
     }
 }
