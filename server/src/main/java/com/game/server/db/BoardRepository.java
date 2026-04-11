@@ -25,7 +25,7 @@ public class BoardRepository {
     /** Save a new board for the given user. Returns the generated id. */
     public long save(long userId, String name, int rows, int cols, String csvData)
             throws SQLException {
-        String sql = "INSERT INTO boards (user_id, name, rows, cols, csv_data) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO boards (user_id, name, `rows`, `cols`, csv_data) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setLong(1, userId);
@@ -44,7 +44,7 @@ public class BoardRepository {
     /** Update the CSV data and dimensions of an existing board owned by the given user. */
     public boolean update(long boardId, long userId, String name, int rows, int cols, String csvData)
             throws SQLException {
-        String sql = "UPDATE boards SET name=?, rows=?, cols=?, csv_data=? " +
+        String sql = "UPDATE boards SET name=?, `rows`=?, `cols`=?, csv_data=? " +
                      "WHERE id=? AND user_id=?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -60,7 +60,7 @@ public class BoardRepository {
 
     /** Returns all boards owned by the given user, ordered by name. */
     public List<BoardRecord> findByUser(long userId) throws SQLException {
-        String sql = "SELECT id, user_id, name, rows, cols, csv_data, created_at, updated_at " +
+        String sql = "SELECT id, user_id, name, `rows`, `cols`, csv_data, created_at, updated_at " +
                      "FROM boards WHERE user_id=? ORDER BY name";
         List<BoardRecord> result = new ArrayList<>();
         try (Connection conn = db.getConnection();
@@ -75,7 +75,7 @@ public class BoardRepository {
 
     /** Returns a single board by id, or null if not found. */
     public BoardRecord findById(long boardId) throws SQLException {
-        String sql = "SELECT id, user_id, name, rows, cols, csv_data, created_at, updated_at " +
+        String sql = "SELECT id, user_id, name, `rows`, `cols`, csv_data, created_at, updated_at " +
                      "FROM boards WHERE id=?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {

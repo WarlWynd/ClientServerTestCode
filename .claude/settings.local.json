@@ -82,7 +82,17 @@
       "Bash(cmd.exe /c \"mvn -pl server -am compile -q 2>&1\")",
       "Bash(cmd.exe /c \"cd E:\\\\\\\\multiplayer-game && mvn -pl server -am compile 2>&1\")",
       "Bash(cmd.exe /c \"cd E:\\\\\\\\multiplayer-game && mvn -pl client -am compile 2>&1\")",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(git stash:*)",
+      "Bash(pkill -f \"com.game.server.ServerMain\")",
+      "Bash(pkill -f \":server:run\")",
+      "Bash(bash server-run.sh)",
+      "Bash(kill 10175:*)",
+      "Bash(sudo systemctl:*)",
+      "Bash(mysql -u root --connect-timeout=3 -e \"SELECT 1;\")",
+      "Bash(ping -c 2 -W 2 192.168.1.153)",
+      "Bash(nc -z -w 3 192.168.1.153 3306)",
+      "Bash(tee /tmp/server-direct.log)"
     ]
   }
 }

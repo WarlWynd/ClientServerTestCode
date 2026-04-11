@@ -80,8 +80,8 @@ public final class DatabaseManager {
                 id          BIGINT        AUTO_INCREMENT PRIMARY KEY,
                 user_id     BIGINT        NOT NULL,
                 name        VARCHAR(100)  NOT NULL,
-                rows        INT           NOT NULL,
-                cols        INT           NOT NULL,
+                `rows`      INT           NOT NULL,
+                `cols`      INT           NOT NULL,
                 csv_data    MEDIUMTEXT    NOT NULL,
                 created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
