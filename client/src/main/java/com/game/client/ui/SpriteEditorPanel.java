@@ -12,6 +12,8 @@ import javafx.scene.control.cell.ComboBoxListCell;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
+import javafx.scene.transform.Scale;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.StrokeLineCap;
@@ -95,6 +97,10 @@ public class SpriteEditorPanel {
 
     // ── Category / body type ──────────────────────────────────────────────────
     private MobCategory currentCategory = MobCategory.HUMANOID;
+
+    // ── View zoom (CTRL+scroll) ───────────────────────────────────────────────
+    private double viewZoom    = 1.0;
+    private Scale  canvasScale = new Scale(1.0, 1.0, CANVAS_W / 2.0, CANVAS_H / 2.0);
 
     // ── UI references ─────────────────────────────────────────────────────────
     private GraphicsContext gc;
@@ -296,10 +302,21 @@ public class SpriteEditorPanel {
         // ── Canvas ────────────────────────────────────────────────────────────
         Canvas canvas = new Canvas(CANVAS_W, CANVAS_H);
         gc = canvas.getGraphicsContext2D();
+        canvas.getTransforms().add(canvasScale);
 
         canvas.setOnMousePressed(this::onPress);
         canvas.setOnMouseDragged(this::onDrag);
         canvas.setOnMouseReleased(e -> { dragJoint = -1; redraw(); });
+
+        // CTRL+scroll → zoom in/out
+        canvas.setOnScroll((ScrollEvent e) -> {
+            if (!e.isControlDown()) return;
+            double factor = e.getDeltaY() > 0 ? 1.12 : 1.0 / 1.12;
+            viewZoom = Math.min(Math.max(viewZoom * factor, 0.25), 6.0);
+            canvasScale.setX(viewZoom);
+            canvasScale.setY(viewZoom);
+            e.consume();
+        });
 
         // ── Playback timer ────────────────────────────────────────────────────
         long[] lastFrameNs = { 0 };
