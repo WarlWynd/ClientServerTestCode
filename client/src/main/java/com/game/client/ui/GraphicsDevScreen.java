@@ -449,7 +449,7 @@ public class GraphicsDevScreen {
             // Drive animation directly from imported sprite images (bypasses
             // poseCount() mapping which is based on stick-figure pose arrays and
             // would cap quadruped states like POUNCE to 1 frame on RIGHT direction).
-            javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s);
+            javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s, PlayerAnimator.Direction.RIGHT);
             int[] spriteIdx = { 0 };
             long[] lastTickMs = { 0L };
             long intervalMs = switch (s) {

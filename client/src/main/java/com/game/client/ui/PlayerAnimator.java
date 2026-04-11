@@ -290,12 +290,18 @@ public class PlayerAnimator {
 
     static final String STATE_SPRITES_DIR = SPRITES_DIR + "states/";
 
-    private static final ConcurrentHashMap<State, Image[]> STATE_SPRITES    = loadAllStateSprites();
-    private static final ConcurrentHashMap<State, Double>  STATE_SCALES     = loadStateScales();
+    private static final ConcurrentHashMap<State, Image[]> STATE_SPRITES       = loadAllStateSprites();
+    private static final ConcurrentHashMap<State, Image[]> STATE_SPRITES_FRONT = loadAllStateSpritesDir("_front");
+    private static final ConcurrentHashMap<State, Image[]> STATE_SPRITES_BACK  = loadAllStateSpritesDir("_back");
+    private static final ConcurrentHashMap<State, Double>  STATE_SCALES        = loadStateScales();
     private static final String STATE_SCALES_FILE = STATE_SPRITES_DIR + "scales.json";
 
     private static Image[] loadStateSpritesFor(State s) {
-        File dir = new File(STATE_SPRITES_DIR + s.name().toLowerCase());
+        return loadStateSpritesFor(s, "");
+    }
+
+    private static Image[] loadStateSpritesFor(State s, String suffix) {
+        File dir = new File(STATE_SPRITES_DIR + s.name().toLowerCase() + suffix);
         if (!dir.exists()) return null;
         File[] files = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".png"));
         if (files == null || files.length == 0) return null;
@@ -306,6 +312,15 @@ public class PlayerAnimator {
             catch (Exception ignored) {}
         }
         return imgs;
+    }
+
+    private static ConcurrentHashMap<State, Image[]> loadAllStateSpritesDir(String suffix) {
+        ConcurrentHashMap<State, Image[]> map = new ConcurrentHashMap<>();
+        for (State s : State.values()) {
+            Image[] imgs = loadStateSpritesFor(s, suffix);
+            if (imgs != null) map.put(s, imgs);
+        }
+        return map;
     }
 
     /**
@@ -393,11 +408,29 @@ public class PlayerAnimator {
         } catch (Exception ignored) {}
     }
 
-    /** Returns the raw sprite image array for the given state, or null if none loaded. */
+    /** Returns the raw sprite image array for the given state (default/right direction). */
     public static Image[] getStateSprites(State s) { return STATE_SPRITES.get(s); }
 
+    /** Returns direction-specific sprites if available, falling back to default. */
+    public static Image[] getStateSprites(State s, Direction dir) {
+        if (dir == Direction.FRONT) {
+            Image[] imgs = STATE_SPRITES_FRONT.get(s);
+            if (imgs != null) return imgs;
+        } else if (dir == Direction.BACK) {
+            Image[] imgs = STATE_SPRITES_BACK.get(s);
+            if (imgs != null) return imgs;
+        }
+        return STATE_SPRITES.get(s);
+    }
+
     public static boolean hasStateSprites(State s) {
-        Image[] imgs = STATE_SPRITES.get(s);
+        return hasAnySprites(STATE_SPRITES, s) ||
+               hasAnySprites(STATE_SPRITES_FRONT, s) ||
+               hasAnySprites(STATE_SPRITES_BACK, s);
+    }
+
+    private static boolean hasAnySprites(ConcurrentHashMap<State, Image[]> map, State s) {
+        Image[] imgs = map.get(s);
         if (imgs == null) return false;
         for (Image img : imgs) if (img != null) return true;
         return false;
@@ -405,11 +438,18 @@ public class PlayerAnimator {
 
     public static void reloadStateSprites(State s) {
         Image[] imgs = loadStateSpritesFor(s);
-        if (imgs != null) STATE_SPRITES.put(s, imgs);
-        else STATE_SPRITES.remove(s);
+        if (imgs != null) STATE_SPRITES.put(s, imgs); else STATE_SPRITES.remove(s);
+        imgs = loadStateSpritesFor(s, "_front");
+        if (imgs != null) STATE_SPRITES_FRONT.put(s, imgs); else STATE_SPRITES_FRONT.remove(s);
+        imgs = loadStateSpritesFor(s, "_back");
+        if (imgs != null) STATE_SPRITES_BACK.put(s, imgs); else STATE_SPRITES_BACK.remove(s);
     }
 
-    public static void clearStateSprites(State s) { STATE_SPRITES.remove(s); }
+    public static void clearStateSprites(State s) {
+        STATE_SPRITES.remove(s);
+        STATE_SPRITES_FRONT.remove(s);
+        STATE_SPRITES_BACK.remove(s);
+    }
 
     /** Advances the animation frame for the given timestamp without drawing anything. */
     public void tick(long nowMs) { advanceFrame(nowMs); }
@@ -442,7 +482,8 @@ public class PlayerAnimator {
     }
 
     private Image stateSpriteForFrame(int frame, int totalFrames) {
-        Image[] imgs = STATE_SPRITES.get(state);
+        // Use direction-specific sprites when available (e.g. states/quad_idle_front/)
+        Image[] imgs = getStateSprites(state, currentDirection());
         if (imgs == null || imgs.length == 0) return null;
         int idx = (int) Math.round(frame * (imgs.length - 1.0) / Math.max(totalFrames - 1, 1));
         return imgs[Math.min(idx, imgs.length - 1)];
