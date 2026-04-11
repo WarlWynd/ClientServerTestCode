@@ -558,11 +558,16 @@ public class GraphicsDevScreen {
                 "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;");
         pasteBtn.setDisable(true);
 
+        Button saveFrameBtn = new Button("💾 Save");
+        saveFrameBtn.setStyle("-fx-background-color: #0f3460; -fx-text-fill: #53c0f0; " +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14; " +
+                "-fx-font-weight: bold;");
+
         // Internal clipboard: holds source PNGs copied from a state's folder
         final List<File>[] clipboard = new List[]{ new java.util.ArrayList<>() };
 
         HBox btnRow  = new HBox(6, browseBtn, importBtn, clearBtn);
-        HBox btnRow2 = new HBox(6, copyBtn, pasteBtn);
+        HBox btnRow2 = new HBox(6, copyBtn, pasteBtn, saveFrameBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
         btnRow2.setAlignment(Pos.CENTER_LEFT);
 
@@ -704,6 +709,57 @@ browseBtn.setOnAction(e -> {
             refreshFrameList.run();
             importStatus.setText("📌 Pasted " + clipboard[0].size() + " frame(s) → " +
                     statePicker.getSelectionModel().getSelectedItems().size() + " state(s)");
+            importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+            importStatus.getStyleClass().add("text-success");
+        });
+
+        saveFrameBtn.setOnAction(e -> {
+            java.util.List<String> sel = new java.util.ArrayList<>(
+                    frameList.getSelectionModel().getSelectedItems());
+            if (sel.isEmpty()) {
+                importStatus.setText("✗ Select frame(s) in the Imported Frames list to save.");
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-error");
+                return;
+            }
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (s == null) return;
+            File srcDir = new File(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+
+            javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+            dc.setTitle("Choose save destination");
+            File dest = dc.showDialog(stage);
+            if (dest == null) return;
+
+            int saved = 0;
+            for (String name : sel) {
+                File src = new File(srcDir, name);
+                if (!src.exists()) continue;
+                try {
+                    java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(src);
+                    if (previewScale[0] != 1.0) {
+                        int nw = Math.max(1, (int)(img.getWidth()  * previewScale[0]));
+                        int nh = Math.max(1, (int)(img.getHeight() * previewScale[0]));
+                        java.awt.image.BufferedImage scaled = new java.awt.image.BufferedImage(
+                                nw, nh, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                        java.awt.Graphics2D g2 = scaled.createGraphics();
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                        g2.drawImage(img, 0, 0, nw, nh, null);
+                        g2.dispose();
+                        img = scaled;
+                    }
+                    javax.imageio.ImageIO.write(img, "PNG", new File(dest, name));
+                    saved++;
+                } catch (Exception ex) {
+                    importStatus.setText("✗ Save failed for " + name + ": " + ex.getMessage());
+                    importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                    importStatus.getStyleClass().add("text-error");
+                    return;
+                }
+            }
+            importStatus.setText("✓ Saved " + saved + " frame(s) → " + dest.getName()
+                    + (previewScale[0] != 1.0 ? " (scale ×" + String.format("%.2f", previewScale[0]) + ")" : ""));
             importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
             importStatus.getStyleClass().add("text-success");
         });
