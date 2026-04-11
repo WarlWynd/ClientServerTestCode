@@ -436,7 +436,20 @@ public class GraphicsDevScreen {
         playBtn.setStyle(btnStyle);
         pauseBtn.setStyle(btnStyle);
         repeatBtn.setStyle(btnStyle);
-        HBox playbackRow = new HBox(6, playBtn, pauseBtn, repeatBtn);
+
+        Label scaleLabel = new Label("Scale:");
+        scaleLabel.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+        javafx.scene.control.Spinner<Double> scaleSpinner =
+                new javafx.scene.control.Spinner<>(0.1, 10.0, 1.0, 0.1);
+        scaleSpinner.setEditable(true);
+        scaleSpinner.setPrefWidth(75);
+        scaleSpinner.setStyle("-fx-font-size: 11;");
+        double[] previewScale = { 1.0 };
+        scaleSpinner.valueProperty().addListener((obs, o, n) -> { if (n != null) previewScale[0] = n; });
+
+        HBox playbackRow = new HBox(6, playBtn, pauseBtn, repeatBtn,
+                new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL),
+                scaleLabel, scaleSpinner);
         playbackRow.setAlignment(Pos.CENTER_LEFT);
 
         Runnable startPreview = () -> {
@@ -489,11 +502,11 @@ public class GraphicsDevScreen {
                         }
                         javafx.scene.image.Image img = sprites[spriteIdx[0]];
                         if (img != null) {
-                            double pad   = 12;
-                            double scale = Math.min((cw - pad * 2) / img.getWidth(),
-                                                    (ch - pad * 2) / img.getHeight());
-                            double dw = img.getWidth()  * scale;
-                            double dh = img.getHeight() * scale;
+                            double fitScale = Math.min((cw - 24) / img.getWidth(),
+                                                       (ch - 24) / img.getHeight());
+                            double s2 = fitScale * previewScale[0];
+                            double dw = img.getWidth()  * s2;
+                            double dh = img.getHeight() * s2;
                             gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
                         }
                     } else {
