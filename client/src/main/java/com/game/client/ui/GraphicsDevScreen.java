@@ -555,12 +555,10 @@ public class GraphicsDevScreen {
             if (!cat.sortedStates().isEmpty())
                 statePicker.getSelectionModel().select(0);
             refreshFrameList.run();
-            startPreview.run();
         });
 
         statePicker.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
             refreshFrameList.run();
-            startPreview.run();
         });
 
 browseBtn.setOnAction(e -> {
@@ -598,7 +596,6 @@ browseBtn.setOnAction(e -> {
                 stagedList.getItems().clear();
                 importBtn.setDisable(true);
                 refreshFrameList.run();
-                startPreview.run();
                 importStatus.setText("✓ Imported " + count + " frame(s) for " + s.name());
                 importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
                 importStatus.getStyleClass().add("text-success");
@@ -663,7 +660,6 @@ browseBtn.setOnAction(e -> {
                 }
             }
             refreshFrameList.run();
-            startPreview.run();
             importStatus.setText("📌 Pasted " + clipboard[0].size() + " frame(s) → " +
                     statePicker.getSelectionModel().getSelectedItems().size() + " state(s)");
             importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
@@ -671,10 +667,7 @@ browseBtn.setOnAction(e -> {
         });
 
         // Init
-        Platform.runLater(() -> {
-            refreshFrameList.run();
-            startPreview.run();
-        });
+        Platform.runLater(refreshFrameList);
 
         // ── Layout ────────────────────────────────────────────────────────────
         VBox leftCol = new VBox(10,
