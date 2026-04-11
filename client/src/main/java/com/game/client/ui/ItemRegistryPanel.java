@@ -271,7 +271,7 @@ public class ItemRegistryPanel {
                 lbl("Item Configuration", 13, true),
                 new VBox(4, lbl("Name:",        11, false), nameField),
                 new VBox(4, lbl("Category:",    11, false), categoryCombo),
-                new VBox(4, lbl("Equip Slot (Armor/Jewelry):", 11, false), slotCombo),
+                new VBox(4, lbl("Item Slot:", 11, false), slotCombo),
                 new VBox(4, lbl("Description:", 11, false), descField),
                 valueRow,
                 lbl("Stat Bonuses  (negative = penalty):", 11, true),
