@@ -569,6 +569,11 @@ public class SpriteEditorPanel {
         return leftScroll;
     }
 
+    /** Returns just the PNG sprite viewer pane — used as the Pose Editor tab content. */
+    public Node buildPngEditor() {
+        return buildRightPane();
+    }
+
     // ── PNG Sprite Viewer (right pane) ───────────────────────────────────────
 
     private Node buildRightPane() {

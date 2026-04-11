@@ -67,7 +67,8 @@ public class GraphicsDevScreen {
         Tab filesTab      = new Tab("📁 Files",            buildFilesView());
         Tab spritesTab    = new Tab("🕹 Sprite Preview",   buildSpritePreview());
         Tab importTab     = new Tab("🖼 Import Sprites",   buildImportSpritesTab());
-        Tab editorTab     = new Tab("✏ Pose Editor",       new SpriteEditorPanel().build());
+        SpriteEditorPanel spriteEditor = new SpriteEditorPanel();
+        Tab editorTab     = new Tab("✏ Pose Editor",       spriteEditor.buildPngEditor());
         Tab mobTab        = new Tab("👾 Mob Manager",      new MobManagerPanel().build());
         Tab lootTab       = new Tab("📦 Loot Tables",     new LootTablePanel().build());
         Tab itemTab       = new Tab("🗡 Item Registry",    new ItemRegistryPanel(client).build());
@@ -938,8 +939,70 @@ browseBtn.setOnAction(e -> {
             }
         });
 
+        // ── Combat Preview ────────────────────────────────────────────────────
+        Label combatLabel = styledLabel("Combat Preview", 13, true);
+
+        // Direction toggle bar
+        String dNorm = "-fx-background-color: #0f3460; -fx-text-fill: #c8c8e0; " +
+                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8;";
+        String dSel  = "-fx-background-color: #e94560; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8; -fx-font-weight: bold;";
+        ToggleGroup combatDirGroup = new ToggleGroup();
+        ToggleButton cdFront = new ToggleButton("⬤ Front");
+        ToggleButton cdLeft  = new ToggleButton("◀ Left");
+        ToggleButton cdRight = new ToggleButton("▶ Right");
+        ToggleButton cdBack  = new ToggleButton("⬛ Back");
+        cdFront.setUserData(PlayerAnimator.Direction.FRONT);
+        cdLeft.setUserData(PlayerAnimator.Direction.LEFT);
+        cdRight.setUserData(PlayerAnimator.Direction.RIGHT);
+        cdBack.setUserData(PlayerAnimator.Direction.BACK);
+        for (ToggleButton b : new ToggleButton[]{ cdFront, cdLeft, cdRight, cdBack }) {
+            b.setToggleGroup(combatDirGroup);
+            b.setStyle(dNorm);
+            b.selectedProperty().addListener((obs, o, n) -> b.setStyle(n ? dSel : dNorm));
+        }
+        cdRight.setSelected(true);
+        Label combatDirHdr = new Label("Direction:");
+        combatDirHdr.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 12;");
+        HBox combatDirBar = new HBox(4, combatDirHdr, cdFront, cdLeft, cdRight, cdBack);
+        combatDirBar.setAlignment(Pos.CENTER_LEFT);
+
+        Canvas combatCanvas = new Canvas(200, 220);
+        StackPane combatCanvasPane = new StackPane(combatCanvas);
+        combatCanvasPane.getStyleClass().add("canvas-preview-bg");
+        combatCanvasPane.setPrefSize(200, 220);
+        VBox.setVgrow(combatCanvasPane, Priority.ALWAYS);
+
+        PlayerAnimator[] combatAnim = { new PlayerAnimator() };
+        AnimationTimer[] combatTimer = { null };
+        combatAnim[0].setForcedDirection(PlayerAnimator.Direction.RIGHT);
+        {
+            PlayerAnimator.State initS = statePicker.getSelectionModel().getSelectedItem();
+            if (initS != null) combatAnim[0].forceState(initS);
+        }
+
+        combatDirGroup.selectedToggleProperty().addListener((obs, old, now) -> {
+            if (now == null) { old.setSelected(true); return; }
+            combatAnim[0].setForcedDirection((PlayerAnimator.Direction) now.getUserData());
+        });
+
+        // Keep combat preview in sync with state / body-type picker
+        statePicker.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            if (n != null) combatAnim[0].forceState(n);
+        });
+
+        combatTimer[0] = new AnimationTimer() {
+            public void handle(long now) {
+                GraphicsContext gc = combatCanvas.getGraphicsContext2D();
+                double cw = combatCanvas.getWidth(), ch = combatCanvas.getHeight();
+                gc.setFill(Color.web("#1a1a2e"));
+                gc.fillRect(0, 0, cw, ch);
+                combatAnim[0].draw(gc, cw / 2, ch - 20, Color.WHITE, 1.5, now / 1_000_000L);
+            }
+        };
+
         // Init
-        Platform.runLater(refreshFrameList);
+        Platform.runLater(() -> { refreshFrameList.run(); combatTimer[0].start(); });
 
         // ── Layout ────────────────────────────────────────────────────────────
         VBox leftCol = new VBox(10,
@@ -955,7 +1018,13 @@ browseBtn.setOnAction(e -> {
         leftCol.setPadding(new Insets(14));
         leftCol.getStyleClass().add("app-card");
 
-        VBox rightCol = new VBox(10, previewLabel, importingForLabel, canvasPane, playbackRow);
+        Separator rightSep = new Separator();
+        rightSep.setStyle("-fx-background-color: #3a3a6a;");
+
+        VBox rightCol = new VBox(10,
+                previewLabel, importingForLabel, canvasPane, playbackRow,
+                rightSep,
+                combatLabel, combatDirBar, combatCanvasPane);
         rightCol.setPadding(new Insets(14));
         rightCol.getStyleClass().add("app-card");
         HBox.setHgrow(rightCol, Priority.ALWAYS);
