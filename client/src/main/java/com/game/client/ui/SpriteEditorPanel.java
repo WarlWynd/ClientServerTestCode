@@ -563,16 +563,10 @@ public class SpriteEditorPanel {
         leftScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         leftScroll.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
 
-        Node rightPane = buildRightPane();
-
-        SplitPane split = new SplitPane(leftScroll, rightPane);
-        split.setDividerPositions(0.5);
-        split.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
-
         refreshFrameLabel();
         redraw();
         refreshCode();
-        return split;
+        return leftScroll;
     }
 
     // ── PNG Sprite Viewer (right pane) ───────────────────────────────────────
