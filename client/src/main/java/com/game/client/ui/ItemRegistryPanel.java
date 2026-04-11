@@ -298,15 +298,15 @@ public class ItemRegistryPanel {
             giveBtn.setOnAction(e -> giveToSelf());
             cfgCol.getChildren().add(giveBtn);
         }
-        cfgCol.setPrefWidth(340);
+        cfgCol.setPrefWidth(220);
 
         ScrollPane cfgScroll = new ScrollPane(cfgCol);
         cfgScroll.setFitToWidth(true);
         cfgScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         cfgScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         cfgScroll.setStyle("-fx-background-color: #1a1a2e; -fx-background: #1a1a2e;");
-        cfgScroll.setPrefWidth(360);
-        HBox.setHgrow(cfgScroll, Priority.ALWAYS);
+        cfgScroll.setPrefWidth(240);
+        cfgScroll.setMaxWidth(240);
 
         // ── Right: stat summary ───────────────────────────────────────────────
         Label summaryTitle = lbl("Stat Guide", 13, true);
@@ -345,6 +345,7 @@ public class ItemRegistryPanel {
 
         VBox rightCol = vbox(8, summaryTitle, guideLabel);
         rightCol.setPrefWidth(200);
+        HBox.setHgrow(rightCol, Priority.ALWAYS);
 
         HBox root = new HBox(8, leftCol, cfgScroll, rightCol);
         root.setPadding(new Insets(10));
