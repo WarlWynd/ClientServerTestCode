@@ -578,6 +578,13 @@ public class SpriteEditorPanel {
     // ── PNG Sprite Viewer (right pane) ───────────────────────────────────────
 
     private Node buildRightPane() {
+        // ── Body Type picker ──────────────────────────────────────────────────
+        Label bodyTypeHdr = styledLabel("Body Type:", 12, false);
+        ComboBox<MobCategory> bodyTypeBox = new ComboBox<>();
+        bodyTypeBox.getItems().addAll(MobCategory.values());
+        bodyTypeBox.setValue(MobCategory.HUMANOID);
+        styleCombo(bodyTypeBox);
+
         // ── State picker ──────────────────────────────────────────────────────
         Label stateHdr = styledLabel("State:", 12, false);
         ComboBox<PlayerAnimator.State> stateBox = new ComboBox<>();
@@ -861,8 +868,19 @@ public class SpriteEditorPanel {
             updateView.run();
         });
 
+        bodyTypeBox.setOnAction(ev -> {
+            MobCategory cat = bodyTypeBox.getValue();
+            if (cat == null) return;
+            stopPlayback.run();
+            stateBox.getItems().setAll(cat.sortedStates());
+            stateBox.setValue(cat.sortedStates().get(0));
+            // stateBox.setOnAction fires from setValue above, loading images
+        });
+
         // ── Assemble toolbars ─────────────────────────────────────────────────
-        HBox row1 = new HBox(8, stateHdr, stateBox,
+        HBox row1 = new HBox(8, bodyTypeHdr, bodyTypeBox,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                stateHdr, stateBox,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 browseBtn, addFrameBtn, removeFrameBtn,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
