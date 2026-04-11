@@ -1585,7 +1585,9 @@ public class MobManagerPanel {
             }
         }
 
-        double leftCx = w * 0.35, rightCx = w * 0.65, floorY = h - 30;
+        double leftCx  = practiceFaceEachOther ? w * 0.40 : w * 0.35;
+        double rightCx = practiceFaceEachOther ? w * 0.60 : w * 0.65;
+        double floorY  = h - 30;
 
         // ── Floor ─────────────────────────────────────────────────────────────
         gc.setFill(Color.web("#2a2040"));
