@@ -380,6 +380,9 @@ public class GraphicsDevScreen {
 
         // ── Preview canvas ────────────────────────────────────────────────────
         Label previewLabel = styledLabel("Preview", 13, true);
+        Label importingForLabel = new Label("Importing for: —");
+        importingForLabel.setStyle(
+                "-fx-text-fill: #53c0f0; -fx-font-size: 13; -fx-font-weight: bold;");
         Canvas previewCanvas = new Canvas(200, 200);
         StackPane canvasPane = new StackPane(previewCanvas);
         canvasPane.getStyleClass().add("canvas-preview-bg");
@@ -418,6 +421,7 @@ public class GraphicsDevScreen {
             importStatus.setText(n > 0 ? "✓ " + n + " frame(s) — " + label : "No frames — " + label);
             importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
             importStatus.getStyleClass().add(n > 0 ? "text-success" : "text-muted");
+            importingForLabel.setText("Importing for: " + s.name());
         };
 
         // Preview animation timer + playback state
@@ -787,7 +791,7 @@ browseBtn.setOnAction(e -> {
         leftCol.setPadding(new Insets(14));
         leftCol.getStyleClass().add("app-card");
 
-        VBox rightCol = new VBox(10, previewLabel, canvasPane, playbackRow);
+        VBox rightCol = new VBox(10, previewLabel, importingForLabel, canvasPane, playbackRow);
         rightCol.setPadding(new Insets(14));
         rightCol.getStyleClass().add("app-card");
         HBox.setHgrow(rightCol, Priority.ALWAYS);
