@@ -442,10 +442,6 @@ public class GraphicsDevScreen {
         Runnable startPreview = () -> {
             PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
             if (s == null) return;
-            boolean hasSprites = PlayerAnimator.hasStateSprites(s)
-                    || (s == PlayerAnimator.State.KIP_UP      && PlayerAnimator.hasKuSprites())
-                    || (s == PlayerAnimator.State.KNOCKED_DOWN && PlayerAnimator.hasKdSprites());
-            if (!hasSprites) return;
             if (timer[0] != null) timer[0].stop();
             paused[0] = false;
             pausedAt[0] = 0L;
@@ -481,7 +477,10 @@ public class GraphicsDevScreen {
             timer[0].start();
         };
 
-        playBtn.setOnAction(e -> { paused[0] = false; });
+        playBtn.setOnAction(e -> {
+            if (timer[0] == null) startPreview.run();
+            else paused[0] = false;
+        });
         pauseBtn.setOnAction(e -> { paused[0] = true; });
         repeatBtn.setOnAction(e -> {
             repeat[0] = !repeat[0];

@@ -809,7 +809,14 @@ public class PlayerAnimator {
         if (skinImg != null) {
             double h = SKIN_HEIGHT * spriteScale;
             double imgW = skinImg.getWidth() * h / skinImg.getHeight();
-            gc.drawImage(skinImg, -imgW / 2, -h, imgW, h);
+            double dx = -imgW / 2, dy = -h;
+            gc.drawImage(skinImg, dx, dy, imgW, h);
+            // Tint the white silhouette with the mob's color
+            gc.save();
+            gc.setGlobalBlendMode(javafx.scene.effect.BlendMode.MULTIPLY);
+            gc.setFill(color);
+            gc.fillRect(dx, dy, imgW, h);
+            gc.restore();
         } else {
             gc.setFill(color);
             gc.setStroke(color);

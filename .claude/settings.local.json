@@ -92,7 +92,12 @@
       "Bash(mysql -u root --connect-timeout=3 -e \"SELECT 1;\")",
       "Bash(ping -c 2 -W 2 192.168.1.153)",
       "Bash(nc -z -w 3 192.168.1.153 3306)",
-      "Bash(tee /tmp/server-direct.log)"
+      "Bash(tee /tmp/server-direct.log)",
+      "Bash(./gradlew :client:run -x test)",
+      "Bash(wscript.exe client-silent.vbs)",
+      "Bash(grep -n \"ComboBox\\\\|combo\" /e/multiplayer-game/client/src/main/java/com/game/client/ui/*.java)",
+      "Bash(grep -v \"//\")",
+      "Bash(python:*)"
     ]
   }
 }

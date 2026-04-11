@@ -7,6 +7,7 @@ import javafx.scene.Node;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.cell.ComboBoxListCell;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
@@ -269,16 +270,28 @@ public class SpriteEditorPanel {
         HBox toolbar = new HBox(10, catHdr, categoryBox,
                 new Separator(javafx.geometry.Orientation.VERTICAL),
                 stateHdr, stateBox, addStateBtn, renameStateBtn, removeStateBtn,
-                new Separator(javafx.geometry.Orientation.VERTICAL), dirBar,
-                new Separator(javafx.geometry.Orientation.VERTICAL), oneShotCheck,
-                new Separator(javafx.geometry.Orientation.VERTICAL), prev, frameLabel, next, playPauseBtn,
-                new Separator(javafx.geometry.Orientation.VERTICAL),
-                speedHdr, speedSlider, speedValLabel,
-                new Separator(javafx.geometry.Orientation.VERTICAL), resetBtn, copyBtn, saveBtn,
-                new Separator(javafx.geometry.Orientation.VERTICAL), hint);
+                new Separator(javafx.geometry.Orientation.VERTICAL), oneShotCheck);
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.setPadding(new Insets(8, 12, 8, 12));
         toolbar.setStyle("-fx-background-color: #16213e;");
+
+        HBox toolbar2 = new HBox(10, dirBar);
+        toolbar2.setAlignment(Pos.CENTER_LEFT);
+        toolbar2.setPadding(new Insets(6, 12, 6, 12));
+        toolbar2.setStyle("-fx-background-color: #16213e;");
+
+        HBox toolbar3 = new HBox(10, prev, frameLabel, next, playPauseBtn,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                speedHdr, speedSlider, speedValLabel);
+        toolbar3.setAlignment(Pos.CENTER_LEFT);
+        toolbar3.setPadding(new Insets(6, 12, 6, 12));
+        toolbar3.setStyle("-fx-background-color: #16213e;");
+
+        HBox toolbar4 = new HBox(10, resetBtn, copyBtn, saveBtn,
+                new Separator(javafx.geometry.Orientation.VERTICAL), hint);
+        toolbar4.setAlignment(Pos.CENTER_LEFT);
+        toolbar4.setPadding(new Insets(6, 12, 6, 12));
+        toolbar4.setStyle("-fx-background-color: #16213e;");
 
         // ── Canvas ────────────────────────────────────────────────────────────
         Canvas canvas = new Canvas(CANVAS_W, CANVAS_H);
@@ -512,8 +525,11 @@ public class SpriteEditorPanel {
         weaponToolbar.setStyle("-fx-background-color: #0f0f1e;");
 
         // ── Assemble ──────────────────────────────────────────────────────────
-        VBox root = new VBox(
+        VBox leftPane = new VBox(
                 toolbar,
+                toolbar2,
+                toolbar3,
+                toolbar4,
                 frameToolbar,
                 weaponToolbar,
                 new Separator(),
@@ -521,19 +537,418 @@ public class SpriteEditorPanel {
                 legendWrapper,
                 new Separator(),
                 codePanel);
-        root.setStyle("-fx-background-color: #1a1a2e;");
+        leftPane.setStyle("-fx-background-color: #1a1a2e;");
 
-        ScrollPane scroll = new ScrollPane(root);
-        scroll.setFitToWidth(false);
-        scroll.setFitToHeight(false);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        scroll.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
+        ScrollPane leftScroll = new ScrollPane(leftPane);
+        leftScroll.setFitToWidth(false);
+        leftScroll.setFitToHeight(false);
+        leftScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        leftScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        leftScroll.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
+
+        Node rightPane = buildRightPane();
+
+        SplitPane split = new SplitPane(leftScroll, rightPane);
+        split.setDividerPositions(0.5);
+        split.setStyle("-fx-background: #1a1a2e; -fx-background-color: #1a1a2e;");
 
         refreshFrameLabel();
         redraw();
         refreshCode();
-        return scroll;
+        return split;
+    }
+
+    // ── PNG Sprite Viewer (right pane) ───────────────────────────────────────
+
+    private Node buildRightPane() {
+        // ── State picker ──────────────────────────────────────────────────────
+        Label stateHdr = styledLabel("State:", 12, false);
+        ComboBox<PlayerAnimator.State> stateBox = new ComboBox<>();
+        stateBox.getItems().addAll(MobCategory.HUMANOID.sortedStates());
+        stateBox.setValue(currentState);
+        styleCombo(stateBox);
+
+        // ── Frame state ───────────────────────────────────────────────────────
+        int[] frameIdx = { 0 };
+        java.util.List<javafx.scene.image.Image> images = new java.util.ArrayList<>(java.util.Arrays.asList(loadPngFrames(currentState)));
+        java.util.List<java.io.File>             srcFiles = new java.util.ArrayList<>();
+
+        Label frameLabel2 = new Label("1 / 1");
+        frameLabel2.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 12; -fx-min-width: 60;");
+
+        // ── ImageView + ColorAdjust ───────────────────────────────────────────
+        javafx.scene.image.ImageView imgView = new javafx.scene.image.ImageView();
+        imgView.setPreserveRatio(true);
+        imgView.setSmooth(true);
+        javafx.scene.effect.ColorAdjust colorAdj = new javafx.scene.effect.ColorAdjust();
+        imgView.setEffect(colorAdj);
+
+        javafx.scene.layout.StackPane imgBox = new javafx.scene.layout.StackPane(imgView);
+        imgBox.setStyle("-fx-background-color: #0f0f1e;");
+        imgBox.setPrefSize(CANVAS_W, CANVAS_H);
+        VBox.setVgrow(imgBox, Priority.ALWAYS);
+
+        Label noFrameLbl = new Label("No PNG frames loaded");
+        noFrameLbl.setStyle("-fx-text-fill: #505070; -fx-font-size: 13;");
+        imgBox.getChildren().add(noFrameLbl);
+
+        // ── Resize spinners ───────────────────────────────────────────────────
+        Label sizeHdr = styledLabel("Size:", 11, false);
+        javafx.scene.control.Spinner<Integer> wField = new javafx.scene.control.Spinner<>(1, 8192, 512, 1);
+        javafx.scene.control.Spinner<Integer> hField = new javafx.scene.control.Spinner<>(1, 8192, 512, 1);
+        wField.setEditable(true); hField.setEditable(true);
+        wField.setPrefWidth(80);  hField.setPrefWidth(80);
+        wField.setStyle("-fx-font-size: 11;"); hField.setStyle("-fx-font-size: 11;");
+        CheckBox lockRatio = new CheckBox("Lock");
+        lockRatio.setSelected(true);
+        lockRatio.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 11;");
+        boolean[] spinnerUpdating = { false };
+
+        // ── Update display ────────────────────────────────────────────────────
+        Runnable updateView = () -> {
+            int total = images.size();
+            boolean hasImg = total > 0 && frameIdx[0] < total && images.get(frameIdx[0]) != null;
+            imgView.setVisible(hasImg);
+            noFrameLbl.setVisible(!hasImg);
+            if (hasImg) {
+                javafx.scene.image.Image img = images.get(frameIdx[0]);
+                imgView.setImage(img);
+                spinnerUpdating[0] = true;
+                wField.getValueFactory().setValue(Math.max(1, (int) img.getWidth()));
+                hField.getValueFactory().setValue(Math.max(1, (int) img.getHeight()));
+                spinnerUpdating[0] = false;
+                imgView.setFitWidth(wField.getValue());
+                imgView.setFitHeight(hField.getValue());
+            }
+            frameLabel2.setText((frameIdx[0] + 1) + " / " + Math.max(total, 1));
+        };
+
+        // Lock ratio: spinner value changes
+        wField.valueProperty().addListener((obs, o, n) -> {
+            if (spinnerUpdating[0] || n == null) return;
+            if (lockRatio.isSelected() && !images.isEmpty() && images.get(0) != null && images.get(0).getWidth() > 0) {
+                spinnerUpdating[0] = true;
+                hField.getValueFactory().setValue((int)(n * images.get(0).getHeight() / images.get(0).getWidth()));
+                spinnerUpdating[0] = false;
+            }
+            imgView.setFitWidth(n); imgView.setFitHeight(hField.getValue());
+        });
+        hField.valueProperty().addListener((obs, o, n) -> {
+            if (spinnerUpdating[0] || n == null) return;
+            if (lockRatio.isSelected() && !images.isEmpty() && images.get(0) != null && images.get(0).getHeight() > 0) {
+                spinnerUpdating[0] = true;
+                wField.getValueFactory().setValue((int)(n * images.get(0).getWidth() / images.get(0).getHeight()));
+                spinnerUpdating[0] = false;
+            }
+            imgView.setFitHeight(n); imgView.setFitWidth(wField.getValue());
+        });
+
+        // ── Color adjust spinners ─────────────────────────────────────────────
+        javafx.scene.control.Spinner<Double> hueS = adjSpinner(); Label hueL = adjLabel("Hue:");
+        javafx.scene.control.Spinner<Double> satS = adjSpinner(); Label satL = adjLabel("Sat:");
+        javafx.scene.control.Spinner<Double> briS = adjSpinner(); Label briL = adjLabel("Bright:");
+        javafx.scene.control.Spinner<Double> conS = adjSpinner(); Label conL = adjLabel("Contrast:");
+
+        hueS.valueProperty().addListener((o, a, n) -> { if (n != null) colorAdj.setHue(n); });
+        satS.valueProperty().addListener((o, a, n) -> { if (n != null) colorAdj.setSaturation(n); });
+        briS.valueProperty().addListener((o, a, n) -> { if (n != null) colorAdj.setBrightness(n); });
+        conS.valueProperty().addListener((o, a, n) -> { if (n != null) colorAdj.setContrast(n); });
+
+        Button resetAdj = toolBtn("↺ Reset");
+        resetAdj.setOnAction(e -> {
+            hueS.getValueFactory().setValue(0.0);
+            satS.getValueFactory().setValue(0.0);
+            briS.getValueFactory().setValue(0.0);
+            conS.getValueFactory().setValue(0.0);
+        });
+
+        // ── Save button ───────────────────────────────────────────────────────
+        Button saveBtn = toolBtn("💾 Save State");
+        saveBtn.setStyle(saveBtn.getStyle() + "-fx-text-fill: #53c0f0; -fx-font-weight: bold;");
+        saveBtn.setOnAction(e -> {
+            if (images.isEmpty()) return;
+            PlayerAnimator.State state = stateBox.getValue();
+            if (state == null) return;
+            java.io.File dir = new java.io.File(PlayerAnimator.STATE_SPRITES_DIR + state.name().toLowerCase());
+            dir.mkdirs();
+            // Clear existing PNGs in the directory first
+            java.io.File[] existing = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".png"));
+            if (existing != null) for (java.io.File f : existing) f.delete();
+            int outW = wField.getValue();
+            int outH = hField.getValue();
+            javafx.scene.SnapshotParameters sp = new javafx.scene.SnapshotParameters();
+            sp.setFill(javafx.scene.paint.Color.TRANSPARENT);
+            int saved = 0;
+            for (int i = 0; i < images.size(); i++) {
+                javafx.scene.image.Image img = images.get(i);
+                if (img == null) continue;
+                java.io.File dest = new java.io.File(dir, String.format("%03d.png", i + 1));
+                try {
+                    // Draw each frame onto a canvas at the target size and save
+                    javafx.scene.canvas.Canvas tmp = new javafx.scene.canvas.Canvas(outW, outH);
+                    tmp.getGraphicsContext2D().drawImage(img, 0, 0, outW, outH);
+                    javafx.scene.image.WritableImage out = tmp.snapshot(sp, null);
+                    javax.imageio.ImageIO.write(
+                            javafx.embed.swing.SwingFXUtils.fromFXImage(out, null), "PNG", dest);
+                    saved++;
+                } catch (Exception ex) { /* skip */ }
+            }
+            setSaveStatus("✓ Saved " + saved + " frame(s) at " + outW + "×" + outH + " → " + state.name().toLowerCase() + "/", true);
+        });
+
+        // ── Playback ──────────────────────────────────────────────────────────
+        AnimationTimer[] timer   = { null };
+        long[]           lastMs  = { 0 };
+        boolean[]        playing = { false };
+        long[]           itvMs   = { 120 };
+
+        Button prev    = toolBtn("◀");
+        Button next    = toolBtn("▶");
+        Button playBtn = toolBtn("▶ Play");
+        playBtn.setStyle(playBtn.getStyle() + "-fx-text-fill: #50c050; -fx-font-weight: bold;");
+
+        Runnable stopPlayback = () -> {
+            playing[0] = false;
+            playBtn.setText("▶ Play");
+            playBtn.setStyle(playBtn.getStyle()
+                    .replace("-fx-text-fill: #f0a030;", "-fx-text-fill: #50c050;"));
+            if (timer[0] != null) { timer[0].stop(); timer[0] = null; }
+        };
+
+        prev.setOnAction(e -> {
+            stopPlayback.run();
+            if (!images.isEmpty())
+                frameIdx[0] = (frameIdx[0] - 1 + images.size()) % images.size();
+            updateView.run();
+        });
+        next.setOnAction(e -> {
+            stopPlayback.run();
+            if (!images.isEmpty())
+                frameIdx[0] = (frameIdx[0] + 1) % images.size();
+            updateView.run();
+        });
+        playBtn.setOnAction(e -> {
+            if (playing[0]) {
+                stopPlayback.run();
+            } else {
+                playing[0] = true;
+                playBtn.setText("⏸ Pause");
+                playBtn.setStyle(playBtn.getStyle()
+                        .replace("-fx-text-fill: #50c050;", "-fx-text-fill: #f0a030;"));
+                lastMs[0] = 0;
+                timer[0] = new AnimationTimer() {
+                    public void handle(long now) {
+                        long ms = now / 1_000_000L;
+                        if (lastMs[0] == 0) { lastMs[0] = ms; return; }
+                        if (ms - lastMs[0] >= itvMs[0]) {
+                            if (!images.isEmpty())
+                                frameIdx[0] = (frameIdx[0] + 1) % images.size();
+                            updateView.run();
+                            lastMs[0] = ms;
+                        }
+                    }
+                };
+                timer[0].start();
+            }
+        });
+
+        Label speedHdr = styledLabel("Speed:", 11, false);
+        javafx.scene.control.Spinner<Double> speedSlider = new javafx.scene.control.Spinner<>(0.25, 8.0, 1.0, 0.25);
+        speedSlider.setEditable(true);
+        speedSlider.setPrefWidth(80);
+        speedSlider.setStyle("-fx-font-size: 11;");
+        speedSlider.valueProperty().addListener((obs, o, n) -> {
+            if (n != null) itvMs[0] = Math.max(16, (long)(120 / n));
+        });
+
+        // ── Browse / Add / Remove ─────────────────────────────────────────────
+        Button browseBtn    = toolBtn("📂 Browse PNG...");
+        Button addFrameBtn  = toolBtn("+ Add Frame(s)");
+        Button removeFrameBtn = toolBtn("✕ Remove Frame");
+        browseBtn.setStyle(browseBtn.getStyle()       + "-fx-text-fill: #53c0f0;");
+        addFrameBtn.setStyle(addFrameBtn.getStyle()   + "-fx-text-fill: #50c050;");
+        removeFrameBtn.setStyle(removeFrameBtn.getStyle() + "-fx-text-fill: #e05050;");
+
+        browseBtn.setOnAction(e -> {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("Replace Current Frame");
+            chooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("PNG Images", "*.png"));
+            java.io.File raw = chooser.showOpenDialog(
+                    imgBox.getScene() != null ? imgBox.getScene().getWindow() : null);
+            if (raw == null) return;
+            stopPlayback.run();
+            int idx = frameIdx[0];
+            javafx.scene.image.Image img = loadResized(raw);
+            if (idx < images.size()) {
+                images.set(idx, img);
+            } else {
+                images.add(img);
+                idx = images.size() - 1;
+            }
+            while (srcFiles.size() <= idx) srcFiles.add(null);
+            srcFiles.set(idx, raw);
+            frameIdx[0] = idx;
+            updateView.run();
+        });
+
+        addFrameBtn.setOnAction(e -> {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("Add PNG Frame(s)");
+            chooser.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("PNG Images", "*.png"));
+            java.util.List<java.io.File> raw = chooser.showOpenMultipleDialog(
+                    imgBox.getScene() != null ? imgBox.getScene().getWindow() : null);
+            if (raw == null || raw.isEmpty()) return;
+            java.util.List<java.io.File> picked = new java.util.ArrayList<>(raw);
+            stopPlayback.run();
+            int insertAt = images.size();
+            picked.sort(java.util.Comparator.comparing(java.io.File::getName));
+            for (java.io.File f : picked) {
+                images.add(loadResized(f));
+                srcFiles.add(f);
+            }
+            frameIdx[0] = insertAt;
+            updateView.run();
+        });
+
+        removeFrameBtn.setOnAction(e -> {
+            if (images.isEmpty()) return;
+            int idx = frameIdx[0];
+            images.remove(idx);
+            if (idx < srcFiles.size()) srcFiles.remove(idx);
+            if (frameIdx[0] >= images.size() && frameIdx[0] > 0) frameIdx[0]--;
+            stopPlayback.run();
+            updateView.run();
+        });
+
+        // ── Scale spinner (per-state render scale) ────────────────────────────
+        javafx.scene.control.Spinner<Double> scaleField = new javafx.scene.control.Spinner<>(0.01, 10.0,
+                PlayerAnimator.getStateScale(currentState), 0.05);
+        scaleField.setEditable(true);
+        scaleField.setPrefWidth(80);
+        scaleField.setStyle("-fx-font-size: 11;");
+        scaleField.valueProperty().addListener((obs, o, n) -> {
+            if (n == null) return;
+            PlayerAnimator.State s = stateBox.getValue();
+            if (s != null) PlayerAnimator.setStateScale(s, n);
+        });
+
+        stateBox.setOnAction(ev -> {
+            if (stateBox.getValue() == null) return;
+            stopPlayback.run();
+            images.clear(); srcFiles.clear();
+            java.util.Collections.addAll(images, loadPngFrames(stateBox.getValue()));
+            frameIdx[0] = 0;
+            scaleField.getValueFactory().setValue(PlayerAnimator.getStateScale(stateBox.getValue()));
+            updateView.run();
+        });
+
+        // ── Assemble toolbars ─────────────────────────────────────────────────
+        HBox row1 = new HBox(8, stateHdr, stateBox,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                browseBtn, addFrameBtn, removeFrameBtn,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                saveBtn);
+        row1.setAlignment(Pos.CENTER_LEFT);
+        row1.setPadding(new Insets(8, 12, 6, 12));
+        row1.setStyle("-fx-background-color: #16213e;");
+
+        HBox row2 = new HBox(8, prev, frameLabel2, next, playBtn,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                speedHdr, speedSlider);
+        row2.setAlignment(Pos.CENTER_LEFT);
+        row2.setPadding(new Insets(6, 12, 6, 12));
+        row2.setStyle("-fx-background-color: #16213e;");
+
+        Label scaleHdr = styledLabel("Scale:", 11, false);
+
+        HBox row3 = new HBox(8,
+                sizeHdr, wField, styledLabel("×", 11, false), hField, lockRatio,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                scaleHdr, scaleField);
+        row3.setAlignment(Pos.CENTER_LEFT);
+        row3.setPadding(new Insets(6, 12, 6, 12));
+        row3.setStyle("-fx-background-color: #13132a;");
+
+        HBox row4 = new HBox(12,
+                hueL, hueS,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                satL, satS,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                briL, briS,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                conL, conS,
+                new Separator(javafx.geometry.Orientation.VERTICAL),
+                resetAdj);
+        row4.setAlignment(Pos.CENTER_LEFT);
+        row4.setPadding(new Insets(6, 12, 6, 12));
+        row4.setStyle("-fx-background-color: #13132a;");
+
+        VBox pane = new VBox(row1, new Separator(), row2, new Separator(),
+                row3, row4, new Separator(), imgBox);
+        VBox.setVgrow(imgBox, Priority.ALWAYS);
+        pane.setStyle("-fx-background-color: #1a1a2e;");
+
+        updateView.run();
+        return pane;
+    }
+
+    private static javafx.scene.control.Spinner<Double> adjSpinner() {
+        javafx.scene.control.Spinner<Double> s = new javafx.scene.control.Spinner<>(-1.0, 1.0, 0.0, 0.05);
+        s.setEditable(true);
+        s.setPrefWidth(80);
+        s.setStyle("-fx-font-size: 11;");
+        return s;
+    }
+    private static Label adjLabel(String text) {
+        Label l = new Label(text);
+        l.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
+        return l;
+    }
+    /** Returns the pixel dimensions of the standard sprite (derived from idle_0.png, fallback 128×128). */
+    private static int[] standardSpriteSize() {
+        java.io.File ref = new java.io.File("client/src/main/resources/graphics/sprites/idle_0.png");
+        if (ref.exists()) {
+            try {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(ref);
+                if (img != null) return new int[]{ img.getWidth(), img.getHeight() };
+            } catch (Exception ignored) {}
+        }
+        return new int[]{ 128, 128 };
+    }
+
+    /** Load a PNG file and resize it to the standard sprite dimensions. */
+    private static javafx.scene.image.Image loadResized(java.io.File f) {
+        try {
+            int[] sz = standardSpriteSize();
+            java.awt.image.BufferedImage src = javax.imageio.ImageIO.read(f);
+            java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(
+                    sz[0], sz[1], java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = out.createGraphics();
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                    java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(src, 0, 0, sz[0], sz[1], null);
+            g.dispose();
+            return javafx.embed.swing.SwingFXUtils.toFXImage(out, null);
+        } catch (Exception ignored) {
+            return new javafx.scene.image.Image(f.toURI().toString());
+        }
+    }
+
+    private javafx.scene.image.Image[] loadPngFrames(PlayerAnimator.State state) {
+        if (state == null) return new javafx.scene.image.Image[0];
+        java.io.File dir = new java.io.File(PlayerAnimator.STATE_SPRITES_DIR + state.name().toLowerCase());
+        if (!dir.exists()) return new javafx.scene.image.Image[0];
+        java.io.File[] files = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".png"));
+        if (files == null || files.length == 0) return new javafx.scene.image.Image[0];
+        java.util.Arrays.sort(files);
+        javafx.scene.image.Image[] imgs = new javafx.scene.image.Image[files.length];
+        for (int i = 0; i < files.length; i++) {
+            try { imgs[i] = new javafx.scene.image.Image(files[i].toURI().toString()); }
+            catch (Exception ignored) {}
+        }
+        return imgs;
     }
 
     // ── Mouse events ──────────────────────────────────────────────────────────
