@@ -253,6 +253,245 @@ public class PlayerAnimator {
         return KD_SPRITES[Math.min(idx, KD_FRAME_COUNT - 1)];
     }
 
+    // ── KIP_UP image sprites (optional — ku001.png … ku011.png) ──────────────
+    private static final int     KU_FRAME_COUNT  = 11;
+    private static volatile Image[] KU_SPRITES   = loadKuSprites();
+
+    private static Image[] loadKuSprites() {
+        Image[] imgs = new Image[KU_FRAME_COUNT];
+        for (int i = 1; i <= KU_FRAME_COUNT; i++) {
+            File f = new File(SPRITES_DIR + String.format("ku%03d.png", i));
+            if (f.exists()) {
+                try { imgs[i - 1] = removeWhiteBg(new Image(f.toURI().toString())); }
+                catch (Exception ignored) {}
+            }
+        }
+        return imgs;
+    }
+
+    public static boolean hasKuSprites() {
+        for (Image img : KU_SPRITES) if (img != null) return true;
+        return false;
+    }
+
+    public static void reloadKuSprites() { KU_SPRITES = loadKuSprites(); }
+
+    private static Image kuSpriteForFrame(int frame, int totalFrames) {
+        int idx = (int) Math.round(frame * (KU_FRAME_COUNT - 1.0) / Math.max(totalFrames - 1, 1));
+        return KU_SPRITES[Math.min(idx, KU_FRAME_COUNT - 1)];
+    }
+
+    // ── General per-state imported image sprites ──────────────────────────────
+    // Drop PNGs into: client/src/main/resources/graphics/sprites/states/{state_lower}/
+    // e.g. states/kip_up/001.png, 002.png, ...
+    // Files are sorted alphabetically so numbering determines frame order.
+    // These take priority over KU/KD sprites and mob skins.
+
+    static final String STATE_SPRITES_DIR = SPRITES_DIR + "states/";
+
+    private static final ConcurrentHashMap<State, Image[]> STATE_SPRITES    = loadAllStateSprites();
+    private static final ConcurrentHashMap<State, Double>  STATE_SCALES     = loadStateScales();
+    private static final String STATE_SCALES_FILE = STATE_SPRITES_DIR + "scales.json";
+
+    private static Image[] loadStateSpritesFor(State s) {
+        File dir = new File(STATE_SPRITES_DIR + s.name().toLowerCase());
+        if (!dir.exists()) return null;
+        File[] files = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".png"));
+        if (files == null || files.length == 0) return null;
+        java.util.Arrays.sort(files);
+        Image[] imgs = new Image[files.length];
+        for (int i = 0; i < files.length; i++) {
+            try { imgs[i] = cropToContent(new Image(files[i].toURI().toString())); }
+            catch (Exception ignored) {}
+        }
+        return imgs;
+    }
+
+    /**
+     * Crops to the bounding box of non-transparent content, removing blank margins.
+     * Also converts white/near-white pixels to transparent and hardens dark edge pixels.
+     */
+    static Image cropToContent(Image src) {
+        int w = (int) src.getWidth(), h = (int) src.getHeight();
+        int[] pixels = new int[w * h];
+        src.getPixelReader().getPixels(0, 0, w, h,
+                javafx.scene.image.PixelFormat.getIntArgbInstance(), pixels, 0, w);
+
+        // 1. Strip white background and harden anti-aliased edges
+        for (int i = 0; i < pixels.length; i++) {
+            int a = (pixels[i] >> 24) & 0xFF;
+            int r = (pixels[i] >> 16) & 0xFF;
+            int g = (pixels[i] >>  8) & 0xFF;
+            int b =  pixels[i]        & 0xFF;
+            int brightness = (r + g + b) / 3;
+            if (a < 10 || brightness > 200) {
+                pixels[i] = 0; // transparent
+            } else {
+                // Fully opaque — keep original colour
+                pixels[i] = (255 << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
+
+        // 2. Find tight content bounds
+        int top = h, bottom = -1, left = w, right = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (((pixels[y * w + x] >> 24) & 0xFF) > 0) {
+                    if (y < top)    top    = y;
+                    if (y > bottom) bottom = y;
+                    if (x < left)   left   = x;
+                    if (x > right)  right  = x;
+                }
+            }
+        }
+        if (bottom < 0) return src; // fully transparent — return original
+        int cw = right - left + 1, ch = bottom - top + 1;
+
+        // 3. Write cropped image
+        WritableImage out = new WritableImage(cw, ch);
+        int[] cropped = new int[cw * ch];
+        for (int y = 0; y < ch; y++)
+            System.arraycopy(pixels, (top + y) * w + left, cropped, y * cw, cw);
+        out.getPixelWriter().setPixels(0, 0, cw, ch,
+                javafx.scene.image.PixelFormat.getIntArgbInstance(), cropped, 0, cw);
+        return out;
+    }
+
+    private static ConcurrentHashMap<State, Image[]> loadAllStateSprites() {
+        ConcurrentHashMap<State, Image[]> map = new ConcurrentHashMap<>();
+        for (State s : State.values()) {
+            Image[] imgs = loadStateSpritesFor(s);
+            if (imgs != null) map.put(s, imgs);
+        }
+        return map;
+    }
+
+    private static ConcurrentHashMap<State, Double> loadStateScales() {
+        ConcurrentHashMap<State, Double> map = new ConcurrentHashMap<>();
+        try {
+            Path p = Paths.get(STATE_SCALES_FILE);
+            if (Files.exists(p)) {
+                ObjectMapper om = new ObjectMapper();
+                om.readTree(p.toFile()).fields().forEachRemaining(e -> {
+                    try { map.put(State.valueOf(e.getKey()), e.getValue().asDouble(1.0)); }
+                    catch (IllegalArgumentException ignored) {}
+                });
+            }
+        } catch (Exception ignored) {}
+        return map;
+    }
+
+    public static void saveStateScales() {
+        try {
+            Path p = Paths.get(STATE_SCALES_FILE);
+            Files.createDirectories(p.getParent());
+            ObjectMapper om = new ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode root = om.createObjectNode();
+            STATE_SCALES.forEach((s, v) -> root.put(s.name(), v));
+            om.writerWithDefaultPrettyPrinter().writeValue(p.toFile(), root);
+        } catch (Exception ignored) {}
+    }
+
+    public static boolean hasStateSprites(State s) {
+        Image[] imgs = STATE_SPRITES.get(s);
+        if (imgs == null) return false;
+        for (Image img : imgs) if (img != null) return true;
+        return false;
+    }
+
+    public static void reloadStateSprites(State s) {
+        Image[] imgs = loadStateSpritesFor(s);
+        if (imgs != null) STATE_SPRITES.put(s, imgs);
+        else STATE_SPRITES.remove(s);
+    }
+
+    public static void clearStateSprites(State s) { STATE_SPRITES.remove(s); }
+
+    /** Advances the animation frame for the given timestamp without drawing anything. */
+    public void tick(long nowMs) { advanceFrame(nowMs); }
+
+    /**
+     * Returns the sprite image for the current animation frame, or null if none.
+     * Used by the Import Sprites preview to fit-to-canvas independently of SKIN_HEIGHT.
+     */
+    public Image getCurrentFrameImage() {
+        int total = poseCount(state);
+        if (hasStateSprites(state))
+            return stateSpriteForFrame(frame, total);
+        if (state == State.KIP_UP && hasKuSprites())
+            return kuSpriteForFrame(frame, total);
+        if (state == State.KNOCKED_DOWN && hasKdSprites())
+            return kdSpriteForFrame(frame, total);
+        return null;
+    }
+
+    public static double getStateScale(State s) { return STATE_SCALES.getOrDefault(s, 1.0); }
+
+    public static void setStateScale(State s, double v) {
+        STATE_SCALES.put(s, v);
+        saveStateScales();
+    }
+
+    public static int getStateFrameCount(State s) {
+        Image[] imgs = STATE_SPRITES.get(s);
+        return imgs != null ? imgs.length : 0;
+    }
+
+    private Image stateSpriteForFrame(int frame, int totalFrames) {
+        Image[] imgs = STATE_SPRITES.get(state);
+        if (imgs == null || imgs.length == 0) return null;
+        int idx = (int) Math.round(frame * (imgs.length - 1.0) / Math.max(totalFrames - 1, 1));
+        return imgs[Math.min(idx, imgs.length - 1)];
+    }
+
+    // ── Mob skin (per-state flat image overlay) ───────────────────────────────
+    // Drop PNGs into: client/src/main/resources/graphics/sprites/mobs/{skinName}/{state}.png
+    // e.g. mobs/wolf/quad_idle.png, mobs/wolf/trot.png, mobs/wolf/quad_death.png
+    // Images facing RIGHT. The existing mirror transform handles left-facing automatically.
+    // States with no image fall back to the procedural stick figure.
+
+    /** Natural draw height in pose-coordinate units (matches ~humanoid standing height). */
+    private static final double SKIN_HEIGHT = 100.0;
+
+    private static final ConcurrentHashMap<String, ConcurrentHashMap<State, Image>>
+            SKIN_CACHE = new ConcurrentHashMap<>();
+
+    /** Per-instance skin name; null = procedural only. */
+    private volatile String skin = null;
+
+    public void setSkin(String skinName) {
+        this.skin = skinName;
+        if (skinName != null) loadSkin(skinName);
+    }
+
+    public String getSkin() { return skin; }
+
+    private static void loadSkin(String skinName) {
+        if (SKIN_CACHE.containsKey(skinName)) return;
+        ConcurrentHashMap<State, Image> map = new ConcurrentHashMap<>();
+        String dir = SPRITES_DIR + "mobs/" + skinName + "/";
+        for (State s : State.values()) {
+            File f = new File(dir + s.name().toLowerCase() + ".png");
+            if (f.exists()) {
+                try { map.put(s, removeWhiteBg(new Image(f.toURI().toString()))); }
+                catch (Exception ignored) {}
+            }
+        }
+        SKIN_CACHE.put(skinName, map);
+    }
+
+    /** Reloads a skin from disk (call after dropping in new images). */
+    public static void reloadSkin(String skinName) {
+        SKIN_CACHE.remove(skinName);
+        loadSkin(skinName);
+    }
+
+    private Image skinImageFor(State s) {
+        if (skin == null) return null;
+        ConcurrentHashMap<State, Image> map = SKIN_CACHE.get(skin);
+        return map != null ? map.get(s) : null;
+    }
+
     // ── One-shot state flags ──────────────────────────────────────────────────
     // States in this set play through once and hold on the last frame.
     private static final String STATE_FLAGS_FILE =
@@ -555,16 +794,34 @@ public class PlayerAnimator {
         gc.scale(scale, scale);
         if (shouldMirror()) gc.scale(-1, 1);
 
-        gc.setFill(color);
-        gc.setStroke(color);
-        gc.setLineWidth(LINE_W);
-        gc.setLineCap(StrokeLineCap.ROUND);
-        gc.setLineJoin(StrokeLineJoin.ROUND);
+        Image skinImg = null;
+        double spriteScale = 1.0;
+        if (hasStateSprites(state)) {
+            skinImg = stateSpriteForFrame(frame, poseCount(state));
+            spriteScale = getStateScale(state);
+        } else {
+            skinImg = skinImageFor(state);
+        }
+        if (skinImg == null && state == State.KIP_UP && hasKuSprites())
+            skinImg = kuSpriteForFrame(frame, poseCount(state));
+        if (skinImg == null && state == State.KNOCKED_DOWN && hasKdSprites())
+            skinImg = kdSpriteForFrame(frame, poseCount(state));
+        if (skinImg != null) {
+            double h = SKIN_HEIGHT * spriteScale;
+            double imgW = skinImg.getWidth() * h / skinImg.getHeight();
+            gc.drawImage(skinImg, -imgW / 2, -h, imgW, h);
+        } else {
+            gc.setFill(color);
+            gc.setStroke(color);
+            gc.setLineWidth(LINE_W);
+            gc.setLineCap(StrokeLineCap.ROUND);
+            gc.setLineJoin(StrokeLineJoin.ROUND);
 
-        if (MobCategory.of(state) == MobCategory.QUADRUPED)
-            drawPoseQuad(gc, pose);
-        else
-            drawPose(gc, pose);
+            if (MobCategory.of(state) == MobCategory.QUADRUPED)
+                drawPoseQuad(gc, pose);
+            else
+                drawPose(gc, pose);
+        }
 
         gc.restore();
     }

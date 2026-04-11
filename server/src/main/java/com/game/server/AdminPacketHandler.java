@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.game.server.db.BoardRepository;
 import com.game.server.db.CharacterRepository;
 import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.UserRepository;
@@ -31,6 +32,7 @@ public class AdminPacketHandler {
     private final UserRepository           userRepo     = new UserRepository();
     private final CharacterRepository      charRepo     = new CharacterRepository();
     private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
+    private final BoardRepository          boardRepo    = new BoardRepository();
 
     public AdminPacketHandler(AuthHandler authHandler, GameHandler gameHandler) {
         this.authHandler = authHandler;
@@ -57,6 +59,7 @@ public class AdminPacketHandler {
             case ADMIN_RESTART_REQUEST      -> handleRestart(socket, packet, session, addr, port);
             case ADMIN_DEPLOY_REQUEST       -> handleDeploy(socket, packet, session, addr, port);
             case ADMIN_SAVE_SETTINGS_REQUEST -> handleSaveSettings(socket, packet, session, addr, port);
+            case ADMIN_GET_BOARDS_REQUEST    -> handleGetBoards(socket, session, addr, port);
             default -> log.warn("Unhandled admin packet type: {}", packet.type);
         }
     }
@@ -184,6 +187,26 @@ public class AdminPacketHandler {
         sendResponse(socket, out, PacketType.ADMIN_SET_DEV_RESPONSE, addr, port);
     }
 
+    private void handleGetBoards(DatagramSocket socket, Session session,
+                                 InetAddress addr, int port) throws Exception {
+        ObjectNode out = PacketSerializer.mapper().createObjectNode();
+        try {
+            java.util.List<BoardRepository.BoardRecord> boards = boardRepo.findAll();
+            ArrayNode arr = out.putArray("boards");
+            for (BoardRepository.BoardRecord b : boards) {
+                ObjectNode n = arr.addObject();
+                n.put("id",   b.id());
+                n.put("name", b.name());
+            }
+            out.put("success", true);
+        } catch (Exception e) {
+            out.put("success", false);
+            out.put("message", e.getMessage());
+            log.warn("ADMIN_GET_BOARDS failed for '{}': {}", session.username(), e.getMessage());
+        }
+        sendResponse(socket, out, PacketType.ADMIN_GET_BOARDS_RESPONSE, addr, port);
+    }
+
     private void handleSaveSettings(DatagramSocket socket, Packet in, Session session,
                                     InetAddress addr, int port) throws Exception {
         ObjectNode out = PacketSerializer.mapper().createObjectNode();
@@ -215,6 +238,10 @@ public class AdminPacketHandler {
                                             ? in.payload.get("rebootDelaySecs").asInt(60) : 60;
             String  rebootMessage         = in.payload.has("rebootMessage")
                                             ? in.payload.get("rebootMessage").asText("") : "";
+            Long    startingBoardId       = in.payload.has("startingBoardId")
+                                            && !in.payload.get("startingBoardId").isNull()
+                                            && in.payload.get("startingBoardId").asLong(0) > 0
+                                            ? in.payload.get("startingBoardId").asLong() : null;
 
             boolean saved = settingsRepo.save(gravity, jumpStrength, runSpeed,
                     allowRememberPassword, showTestNpc, testNpcX, testNpcY,
@@ -222,6 +249,7 @@ public class AdminPacketHandler {
                     externalServerHost, externalServerPort,
                     allowExternalAdmin, allowExternalDev,
                     rebootDelaySecs, rebootMessage,
+                    startingBoardId,
                     session.username());
             if (saved) {
                 gameHandler.updateSettings(gravity, jumpStrength, runSpeed,
@@ -230,6 +258,7 @@ public class AdminPacketHandler {
                         externalServerHost, externalServerPort,
                         allowExternalAdmin, allowExternalDev,
                         rebootDelaySecs, rebootMessage,
+                        startingBoardId,
                         socket);
                 out.put("success",              true);
                 out.put("gravity",              gravity);
@@ -360,6 +389,7 @@ public class AdminPacketHandler {
             case ADMIN_RESTART_REQUEST        -> PacketType.ADMIN_RESTART_RESPONSE;
             case ADMIN_DEPLOY_REQUEST         -> PacketType.ADMIN_DEPLOY_RESPONSE;
             case ADMIN_SAVE_SETTINGS_REQUEST  -> PacketType.ADMIN_SAVE_SETTINGS_RESPONSE;
+            case ADMIN_GET_BOARDS_REQUEST     -> PacketType.ADMIN_GET_BOARDS_RESPONSE;
             default                           -> PacketType.ERROR;
         };
     }

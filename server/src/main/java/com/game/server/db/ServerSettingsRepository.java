@@ -19,13 +19,14 @@ public class ServerSettingsRepository {
                            String localServerHost, int localServerPort,
                            String externalServerHost, int externalServerPort,
                            boolean allowExternalAdmin, boolean allowExternalDev,
-                           int rebootDelaySecs, String rebootMessage) {
+                           int rebootDelaySecs, String rebootMessage,
+                           Long startingBoardId) {
         public static final Settings DEFAULTS = new Settings(
                 0.5f, 8.0f, 6.0f,
                 false, true, 1200f, 0f,
                 "localhost", 9876, "", 9876,
                 false, false,
-                60, "");
+                60, "", null);
     }
 
     /**
@@ -43,13 +44,15 @@ public class ServerSettingsRepository {
                        local_server_host, local_server_port,
                        external_server_host, external_server_port,
                        allow_external_admin, allow_external_dev,
-                       reboot_delay_secs, reboot_message
+                       reboot_delay_secs, reboot_message, starting_board_id
                 FROM ServerSettings WHERE id = 1
                 """;
         try (Connection c = db(); Statement s = c.createStatement()) {
             s.execute(upsert);
             try (ResultSet rs = s.executeQuery(select)) {
                 if (rs.next()) {
+                    long sbid = rs.getLong("starting_board_id");
+                    Long startingBoardId = rs.wasNull() ? null : sbid;
                     return new Settings(
                             rs.getFloat("gravity"),
                             rs.getFloat("jump_strength"),
@@ -65,7 +68,8 @@ public class ServerSettingsRepository {
                             rs.getBoolean("allow_external_admin"),
                             rs.getBoolean("allow_external_dev"),
                             rs.getInt("reboot_delay_secs"),
-                            rs.getString("reboot_message"));
+                            rs.getString("reboot_message"),
+                            startingBoardId);
                 }
             }
         } catch (SQLException e) {
@@ -84,6 +88,7 @@ public class ServerSettingsRepository {
                         String externalServerHost, int externalServerPort,
                         boolean allowExternalAdmin, boolean allowExternalDev,
                         int rebootDelaySecs, String rebootMessage,
+                        Long startingBoardId,
                         String updatedBy) {
         String sql = """
                 INSERT INTO ServerSettings
@@ -93,8 +98,8 @@ public class ServerSettingsRepository {
                      external_server_host, external_server_port,
                      allow_external_admin, allow_external_dev,
                      reboot_delay_secs, reboot_message,
-                     updated_by)
-                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     starting_board_id, updated_by)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     gravity                 = VALUES(gravity),
                     jump_strength           = VALUES(jump_strength),
@@ -111,6 +116,7 @@ public class ServerSettingsRepository {
                     allow_external_dev      = VALUES(allow_external_dev),
                     reboot_delay_secs       = VALUES(reboot_delay_secs),
                     reboot_message          = VALUES(reboot_message),
+                    starting_board_id       = VALUES(starting_board_id),
                     updated_by              = VALUES(updated_by)
                 """;
         try (Connection c = db(); PreparedStatement ps = c.prepareStatement(sql)) {
@@ -129,14 +135,16 @@ public class ServerSettingsRepository {
             ps.setBoolean(13, allowExternalDev);
             ps.setInt(14, rebootDelaySecs);
             ps.setString(15, rebootMessage);
-            ps.setString(16, updatedBy);
+            if (startingBoardId != null) ps.setLong(16, startingBoardId);
+            else                         ps.setNull(16, java.sql.Types.BIGINT);
+            ps.setString(17, updatedBy);
             ps.executeUpdate();
-            log.info("ServerSettings saved by '{}': gravity={}, jump={}, runSpeed={}, rememberPwd={}, testNpc={}, local={}:{}, ext={}:{}, extAdmin={}, extDev={}, reboot={}s",
+            log.info("ServerSettings saved by '{}': gravity={}, jump={}, runSpeed={}, rememberPwd={}, testNpc={}, local={}:{}, ext={}:{}, extAdmin={}, extDev={}, reboot={}s, startingBoard={}",
                     updatedBy, gravity, jumpStrength, runSpeed,
                     allowRememberPassword, showTestNpc,
                     localServerHost, localServerPort,
                     externalServerHost, externalServerPort,
-                    allowExternalAdmin, allowExternalDev, rebootDelaySecs);
+                    allowExternalAdmin, allowExternalDev, rebootDelaySecs, startingBoardId);
             return true;
         } catch (SQLException e) {
             log.error("Failed to save ServerSettings: {}", e.getMessage(), e);

@@ -124,6 +124,19 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
+    private static final String DDL_CHARACTER_INVENTORY = """
+            CREATE TABLE IF NOT EXISTS character_inventory (
+                id           BIGINT       AUTO_INCREMENT PRIMARY KEY,
+                character_id BIGINT       NOT NULL,
+                item_name    VARCHAR(100) NOT NULL,
+                quantity     INT          NOT NULL DEFAULT 1,
+                equipped     TINYINT(1)   NOT NULL DEFAULT 0,
+                CONSTRAINT fk_inv_char
+                    FOREIGN KEY (character_id) REFERENCES characters(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
     private static final String DDL_SERVER_CHANGES = """
             CREATE TABLE IF NOT EXISTS MultiplayerServerChanges (
                 id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
@@ -185,7 +198,11 @@ public final class DatabaseManager {
             addColumnIfMissing(conn, "characters", "stat_sta",  "INT NOT NULL DEFAULT 1");
             addColumnIfMissing(conn, "characters", "stat_agi",  "INT NOT NULL DEFAULT 1");
             addColumnIfMissing(conn, "characters", "stat_dex",  "INT NOT NULL DEFAULT 1");
-            addColumnIfMissing(conn, "characters", "stat_luk",  "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "stat_luk",         "INT NOT NULL DEFAULT 1");
+            addColumnIfMissing(conn, "characters", "currency_platinum", "INT NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "characters", "currency_gold",     "INT NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "characters", "currency_silver",   "INT NOT NULL DEFAULT 0");
+            addColumnIfMissing(conn, "characters", "currency_bronze",   "INT NOT NULL DEFAULT 0");
             stmt.execute(DDL_SERVER_SETTINGS);
             addColumnIfMissing(conn, "ServerSettings", "allow_remember_password", "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "ServerSettings", "show_test_npc",           "TINYINT(1)   NOT NULL DEFAULT 1");
@@ -199,8 +216,10 @@ public final class DatabaseManager {
             addColumnIfMissing(conn, "ServerSettings", "allow_external_dev",      "TINYINT(1)   NOT NULL DEFAULT 0");
             addColumnIfMissing(conn, "ServerSettings", "reboot_delay_secs",       "INT          NOT NULL DEFAULT 60");
             addColumnIfMissing(conn, "ServerSettings", "reboot_message",          "VARCHAR(500) NOT NULL DEFAULT ''");
+            addColumnIfMissing(conn, "ServerSettings", "starting_board_id",       "BIGINT       NULL DEFAULT NULL");
             stmt.execute(DDL_BOARDS);
             stmt.execute(DDL_BOARD_PROGRESS);
+            stmt.execute(DDL_CHARACTER_INVENTORY);
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }

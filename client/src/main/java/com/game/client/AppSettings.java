@@ -65,6 +65,7 @@ public final class AppSettings {
     private static volatile float     testNpcY         = 14f;
     private static volatile int       rebootDelaySecs  = 60;
     private static volatile String    rebootMessage    = "";
+    private static volatile long      startingBoardId  = 0L;
     private static volatile boolean   combatShowHealthBar  = true;
     private static volatile boolean   combatShowHits       = true;
     private static volatile boolean   combatShowDamage     = true;
@@ -132,6 +133,7 @@ public final class AppSettings {
         testNpcY          = floatOf(merged, "gameplay.testNpcY",   testNpcY);
         rebootDelaySecs   = intOf(merged,   "server.rebootDelaySecs", rebootDelaySecs);
         rebootMessage     = merged.getProperty("server.rebootMessage", rebootMessage);
+        startingBoardId   = longOf(merged,  "gameplay.startingBoardId", startingBoardId);
         combatShowHealthBar  = boolOf(merged, "combat.showHealthBar",  combatShowHealthBar);
         combatShowHits       = boolOf(merged, "combat.showHits",       combatShowHits);
         combatShowDamage     = boolOf(merged, "combat.showDamage",     combatShowDamage);
@@ -184,6 +186,7 @@ public final class AppSettings {
         p.setProperty("gameplay.testNpcY",         String.valueOf(testNpcY));
         p.setProperty("server.rebootDelaySecs",    String.valueOf(rebootDelaySecs));
         p.setProperty("server.rebootMessage",      rebootMessage);
+        p.setProperty("gameplay.startingBoardId",  String.valueOf(startingBoardId));
         p.setProperty("combat.showHealthBar",   String.valueOf(combatShowHealthBar));
         p.setProperty("combat.showHits",        String.valueOf(combatShowHits));
         p.setProperty("combat.showDamage",      String.valueOf(combatShowDamage));
@@ -268,6 +271,8 @@ public final class AppSettings {
     public static void      setRebootDelaySecs(int v)  { rebootDelaySecs = v; }
     public static String    getRebootMessage()         { return rebootMessage; }
     public static void      setRebootMessage(String v) { rebootMessage = v == null ? "" : v; }
+    public static long      getStartingBoardId()       { return startingBoardId; }
+    public static void      setStartingBoardId(long v) { startingBoardId = v; }
 
     public static void setResolution(GameResolution v)    { resolution      = v; }
     public static void      setServerHost(String v)            { serverHost           = v; }
@@ -310,6 +315,11 @@ public final class AppSettings {
 
     private static float floatOf(Properties p, String key, float def) {
         try { return Float.parseFloat(p.getProperty(key, String.valueOf(def))); }
+        catch (NumberFormatException e) { return def; }
+    }
+
+    private static long longOf(Properties p, String key, long def) {
+        try { return Long.parseLong(p.getProperty(key, String.valueOf(def))); }
         catch (NumberFormatException e) { return def; }
     }
 }

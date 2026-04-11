@@ -1,5 +1,6 @@
 package com.game.client.ui;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.client.AppSettings;
 import com.game.client.BuildInfo;
@@ -26,6 +27,8 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -40,6 +43,9 @@ public class GameSettingsPanel {
     private Label     rebootStatusLabel;
     private Label     commitStatusLabel;
     private Consumer<Integer> onServerRestart;
+
+    private ComboBox<String> startingBoardCombo;
+    private final List<Long> boardIdList = new ArrayList<>();
 
     public GameSettingsPanel(UDPClient client) {
         this.client = client;
@@ -60,6 +66,21 @@ public class GameSettingsPanel {
                                     ? packet.payload.get("message").asText("Save failed.")
                                     : "Save failed.";
                     if (commitStatusLabel != null) setStatus(commitStatusLabel, msg, ok);
+                }
+                case ADMIN_GET_BOARDS_RESPONSE -> {
+                    if (startingBoardCombo == null) return;
+                    if (!packet.payload.has("boards")) return;
+                    long currentId = AppSettings.getStartingBoardId();
+                    boardIdList.clear();
+                    startingBoardCombo.getItems().clear();
+                    startingBoardCombo.getItems().add("(None)");
+                    boardIdList.add(0L);
+                    for (JsonNode b : packet.payload.get("boards")) {
+                        boardIdList.add(b.get("id").asLong());
+                        startingBoardCombo.getItems().add(b.get("name").asText());
+                    }
+                    int sel = boardIdList.indexOf(currentId);
+                    startingBoardCombo.getSelectionModel().select(sel >= 0 ? sel : 0);
                 }
                 case ADMIN_RESTART_RESPONSE -> {
                     boolean ok = packet.payload.get("success").asBoolean();
@@ -263,6 +284,31 @@ public class GameSettingsPanel {
         VBox connectionSection = section("Connection", localHostRow, localPortRow, extHostRow, extPortRow,
                 allowExtAdminBox, allowExtDevBox, connNote);
 
+        // ── Starting Board ────────────────────────────────────────────────────
+        Label startingBoardDesc = new Label(
+                "The board players are placed on when they first join the game world.");
+        startingBoardDesc.getStyleClass().addAll("text-muted", "font-11");
+        startingBoardDesc.setWrapText(true);
+
+        Label startingBoardLbl = new Label("Starting board:");
+        startingBoardLbl.setMinWidth(140);
+        startingBoardLbl.getStyleClass().addAll("text-secondary", "font-12");
+
+        startingBoardCombo = new ComboBox<>();
+        startingBoardCombo.getItems().add("(Loading…)");
+        startingBoardCombo.getSelectionModel().select(0);
+        startingBoardCombo.getStyleClass().add("combo-dark");
+        startingBoardCombo.setPrefWidth(220);
+
+        Button refreshBoardsBtn = new Button("↻");
+        refreshBoardsBtn.getStyleClass().add("btn-secondary");
+        refreshBoardsBtn.setOnAction(e -> requestBoardList());
+
+        HBox startingBoardRow = new HBox(12, startingBoardLbl, startingBoardCombo, refreshBoardsBtn);
+        startingBoardRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox startingBoardSection = section("Starting Board", startingBoardDesc, startingBoardRow);
+
         // ── Reboot Settings ───────────────────────────────────────────────────
         Label delayLbl = new Label("Delay (seconds):");
         delayLbl.setMinWidth(labelW);
@@ -368,6 +414,11 @@ public class GameSettingsPanel {
                 payload.put("allowExternalDev",      allowExtDevBox.isSelected());
                 payload.put("rebootDelaySecs",       rebootDelay);
                 payload.put("rebootMessage",         rebootMessageField.getText().trim());
+                int boardIdx = startingBoardCombo.getSelectionModel().getSelectedIndex();
+                long startingBoardId = (boardIdx > 0 && boardIdx < boardIdList.size())
+                        ? boardIdList.get(boardIdx) : 0L;
+                AppSettings.setStartingBoardId(startingBoardId);
+                if (startingBoardId > 0) payload.put("startingBoardId", startingBoardId);
                 client.sendToAdmin(new Packet(PacketType.ADMIN_SAVE_SETTINGS_REQUEST,
                         SessionStore.getToken(), payload));
                 setStatus(statusLabel, "Sending to server…", true);
@@ -419,13 +470,21 @@ public class GameSettingsPanel {
         VBox uploadSection = section("Uploads", keyRow, uploadRow);
 
         VBox content = new VBox(gravitySection, jumpSection, speedSection,
-                rememberPassSection, gameplaySection, connectionSection, rebootSection, uploadSection, buttons);
+                rememberPassSection, gameplaySection, connectionSection,
+                startingBoardSection, rebootSection, uploadSection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
         scroll.getStyleClass().add("scroll-dark");
+
+        requestBoardList();
         return scroll;
+    }
+
+    private void requestBoardList() {
+        client.sendToAdmin(new Packet(PacketType.ADMIN_GET_BOARDS_REQUEST,
+                SessionStore.getToken(), PacketSerializer.emptyPayload()));
     }
 
     private static VBox section(String title, Node... children) {

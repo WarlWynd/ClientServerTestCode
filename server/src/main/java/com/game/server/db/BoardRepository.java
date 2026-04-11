@@ -73,6 +73,19 @@ public class BoardRepository {
         return result;
     }
 
+    /** Returns all boards across all users, ordered by name. */
+    public List<BoardRecord> findAll() throws SQLException {
+        String sql = "SELECT id, user_id, name, `rows`, `cols`, csv_data, created_at, updated_at " +
+                     "FROM boards ORDER BY name";
+        List<BoardRecord> result = new ArrayList<>();
+        try (Connection conn = db.getConnection();
+             java.sql.Statement s = conn.createStatement();
+             ResultSet rs = s.executeQuery(sql)) {
+            while (rs.next()) result.add(fromRow(rs));
+        }
+        return result;
+    }
+
     /** Returns a single board by id, or null if not found. */
     public BoardRecord findById(long boardId) throws SQLException {
         String sql = "SELECT id, user_id, name, `rows`, `cols`, csv_data, created_at, updated_at " +

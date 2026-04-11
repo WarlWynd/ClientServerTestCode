@@ -63,6 +63,7 @@ public class GameHandler {
                                String externalServerHost, int externalServerPort,
                                boolean allowExternalAdmin, boolean allowExternalDev,
                                int rebootDelaySecs, String rebootMessage,
+                               Long startingBoardId,
                                DatagramSocket socket) throws Exception {
         currentSettings = new ServerSettingsRepository.Settings(
                 gravity, jumpStrength, runSpeed,
@@ -70,7 +71,8 @@ public class GameHandler {
                 localServerHost, localServerPort,
                 externalServerHost, externalServerPort,
                 allowExternalAdmin, allowExternalDev,
-                rebootDelaySecs, rebootMessage);
+                rebootDelaySecs, rebootMessage,
+                startingBoardId);
         broadcastSettings(socket);
     }
 
@@ -210,6 +212,7 @@ public class GameHandler {
         node.put("allowExternalDev",      s.allowExternalDev());
         node.put("rebootDelaySecs",       s.rebootDelaySecs());
         node.put("rebootMessage",         s.rebootMessage());
+        if (s.startingBoardId() != null) node.put("startingBoardId", s.startingBoardId());
         return node;
     }
 

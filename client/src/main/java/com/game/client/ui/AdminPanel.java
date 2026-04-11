@@ -27,6 +27,7 @@ import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.util.Duration;
+import java.util.function.Consumer;
 
 
 /**
@@ -42,6 +43,8 @@ public class AdminPanel {
     private static final Logger log = LoggerFactory.getLogger(AdminPanel.class);
 
     private final UDPClient client;
+
+    private GameSettingsPanel gameSettingsPanel;
 
     private Label     headerLabel;
     private Label     statusLabel;
@@ -132,7 +135,21 @@ public class AdminPanel {
         ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
 
-        return playersPage;
+        // ── Admin Settings tab ────────────────────────────────────────────────
+        gameSettingsPanel = new GameSettingsPanel(client);
+
+        Tab playersTab  = new Tab("👥 Players",        playersPage);
+        Tab settingsTab = new Tab("⚙ Admin Settings",  gameSettingsPanel.buildView());
+        playersTab.setClosable(false);
+        settingsTab.setClosable(false);
+
+        TabPane tabs = new TabPane(playersTab, settingsTab);
+        tabs.getStyleClass().add("tab-pane-dark");
+        return tabs;
+    }
+
+    public void setRestartCallback(Consumer<Integer> callback) {
+        if (gameSettingsPanel != null) gameSettingsPanel.setRestartCallback(callback);
     }
 
     private VBox buildSection(String title, Node... children) {
@@ -165,6 +182,7 @@ public class AdminPanel {
     // ── Packet handling (called by GameScreen) ────────────────────────────────
 
     public void onPacket(Packet packet) {
+        if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
         switch (packet.type) {
             case ADMIN_USER_LIST_RESPONSE -> {
                 boolean success = packet.payload.get("success").asBoolean();

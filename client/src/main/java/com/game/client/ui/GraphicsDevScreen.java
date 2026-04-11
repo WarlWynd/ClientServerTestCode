@@ -24,7 +24,6 @@ import java.nio.file.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * Graphics Developer Tab.
@@ -52,8 +51,6 @@ public class GraphicsDevScreen {
     private final Stage     stage;
     private final UDPClient client;
 
-    private GameSettingsPanel gameSettingsPanel;
-
     private ListView<String> fileList;
     private ImageView        previewImage;
     private Label            previewNameLabel;
@@ -66,39 +63,25 @@ public class GraphicsDevScreen {
         this.client = client;
     }
 
-    public void setRestartCallback(Consumer<Integer> callback) {
-        if (gameSettingsPanel != null) gameSettingsPanel.setRestartCallback(callback);
-    }
-
-    public void onPacket(Packet packet) {
-        if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
-    }
-
     public Node build() {
         Tab filesTab      = new Tab("📁 Files",            buildFilesView());
         Tab spritesTab    = new Tab("🕹 Sprite Preview",   buildSpritePreview());
+        Tab importTab     = new Tab("🖼 Import Sprites",   buildImportSpritesTab());
         Tab editorTab     = new Tab("✏ Pose Editor",       new SpriteEditorPanel().build());
         Tab mobTab        = new Tab("👾 Mob Manager",      new MobManagerPanel().build());
         Tab lootTab       = new Tab("📦 Loot Tables",     new LootTablePanel().build());
-        Tab itemTab       = new Tab("🗡 Item Registry",    new ItemRegistryPanel().build());
+        Tab itemTab       = new Tab("🗡 Item Registry",    new ItemRegistryPanel(client).build());
         Tab mechanicsTab  = new Tab("🎮 Game Mechanics",   new GameMechanicsPanel().build());
         filesTab.setClosable(false);
         spritesTab.setClosable(false);
+        importTab.setClosable(false);
         editorTab.setClosable(false);
         mobTab.setClosable(false);
         lootTab.setClosable(false);
         itemTab.setClosable(false);
         mechanicsTab.setClosable(false);
 
-        TabPane inner;
-        if (client != null) {
-            gameSettingsPanel = new GameSettingsPanel(client);
-            Tab gameSettingsTab = new Tab("🎛 Game Settings", gameSettingsPanel.buildView());
-            gameSettingsTab.setClosable(false);
-            inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab, gameSettingsTab);
-        } else {
-            inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
-        }
+        TabPane inner = new TabPane(filesTab, importTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;
@@ -366,6 +349,330 @@ public class GraphicsDevScreen {
         }
     }
 
+    // ── Import Sprites Tab ────────────────────────────────────────────────────
+
+    private Node buildImportSpritesTab() {
+        // ── Body type selector ────────────────────────────────────────────────
+        Label bodyTypeLabel = styledLabel("Body Type", 13, true);
+        ComboBox<MobCategory> bodyTypePicker = new ComboBox<>();
+        bodyTypePicker.getItems().addAll(MobCategory.values());
+        bodyTypePicker.setValue(MobCategory.HUMANOID);
+        bodyTypePicker.getStyleClass().add("combo-dark");
+        bodyTypePicker.setMaxWidth(Double.MAX_VALUE);
+
+        // ── State selector (multi-select) ─────────────────────────────────────
+        Label stateLabel = styledLabel("Animation State", 13, true);
+        ListView<PlayerAnimator.State> statePicker = new ListView<>();
+        statePicker.getItems().addAll(MobCategory.HUMANOID.sortedStates());
+        statePicker.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        statePicker.getSelectionModel().select(PlayerAnimator.State.IDLE);
+        statePicker.getStyleClass().add("list-dark");
+        statePicker.setPrefHeight(160);
+        statePicker.setMaxWidth(Double.MAX_VALUE);
+
+        // ── Frame list ────────────────────────────────────────────────────────
+        Label framesLabel = styledLabel("Imported Frames", 13, true);
+        ListView<String> frameList = new ListView<>();
+        frameList.getSelectionModel().setSelectionMode(javafx.scene.control.SelectionMode.MULTIPLE);
+        frameList.getStyleClass().add("list-dark");
+        frameList.setPrefHeight(200);
+
+
+        // ── Preview canvas ────────────────────────────────────────────────────
+        Label previewLabel = styledLabel("Preview", 13, true);
+        Canvas previewCanvas = new Canvas(200, 200);
+        StackPane canvasPane = new StackPane(previewCanvas);
+        canvasPane.getStyleClass().add("canvas-preview-bg");
+        canvasPane.setPrefSize(200, 200);
+
+        // ── Status ────────────────────────────────────────────────────────────
+        Label importStatus = new Label("No frames imported.");
+        importStatus.getStyleClass().addAll("text-muted", "font-11");
+        importStatus.setWrapText(true);
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+        Runnable refreshFrameList = () -> {
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            frameList.getItems().clear();
+            if (s == null) return;
+            File dir = new File(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+            if (dir.exists()) {
+                File[] files = dir.listFiles(f -> f.getName().toLowerCase().endsWith(".png"));
+                if (files != null) {
+                    java.util.Arrays.sort(files);
+                    for (File f : files) frameList.getItems().add(f.getName());
+                }
+            }
+            int n = PlayerAnimator.getStateFrameCount(s);
+            int sel = statePicker.getSelectionModel().getSelectedItems().size();
+            String label = sel > 1 ? s.name() + " (+" + (sel - 1) + " more selected)" : s.name();
+            importStatus.setText(n > 0 ? "✓ " + n + " frame(s) — " + label : "No frames — " + label);
+            importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+            importStatus.getStyleClass().add(n > 0 ? "text-success" : "text-muted");
+        };
+
+        // Preview animation timer + playback state
+        PlayerAnimator[] previewAnim = { new PlayerAnimator() };
+        javafx.animation.AnimationTimer[] timer = { null };
+        boolean[] paused   = { false };
+        boolean[] repeat   = { true  };
+        long[]    pausedAt = { 0L    };
+
+        Button playBtn   = new Button("▶ Play");
+        Button pauseBtn  = new Button("⏸ Pause");
+        Button repeatBtn = new Button("🔁 Repeat: ON");
+        String btnStyle  = "-fx-background-color: #16213e; -fx-text-fill: white; " +
+                "-fx-border-color: #3a3a6a; -fx-border-radius: 4; " +
+                "-fx-font-size: 11; -fx-padding: 4 10 4 10;";
+        playBtn.setStyle(btnStyle);
+        pauseBtn.setStyle(btnStyle);
+        repeatBtn.setStyle(btnStyle);
+        HBox playbackRow = new HBox(6, playBtn, pauseBtn, repeatBtn);
+        playbackRow.setAlignment(Pos.CENTER_LEFT);
+
+        Runnable startPreview = () -> {
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (s == null) return;
+            boolean hasSprites = PlayerAnimator.hasStateSprites(s)
+                    || (s == PlayerAnimator.State.KIP_UP      && PlayerAnimator.hasKuSprites())
+                    || (s == PlayerAnimator.State.KNOCKED_DOWN && PlayerAnimator.hasKdSprites());
+            if (!hasSprites) return;
+            if (timer[0] != null) timer[0].stop();
+            paused[0] = false;
+            pausedAt[0] = 0L;
+            previewAnim[0] = new PlayerAnimator();
+            previewAnim[0].forceState(s);
+            previewAnim[0].setForcedDirection(PlayerAnimator.Direction.RIGHT);
+            previewAnim[0].setHoldLastFrame(!repeat[0]);
+            timer[0] = new javafx.animation.AnimationTimer() {
+                public void handle(long now) {
+                    if (paused[0]) return;
+                    long nowMs = now / 1_000_000L;
+                    javafx.scene.canvas.GraphicsContext gc = previewCanvas.getGraphicsContext2D();
+                    double cw = previewCanvas.getWidth();
+                    double ch = previewCanvas.getHeight();
+                    gc.setFill(javafx.scene.paint.Color.web("#2a2a4a"));
+                    gc.fillRect(0, 0, cw, ch);
+
+                    previewAnim[0].tick(nowMs);
+                    javafx.scene.image.Image img = previewAnim[0].getCurrentFrameImage();
+                    if (img != null) {
+                        double pad    = 12;
+                        double scale  = Math.min((cw - pad * 2) / img.getWidth(),
+                                                 (ch - pad * 2) / img.getHeight());
+                        double dw = img.getWidth()  * scale;
+                        double dh = img.getHeight() * scale;
+                        gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                    } else {
+                        previewAnim[0].draw(gc, cw / 2, ch - 20,
+                                javafx.scene.paint.Color.WHITE, 1.5, nowMs);
+                    }
+                }
+            };
+            timer[0].start();
+        };
+
+        playBtn.setOnAction(e -> { paused[0] = false; });
+        pauseBtn.setOnAction(e -> { paused[0] = true; });
+        repeatBtn.setOnAction(e -> {
+            repeat[0] = !repeat[0];
+            repeatBtn.setText(repeat[0] ? "🔁 Repeat: ON" : "🔁 Repeat: OFF");
+            if (previewAnim[0] != null) previewAnim[0].setHoldLastFrame(!repeat[0]);
+        });
+
+        // ── Staged files list ─────────────────────────────────────────────────
+        Label stagedLabel = styledLabel("Staged Files (ready to import)", 13, true);
+        ListView<String> stagedList = new ListView<>();
+        stagedList.getStyleClass().add("list-dark");
+        stagedList.setPrefHeight(120);
+        final List<File>[] stagedFiles = new List[]{ new java.util.ArrayList<>() };
+
+        // ── Buttons ───────────────────────────────────────────────────────────
+        Button browseBtn = new Button("📂 Browse...");
+        browseBtn.setStyle("-fx-background-color: #16213e; -fx-text-fill: white; " +
+                "-fx-border-color: #3a3a6a; -fx-border-radius: 4; " +
+                "-fx-font-size: 12; -fx-padding: 6 14 6 14;");
+
+        Button importBtn = new Button("⬆ Import");
+        importBtn.setStyle("-fx-background-color: #0f3460; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;");
+        importBtn.setDisable(true);
+
+        Button clearBtn = new Button("🗑 Clear");
+        clearBtn.setStyle("-fx-background-color: #7b241c; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;");
+
+        Button copyBtn = new Button("📋 Copy");
+        copyBtn.setStyle("-fx-background-color: #1a4a2e; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;");
+
+        Button pasteBtn = new Button("📌 Paste");
+        pasteBtn.setStyle("-fx-background-color: #1a4a2e; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 12; -fx-padding: 6 14 6 14;");
+        pasteBtn.setDisable(true);
+
+        // Internal clipboard: holds source PNGs copied from a state's folder
+        final List<File>[] clipboard = new List[]{ new java.util.ArrayList<>() };
+
+        HBox btnRow  = new HBox(6, browseBtn, importBtn, clearBtn);
+        HBox btnRow2 = new HBox(6, copyBtn, pasteBtn);
+        btnRow.setAlignment(Pos.CENTER_LEFT);
+        btnRow2.setAlignment(Pos.CENTER_LEFT);
+
+        // ── Wire events ───────────────────────────────────────────────────────
+        bodyTypePicker.setOnAction(e -> {
+            MobCategory cat = bodyTypePicker.getValue();
+            if (cat == null) return;
+            statePicker.getItems().setAll(cat.sortedStates());
+            if (!cat.sortedStates().isEmpty())
+                statePicker.getSelectionModel().select(0);
+            refreshFrameList.run();
+            startPreview.run();
+        });
+
+        statePicker.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
+            refreshFrameList.run();
+            startPreview.run();
+        });
+
+browseBtn.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Select PNG Frames");
+            chooser.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter("PNG Images", "*.png"));
+            List<File> picked = chooser.showOpenMultipleDialog(stage);
+            if (picked == null || picked.isEmpty()) return;
+            stagedFiles[0] = new java.util.ArrayList<>(picked);
+            stagedFiles[0].sort(java.util.Comparator.comparing(File::getName));
+            stagedList.getItems().setAll(stagedFiles[0].stream()
+                    .map(File::getName).collect(java.util.stream.Collectors.toList()));
+            importBtn.setDisable(false);
+            importStatus.setText(stagedFiles[0].size() + " file(s) staged — click Import to confirm.");
+            importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+            importStatus.getStyleClass().add("text-muted");
+        });
+
+        importBtn.setOnAction(e -> {
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (s == null || stagedFiles[0].isEmpty()) return;
+            try {
+                Path destDir = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+                Files.createDirectories(destDir);
+                File[] existing = destDir.toFile().listFiles(f -> f.getName().endsWith(".png"));
+                if (existing != null) for (File f : existing) f.delete();
+                for (int i = 0; i < stagedFiles[0].size(); i++) {
+                    Path dest = destDir.resolve(String.format("%03d.png", i + 1));
+                    Files.copy(stagedFiles[0].get(i).toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                }
+                PlayerAnimator.reloadStateSprites(s);
+                int count = stagedFiles[0].size();
+                stagedFiles[0].clear();
+                stagedList.getItems().clear();
+                importBtn.setDisable(true);
+                refreshFrameList.run();
+                startPreview.run();
+                importStatus.setText("✓ Imported " + count + " frame(s) for " + s.name());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-success");
+            } catch (Exception ex) {
+                importStatus.setText("✗ Failed: " + ex.getMessage());
+                importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+                importStatus.getStyleClass().add("text-error");
+            }
+        });
+
+        clearBtn.setOnAction(e -> {
+            // Clear all selected states
+            for (PlayerAnimator.State s : statePicker.getSelectionModel().getSelectedItems()) {
+                if (s == null) continue;
+                PlayerAnimator.clearStateSprites(s);
+                try {
+                    Path destDir = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+                    File[] existing = destDir.toFile().listFiles(f -> f.getName().endsWith(".png"));
+                    if (existing != null) for (File f : existing) f.delete();
+                } catch (Exception ignored) {}
+            }
+            if (timer[0] != null) { timer[0].stop(); timer[0] = null; }
+            previewCanvas.getGraphicsContext2D().clearRect(0, 0,
+                    previewCanvas.getWidth(), previewCanvas.getHeight());
+            refreshFrameList.run();
+        });
+
+        copyBtn.setOnAction(e -> {
+            PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
+            if (s == null) return;
+            File dir = new File(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+            File[] files = dir.listFiles(f -> f.getName().endsWith(".png"));
+            if (files == null || files.length == 0) {
+                importStatus.setText("✗ No imported frames to copy for " + s.name());
+                return;
+            }
+            java.util.Arrays.sort(files);
+            clipboard[0] = new java.util.ArrayList<>(java.util.Arrays.asList(files));
+            pasteBtn.setDisable(false);
+            importStatus.setText("📋 Copied " + files.length + " frame(s) from " + s.name());
+            importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+            importStatus.getStyleClass().add("text-muted");
+        });
+
+        pasteBtn.setOnAction(e -> {
+            if (clipboard[0].isEmpty()) return;
+            for (PlayerAnimator.State s : statePicker.getSelectionModel().getSelectedItems()) {
+                if (s == null) continue;
+                try {
+                    Path destDir = Paths.get(PlayerAnimator.STATE_SPRITES_DIR + s.name().toLowerCase());
+                    Files.createDirectories(destDir);
+                    File[] existing = destDir.toFile().listFiles(f -> f.getName().endsWith(".png"));
+                    if (existing != null) for (File f : existing) f.delete();
+                    for (int i = 0; i < clipboard[0].size(); i++) {
+                        Path dest = destDir.resolve(String.format("%03d.png", i + 1));
+                        Files.copy(clipboard[0].get(i).toPath(), dest, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    PlayerAnimator.reloadStateSprites(s);
+                } catch (Exception ex) {
+                    importStatus.setText("✗ Paste failed: " + ex.getMessage());
+                    return;
+                }
+            }
+            refreshFrameList.run();
+            startPreview.run();
+            importStatus.setText("📌 Pasted " + clipboard[0].size() + " frame(s) → " +
+                    statePicker.getSelectionModel().getSelectedItems().size() + " state(s)");
+            importStatus.getStyleClass().removeAll("text-muted", "text-success", "text-error");
+            importStatus.getStyleClass().add("text-success");
+        });
+
+        // Init
+        Platform.runLater(() -> {
+            refreshFrameList.run();
+            startPreview.run();
+        });
+
+        // ── Layout ────────────────────────────────────────────────────────────
+        VBox leftCol = new VBox(10,
+                bodyTypeLabel, bodyTypePicker,
+                stateLabel, statePicker,
+                framesLabel, frameList,
+                stagedLabel, stagedList,
+                btnRow,
+                btnRow2,
+                importStatus);
+        leftCol.setPrefWidth(320);
+        leftCol.setPadding(new Insets(14));
+        leftCol.getStyleClass().add("app-card");
+
+        VBox rightCol = new VBox(10, previewLabel, canvasPane, playbackRow);
+        rightCol.setPadding(new Insets(14));
+        rightCol.getStyleClass().add("app-card");
+        HBox.setHgrow(rightCol, Priority.ALWAYS);
+
+        HBox content = new HBox(12, leftCol, rightCol);
+        content.setPadding(new Insets(12));
+        content.getStyleClass().add("app-root");
+        VBox.setVgrow(frameList, Priority.ALWAYS);
+        return content;
+    }
+
     // ── File Browser ─────────────────────────────────────────────────────────
 
     private VBox buildFileBrowser() {
@@ -598,15 +905,14 @@ public class GraphicsDevScreen {
 
     private Label styledLabel(String text, int size, boolean bold) {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #e0e0e0;" +
-                   "-fx-font-size: " + size + ";" +
-                   (bold ? "-fx-font-weight: bold;" : ""));
+        l.getStyleClass().addAll("text-primary", "font-" + size);
+        if (bold) l.getStyleClass().add("bold");
         return l;
     }
 
     private Label dirLabel(String text) {
         Label l = new Label(text);
-        l.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 10;");
+        l.getStyleClass().addAll("text-secondary", "font-10");
         l.setWrapText(true);
         return l;
     }

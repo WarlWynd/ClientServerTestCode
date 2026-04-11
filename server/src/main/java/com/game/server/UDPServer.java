@@ -37,11 +37,12 @@ public class UDPServer {
     private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
 
     private final int port;
-    private final AuthHandler        authHandler    = new AuthHandler();
-    private final GameHandler        gameHandler    = new GameHandler();
-    private final CharacterHandler   charHandler    = new CharacterHandler();
-    private final AdminPacketHandler adminHandler   = new AdminPacketHandler(authHandler, gameHandler);
-    private final SessionRepository sessionRepo = new SessionRepository();
+    private final AuthHandler        authHandler       = new AuthHandler();
+    private final GameHandler        gameHandler       = new GameHandler();
+    private final CharacterHandler   charHandler       = new CharacterHandler();
+    private final AdminPacketHandler adminHandler      = new AdminPacketHandler(authHandler, gameHandler);
+    private final InventoryHandler   inventoryHandler  = new InventoryHandler();
+    private final SessionRepository  sessionRepo       = new SessionRepository();
 
     private DatagramSocket         socket;
     private volatile boolean       running = false;
@@ -144,7 +145,12 @@ public class UDPServer {
                  ADMIN_SET_DEV_REQUEST,
                  ADMIN_RESTART_REQUEST,
                  ADMIN_DEPLOY_REQUEST,
-                 ADMIN_SAVE_SETTINGS_REQUEST -> adminHandler.dispatch(socket, packet, session, addr, port);
+                 ADMIN_SAVE_SETTINGS_REQUEST,
+                 ADMIN_GET_BOARDS_REQUEST -> adminHandler.dispatch(socket, packet, session, addr, port);
+            case INVENTORY_REQUEST           -> inventoryHandler.handleRequest(socket, packet, session, addr, port);
+            case INVENTORY_GIVE_ITEM_REQUEST -> inventoryHandler.handleGiveItem(socket, packet, session, addr, port);
+            case INVENTORY_EQUIP_REQUEST     -> inventoryHandler.handleEquip(socket, packet, session, addr, port);
+            case INVENTORY_DROP_REQUEST      -> inventoryHandler.handleDrop(socket, packet, session, addr, port);
             default            -> log.warn("Unhandled packet type: {} from {}", packet.type, session.username());
         }
     }

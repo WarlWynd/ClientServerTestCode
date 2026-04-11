@@ -99,6 +99,7 @@ public class GameScreen {
     private float    npcY             = 14f;   // PLAYER_RADIUS — stands on floor
     private final PlayerAnimator npcAnimator       = new PlayerAnimator();
     private final WeaponRenderer npcWeaponRenderer = new WeaponRenderer();
+    { npcAnimator.setSkin("wolf"); } // loads sprites/mobs/wolf/*.png when present
     private long     npcLastAttackMs  = 0;
     private boolean  npcHitPending    = false;
     private long     npcHitTimeMs     = 0;
@@ -139,14 +140,22 @@ public class GameScreen {
     private Label damageTotalLabel;
     private Label hitStatusLabel;
     private int   totalDamageTaken = 0;
+
+    // ── Currency display ──────────────────────────────────────────────────────
+    private Label platinumAmtLabel;
+    private Label goldAmtLabel;
+    private Label silverAmtLabel;
+    private Label bronzeAmtLabel;
     private Canvas canvas;
     private AnimationTimer gameLoop;
     private TabPane tabPane;
     private Tab     gameTab;
     private boolean gameLoopRunning = false;
     private Timeline pingTimer;
-    private AdminPanel       adminPanel;
+    private AdminPanel        adminPanel;
     private GraphicsDevScreen graphicsDevScreen;
+    private InventoryPanel    inventoryPanel;
+    private Tab               inventoryTab;
 
     // ── System message bar ────────────────────────────────────────────────────
     private HBox    systemMsgBar;
@@ -243,6 +252,23 @@ public class GameScreen {
         damageTotalLabel = new Label("Total: 0");
         damageTotalLabel.setStyle("-fx-text-fill: #ff8888; -fx-font-weight: bold; -fx-font-size: 11;");
 
+        Separator sep7 = new Separator();
+        sep7.getStyleClass().add("sep");
+
+        Label currencyLbl = new Label("CURRENCY");
+        currencyLbl.getStyleClass().addAll("text-muted", "font-10");
+
+        platinumAmtLabel = new Label("0");
+        goldAmtLabel     = new Label("0");
+        silverAmtLabel   = new Label("0");
+        bronzeAmtLabel   = new Label("0");
+
+        VBox currencyBox = new VBox(4,
+                makeCoinRow("\u25CF Platinum", "#b8d4e8", platinumAmtLabel),
+                makeCoinRow("\u25CF Gold",     "#ffd700", goldAmtLabel),
+                makeCoinRow("\u25CF Silver",   "#c0c0c0", silverAmtLabel),
+                makeCoinRow("\u25CF Bronze",   "#cd7f32", bronzeAmtLabel));
+
         VBox sidebar = new VBox(10,
                 gameTitle,
                 sep1,
@@ -256,7 +282,9 @@ public class GameScreen {
                 sep5,
                 posLbl, posLabel,
                 sep6,
-                damageLbl, damageLastLabel, damageTotalLabel);
+                damageLbl, damageLastLabel, damageTotalLabel,
+                sep7,
+                currencyLbl, currencyBox);
         sidebar.setPadding(new Insets(16, 12, 16, 12));
         sidebar.setPrefWidth(160);
         sidebar.setMinWidth(160);
@@ -329,18 +357,28 @@ public class GameScreen {
         settingsTab.setClosable(false);
         settingsTab.getProperties().put("connectionIp", serverIp);
 
+        // ── Inventory tab (all users) ─────────────────────────────────────────
+        inventoryPanel = new InventoryPanel(client);
+        inventoryPanel.setOnCurrencyUpdated(() -> {
+            int pt = Integer.parseInt(platinumAmtLabel.getText());
+            int gd = Integer.parseInt(goldAmtLabel.getText());
+            int sv = Integer.parseInt(silverAmtLabel.getText());
+            int br = Integer.parseInt(bronzeAmtLabel.getText());
+            setCurrency(pt, gd, sv, br);
+        });
+        inventoryTab = new Tab("🎒 Inventory " + serverIp, inventoryPanel.build());
+        inventoryTab.setClosable(false);
+        inventoryTab.getProperties().put("connectionIp", serverIp);
+
         // ── Role-gated tabs ───────────────────────────────────────────────────
         java.util.List<Tab> tabs = new java.util.ArrayList<>();
         tabs.add(gameTab);
+        tabs.add(inventoryTab);
         tabs.add(settingsTab);
 
         if (SessionStore.isAdmin()) {
-            Tab isAdminTab = new Tab("Is Admin " + client.getAdminHost(), buildIsAdminView());
-            isAdminTab.setClosable(false);
-            isAdminTab.getProperties().put("connectionIp", client.getAdminHost());
-            tabs.add(isAdminTab);
-
             adminPanel = new AdminPanel(client);
+            adminPanel.setRestartCallback(this::startReconnectCountdown);
             String adminIp = client.getAdminHost();
             Tab adminTab = new Tab("🛡 Admin " + adminIp, withIpBanner(adminPanel.buildView(), adminIp));
             adminTab.setClosable(false);
@@ -349,7 +387,6 @@ public class GameScreen {
             audioTab.setClosable(false);
             audioTab.getProperties().put("connectionIp", adminIp);
             graphicsDevScreen = new GraphicsDevScreen(stage, client);
-            graphicsDevScreen.setRestartCallback(this::startReconnectCountdown);
             Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(graphicsDevScreen.build(), adminIp));
             graphicsTab.setClosable(false);
             graphicsTab.getProperties().put("connectionIp", adminIp);
@@ -402,6 +439,10 @@ public class GameScreen {
             KeyCode c = e.getCode();
             if ((c == KeyCode.LEFT || c == KeyCode.RIGHT || c == KeyCode.UP || c == KeyCode.DOWN)
                     && tabPane.getSelectionModel().getSelectedItem() == gameTab) {
+                e.consume();
+            }
+            if (c == KeyCode.I && tabPane.getSelectionModel().getSelectedItem() == gameTab) {
+                tabPane.getSelectionModel().select(inventoryTab);
                 e.consume();
             }
         });
@@ -833,7 +874,6 @@ public class GameScreen {
 
     private void onPacket(Packet packet) {
         if (adminPanel != null) adminPanel.onPacket(packet);
-        if (graphicsDevScreen != null) graphicsDevScreen.onPacket(packet);
         switch (packet.type) {
             case GAME_STATE -> {
                 lastGameStateMs = System.currentTimeMillis();
@@ -924,6 +964,8 @@ public class GameScreen {
                     AppSettings.setRebootDelaySecs(packet.payload.get("rebootDelaySecs").asInt());
                 if (packet.payload.has("rebootMessage"))
                     AppSettings.setRebootMessage(packet.payload.get("rebootMessage").asText());
+                if (packet.payload.has("startingBoardId"))
+                    AppSettings.setStartingBoardId(packet.payload.get("startingBoardId").asLong());
                 AppSettings.save();
             }
             case FORCE_LOGOUT -> {
@@ -942,6 +984,12 @@ public class GameScreen {
                     alert.setContentText(msg);
                     alert.show();
                 });
+            }
+            case INVENTORY_RESPONSE,
+                 INVENTORY_EQUIP_RESPONSE,
+                 INVENTORY_DROP_RESPONSE,
+                 INVENTORY_GIVE_ITEM_RESPONSE -> {
+                if (inventoryPanel != null) inventoryPanel.onPacket(packet);
             }
             case ERROR -> {
                 String msg = packet.payload.get("message").asText("Server error.");
@@ -1220,24 +1268,26 @@ public class GameScreen {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /** Builds the content for the "Is Admin" confirmation tab. */
-    private javafx.scene.Node buildIsAdminView() {
-        Label title = new Label("Admin Access Confirmed");
-        title.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #4caf50;");
-
-        Label user  = new Label("User:        " + SessionStore.getUsername());
-        Label role  = new Label("Role:        Administrator");
-        Label admIp = new Label("Admin Host:  " + client.getAdminHost());
-
-        for (Label l : new Label[]{user, role, admIp}) {
-            l.setStyle("-fx-font-size: 13px; -fx-text-fill: #cccccc; -fx-font-family: monospace;");
-        }
-
-        VBox box = new VBox(12, title, user, role, admIp);
-        box.setPadding(new Insets(24));
-        box.setStyle("-fx-background-color: #1e1e1e;");
-        return box;
+    /** Builds one row for the currency display: colored name label + right-aligned amount. */
+    private static HBox makeCoinRow(String name, String color, Label amtLabel) {
+        Label nameLbl = new Label(name);
+        nameLbl.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px; -fx-font-weight: bold;");
+        amtLabel.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 11px; -fx-font-weight: bold;");
+        javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox row = new HBox(nameLbl, spacer, amtLabel);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
     }
+
+    /** Updates the currency display (call from Platform.runLater). */
+    public void setCurrency(int platinum, int gold, int silver, int bronze) {
+        platinumAmtLabel.setText(String.valueOf(platinum));
+        goldAmtLabel    .setText(String.valueOf(gold));
+        silverAmtLabel  .setText(String.valueOf(silver));
+        bronzeAmtLabel  .setText(String.valueOf(bronze));
+    }
+
 
     /** Wraps a tab's content node with a small IP/connection banner at the very top. */
     private static javafx.scene.Node withIpBanner(javafx.scene.Node content, String ip) {
