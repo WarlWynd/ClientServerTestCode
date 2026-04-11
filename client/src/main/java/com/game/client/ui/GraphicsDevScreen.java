@@ -454,9 +454,55 @@ public class GraphicsDevScreen {
         Label frameCounterLabel = new Label("— / —");
         frameCounterLabel.setStyle("-fx-text-fill: #c8c8e0; -fx-font-size: 11; -fx-min-width: 52;");
 
+        // Shared frame state — accessible by step buttons and frameList click
+        int[]                           sharedSpriteIdx = { 0 };
+        javafx.scene.image.Image[][]    currentSprites  = { null };
+
+        // Draws whichever frame sharedSpriteIdx[0] currently points to
+        Runnable drawCurrentFrame = () -> {
+            javafx.scene.canvas.GraphicsContext gc = previewCanvas.getGraphicsContext2D();
+            double cw = previewCanvas.getWidth();
+            double ch = previewCanvas.getHeight();
+            gc.setFill(javafx.scene.paint.Color.web("#2a2a4a"));
+            gc.fillRect(0, 0, cw, ch);
+            javafx.scene.image.Image[] sp = currentSprites[0];
+            if (sp != null && sp.length > 0) {
+                int idx = Math.min(sharedSpriteIdx[0], sp.length - 1);
+                javafx.scene.image.Image img = sp[idx];
+                if (img != null) {
+                    double fit = Math.min((cw - 24) / img.getWidth(), (ch - 24) / img.getHeight());
+                    double sc  = fit * previewScale[0];
+                    double dw  = img.getWidth() * sc, dh = img.getHeight() * sc;
+                    gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+                }
+                frameCounterLabel.setText((idx + 1) + " / " + sp.length);
+            } else {
+                frameCounterLabel.setText("— / —");
+            }
+        };
+
+        Button prevFrameBtn = new Button("◀");
+        Button nextFrameBtn = new Button("▶");
+        prevFrameBtn.setStyle(btnStyle);
+        nextFrameBtn.setStyle(btnStyle);
+        prevFrameBtn.setOnAction(e -> {
+            javafx.scene.image.Image[] sp = currentSprites[0];
+            if (sp == null || sp.length == 0) return;
+            paused[0] = true;
+            sharedSpriteIdx[0] = (sharedSpriteIdx[0] - 1 + sp.length) % sp.length;
+            drawCurrentFrame.run();
+        });
+        nextFrameBtn.setOnAction(e -> {
+            javafx.scene.image.Image[] sp = currentSprites[0];
+            if (sp == null || sp.length == 0) return;
+            paused[0] = true;
+            sharedSpriteIdx[0] = (sharedSpriteIdx[0] + 1) % sp.length;
+            drawCurrentFrame.run();
+        });
+
         HBox playbackRow = new HBox(6, playBtn, pauseBtn, repeatBtn,
                 new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL),
-                frameCounterLabel,
+                prevFrameBtn, frameCounterLabel, nextFrameBtn,
                 new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL),
                 scaleLabel, scaleSpinner);
         playbackRow.setAlignment(Pos.CENTER_LEFT);
@@ -469,10 +515,10 @@ public class GraphicsDevScreen {
             pausedAt[0] = 0L;
 
             // Drive animation directly from imported sprite images (bypasses
-            // poseCount() mapping which is based on stick-figure pose arrays and
-            // would cap quadruped states like POUNCE to 1 frame on RIGHT direction).
+            // poseCount() mapping which caps quadruped states to 1 frame on RIGHT direction).
             javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s, PlayerAnimator.Direction.RIGHT);
-            int[] spriteIdx = { 0 };
+            currentSprites[0]  = sprites;
+            sharedSpriteIdx[0] = 0;
             frameCounterLabel.setText(sprites != null && sprites.length > 0 ? "1 / " + sprites.length : "— / —");
             long[] lastTickMs = { 0L };
             long intervalMs = switch (s) {
@@ -493,34 +539,24 @@ public class GraphicsDevScreen {
                 public void handle(long now) {
                     if (paused[0]) return;
                     long nowMs = now / 1_000_000L;
-                    javafx.scene.canvas.GraphicsContext gc = previewCanvas.getGraphicsContext2D();
-                    double cw = previewCanvas.getWidth();
-                    double ch = previewCanvas.getHeight();
-                    gc.setFill(javafx.scene.paint.Color.web("#2a2a4a"));
-                    gc.fillRect(0, 0, cw, ch);
 
                     if (sprites != null && sprites.length > 0) {
                         // Advance sprite frame on interval
                         if (lastTickMs[0] == 0) lastTickMs[0] = nowMs;
                         if (nowMs - lastTickMs[0] >= intervalMs) {
-                            int next = spriteIdx[0] + 1;
+                            int next = sharedSpriteIdx[0] + 1;
                             boolean oneShot = PlayerAnimator.isOneShot(s);
-                            spriteIdx[0] = (oneShot && next >= sprites.length)
+                            sharedSpriteIdx[0] = (oneShot && next >= sprites.length)
                                     ? (repeat[0] ? 0 : sprites.length - 1)
                                     : next % sprites.length;
                             lastTickMs[0] = nowMs;
-                            frameCounterLabel.setText((spriteIdx[0] + 1) + " / " + sprites.length);
                         }
-                        javafx.scene.image.Image img = sprites[spriteIdx[0]];
-                        if (img != null) {
-                            double fitScale = Math.min((cw - 24) / img.getWidth(),
-                                                       (ch - 24) / img.getHeight());
-                            double s2 = fitScale * previewScale[0];
-                            double dw = img.getWidth()  * s2;
-                            double dh = img.getHeight() * s2;
-                            gc.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
-                        }
+                        drawCurrentFrame.run();
                     } else {
+                        javafx.scene.canvas.GraphicsContext gc = previewCanvas.getGraphicsContext2D();
+                        double cw = previewCanvas.getWidth(), ch = previewCanvas.getHeight();
+                        gc.setFill(javafx.scene.paint.Color.web("#2a2a4a"));
+                        gc.fillRect(0, 0, cw, ch);
                         // No sprite images — draw procedural stick figure
                         previewAnim[0].draw(gc, cw / 2, ch - 20,
                                 javafx.scene.paint.Color.WHITE, 1.5, nowMs);
@@ -601,6 +637,16 @@ public class GraphicsDevScreen {
         HBox btnRow3 = new HBox(6, addFrameBtn, updateFrameBtn, deleteFrameBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
         btnRow2.setAlignment(Pos.CENTER_LEFT);
+
+        // Click a frame in the list → pause and jump preview to that frame
+        frameList.setOnMouseClicked(ev -> {
+            int clickedIdx = frameList.getSelectionModel().getSelectedIndex();
+            javafx.scene.image.Image[] sp = currentSprites[0];
+            if (clickedIdx < 0 || sp == null || sp.length == 0) return;
+            paused[0] = true;
+            sharedSpriteIdx[0] = Math.min(clickedIdx, sp.length - 1);
+            drawCurrentFrame.run();
+        });
 
         // Selecting items in the Imported Frames list stages them for import
         frameList.getSelectionModel().getSelectedItems().addListener(
