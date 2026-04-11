@@ -50,7 +50,7 @@ public class GameHandler {
     /** Current committed game settings — loaded from DB on first use. */
     private volatile ServerSettingsRepository.Settings currentSettings = null;
 
-    private ServerSettingsRepository.Settings getSettings() {
+    public ServerSettingsRepository.Settings getSettings() {
         if (currentSettings == null) currentSettings = settingsRepo.load();
         return currentSettings;
     }

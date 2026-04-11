@@ -66,7 +66,23 @@
       "Bash(./gradlew :client:jar)",
       "Bash(cmd.exe /c \"cd /d E:\\\\multiplayer-game && mvnw.cmd -pl client compile > E:\\\\multiplayer-game\\\\build_output.txt 2>&1 & exit\")",
       "Bash(powershell.exe:*)",
-      "Bash(echo \"PID $!\")"
+      "Bash(echo \"PID $!\")",
+      "Bash(powershell:*)",
+      "Bash(java -classpath \"gradle/wrapper/gradle-wrapper.jar\" org.gradle.wrapper.GradleWrapperMain :client:compileJava)",
+      "Bash(java:*)",
+      "Bash(\"C:\\\\Program Files\\\\Python312\\\\python.exe\" -c \"from PIL import Image; print\\('PIL ok'\\)\")",
+      "Bash(\"C:\\\\Program Files\\\\Python312\\\\python.exe\" -m pip install pillow -q)",
+      "Bash(C:\\\\Program Files\\\\Python312\\\\python.exe:*)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(mvn:*)",
+      "Bash(./gradlew.bat :client:run:*)",
+      "Bash(./mvnw compile:*)",
+      "Bash(mvn.cmd compile:*)",
+      "Bash(cmd.exe /c \"mvn compile -pl client -am -q 2>&1\")",
+      "Bash(cmd.exe /c \"mvn -pl server -am compile -q 2>&1\")",
+      "Bash(cmd.exe /c \"cd E:\\\\\\\\multiplayer-game && mvn -pl server -am compile 2>&1\")",
+      "Bash(cmd.exe /c \"cd E:\\\\\\\\multiplayer-game && mvn -pl client -am compile 2>&1\")",
+      "Bash(cmd.exe:*)"
     ]
   }
 }

@@ -1,5 +1,6 @@
 package com.game.client.ui;
 
+import com.game.client.AppSettings;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -120,90 +121,34 @@ public class MobManagerPanel {
     private ComboBox<String>    placeMobCombo;
     private Spinner<Integer>    respawnSpinner, maxCountSpinner;
 
-    // ── Combat preview inner classes ──────────────────────────────────────────
-    private static class DmgNum {
-        static final long LIFE_NS = 1_400_000_000L;
-        static final double RISE  = 30.0;
-        final double x, baseY; final String text; final Color color; final long birthNs;
-        DmgNum(double x, double y, int dmg, String label, Color color, long now) {
-            this.x=x; this.baseY=y; this.text=dmg+(label.isEmpty()?"":" "+label);
-            this.color=color; this.birthNs=now;
-        }
-        boolean dead(long now) { return now-birthNs>=LIFE_NS; }
-        double alpha(long now) { return 1.0-(double)(now-birthNs)/LIFE_NS; }
-        double currentY(long now){ return baseY-RISE*((double)(now-birthNs)/LIFE_NS); }
-    }
+    // UI refs — Practice Fight
+    private Canvas              practiceCanvas;
+    private AnimationTimer      practiceTimer;
+    private ComboBox<String>    practiceLeftCombo, practiceRightCombo;
+    private boolean             practiceFaceEachOther = true;
+    private PlayerAnimator      practiceLeftAnim  = new PlayerAnimator();
+    private PlayerAnimator      practiceRightAnim = new PlayerAnimator();
+    private String              practiceResolvedLeft, practiceResolvedRight;
+    private boolean             practicePlaying      = false;
+    private boolean             practiceLeftAI       = true;
+    private boolean             practiceRightAI      = true;
+    private double              practiceSpeedMult    = 1.0;
+    private float               practiceLeftHp, practiceRightHp;
+    private long                practiceLeftHitMs, practiceRightHitMs;
+    // [0]=cx, [1]=y, [2]=dmg, [3]=startMs, [4]=isHeal(0/1), [5]=label
+    private final List<Object[]> practiceDmgNums     = new ArrayList<>();
+    private long                practiceCombatNextMs = 0;
+    private long                practiceLeftStunEndMs  = 0;
+    private long                practiceRightStunEndMs = 0;
+    private int                 practiceCombatTurn   = 0; // 0=left attacks, 1=right attacks
+    private Label               practiceActionLabel;
+    // Mechanics settings (loaded from game-mechanics.json, editable in panel)
+    private Spinner<Integer>    pmIntervalSpinner, pmStunSpinner, pmKoSpinner;
+    private List<GameMechanicsPanel.AttackRule> practiceMechanicsRules = new ArrayList<>();
 
-    private static class MobFighter {
-        MobDef mob; final PlayerAnimator anim=new PlayerAnimator(); final boolean facingLeft;
-        int  hp; int maxHp; long nextAttkMs=0; PlayerAnimator.State pendingAttack=null;
-        boolean hitPending=false; long hitTimeMs=0; long stunEndMs=0;
-        boolean kipUpTriggered=false;
-        MobFighter(MobDef mob, boolean facingLeft, long nowMs) {
-            this.mob=mob; this.facingLeft=facingLeft;
-            maxHp = Math.max(1, mob.baseHp);
-            hp    = maxHp;
-            anim.setFacingRight(!facingLeft);
-            nextAttkMs=nowMs+(facingLeft?1_000:500);
-        }
-        boolean isStunned(long nowMs){ return nowMs<stunEndMs; }
-        boolean isKO(){ return hp<=0; }
-        boolean hasState(PlayerAnimator.State s){ return mob.states.contains(s); }
-        List<PlayerAnimator.State> attackStates(){
-            return mob.states.stream().filter(MobFighter::isAttack).collect(java.util.stream.Collectors.toList());
-        }
-        static boolean isAttack(PlayerAnimator.State s){
-            return switch(s){
-                case PUNCH,CROSS,HOOK,UPPERCUT,HAYMAKER,
-                     HEAD_KICK,LOW_KICK,BODY_KICK,
-                     SPINNING_BACK_KICK,SIDE_KICK,SHOOT,
-                     BITE,POUNCE -> true;
-                default -> false;
-            };
-        }
-        PlayerAnimator.State idleState(){
-            if(mob.states.contains(PlayerAnimator.State.QUAD_IDLE)) return PlayerAnimator.State.QUAD_IDLE;
-            if(mob.states.contains(PlayerAnimator.State.IDLE)) return PlayerAnimator.State.IDLE;
-            return mob.states.isEmpty()?PlayerAnimator.State.IDLE:mob.states.get(0);
-        }
-        PlayerAnimator.State knockedState(){
-            if(mob.states.contains(PlayerAnimator.State.KNOCKED_DOWN)) return PlayerAnimator.State.KNOCKED_DOWN;
-            if(mob.states.contains(PlayerAnimator.State.QUAD_DEATH))   return PlayerAnimator.State.QUAD_DEATH;
-            return null;
-        }
-    }
-
-    // UI refs — Combat
-    private Canvas              combatCanvas;
-    private AnimationTimer      combatTimer;
-    private ComboBox<String>    combatLeftCombo, combatRightCombo;
-    private boolean             combatPaused      = false;
-    private long                combatFrozenNs    = 0;
-    private boolean             combatFaceEachOther = true;
-    private long                combatAttackIntervalMs = 2_200;
-
-    // Combat engine state
-    private MobFighter          cLeftFighter, cRightFighter;
-    private String              cResolvedLeft, cResolvedRight;
-    private long                cKoTimeMs=0; private String cKoText="";
-    private MobFighter          cKoFighter=null; private boolean cHealthResetDone=false;
-    private long                cKipUpStartMs=0;
-    private final List<DmgNum>  cDmgNums = new ArrayList<>();
-    private final Random        cRng     = new Random();
-    private boolean             suppressCombatComboEvents = false;
-
-    private static final int    COMBAT_TOTAL_H  = 380;
-    private static final int    COMBAT_CANVAS_W = 420;
-    private static final int    COMBAT_H        = (int)(COMBAT_TOTAL_H * 0.78);
-    private static final int    COMBAT_FLOOR_H  = COMBAT_TOTAL_H - COMBAT_H;
-    private static final double COMBAT_SCALE    = 1.5;
-    private static final long   C_ATTACK_MS     = 2_200;
-    private static final long   C_HIT_DELAY_MS  = 500;
-    private static final long   C_STUN_MS       = 650;
-    private static final long   C_KO_RESET_MS   = 20_000;
-    private long                cKipUpDelayMs   = 15_000;
-    private static final long   C_KIP_UP_DUR    = 900;
-    private static final long   C_STEP_NS       = 50_000_000L;
+    private static final int    PRACTICE_W     = 420;
+    private static final int    PRACTICE_H     = 310;
+    private static final double PRACTICE_SCALE = 1.5;
 
     // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -412,9 +357,9 @@ public class MobManagerPanel {
         previewCol.setStyle("-fx-background-color: #16213e; -fx-background-radius: 6;");
         previewCol.setAlignment(Pos.TOP_CENTER);
 
-        Node combatPanel = buildCombatPanel();
+        Node practiceNode = buildPracticeFight();
 
-        HBox root = new HBox(8, leftCol, cfgCol, previewCol, combatPanel);
+        HBox root = new HBox(8, leftCol, cfgCol, previewCol, practiceNode);
         root.setPadding(new Insets(10));
         root.setStyle("-fx-background-color: #1a1a2e;");
         if (!mobs.isEmpty()) mobList.getSelectionModel().select(0);
@@ -796,20 +741,6 @@ public class MobManagerPanel {
             placeMobCombo.setValue(prev);
         else if (!placeMobCombo.getItems().isEmpty())
             placeMobCombo.setValue(placeMobCombo.getItems().get(0));
-        syncCombatCombos();
-    }
-
-    private void syncCombatCombos() {
-        if (combatLeftCombo == null || combatRightCombo == null) return;
-        String prevL = combatLeftCombo.getValue(), prevR = combatRightCombo.getValue();
-        suppressCombatComboEvents = true;
-        combatLeftCombo.getItems().clear(); combatRightCombo.getItems().clear();
-        mobs.forEach(m -> { combatLeftCombo.getItems().add(m.name); combatRightCombo.getItems().add(m.name); });
-        combatLeftCombo.setValue(combatLeftCombo.getItems().contains(prevL) ? prevL :
-                (!mobs.isEmpty() ? mobs.get(0).name : null));
-        combatRightCombo.setValue(combatRightCombo.getItems().contains(prevR) ? prevR :
-                (mobs.size() > 1 ? mobs.get(1).name : (!mobs.isEmpty() ? mobs.get(0).name : null)));
-        suppressCombatComboEvents = false;
     }
 
     // ── Mob Roster CRUD ───────────────────────────────────────────────────────
@@ -828,6 +759,7 @@ public class MobManagerPanel {
         refreshMobList();
         mobList.getSelectionModel().select(mobs.size() - 1);
         syncPlaceMobCombo();
+        syncPracticeCombos();
     }
 
     private void deleteSelected() {
@@ -838,6 +770,7 @@ public class MobManagerPanel {
         refreshMobList();
         if (!mobs.isEmpty()) mobList.getSelectionModel().select(0);
         syncPlaceMobCombo();
+        syncPracticeCombos();
     }
 
     private void loadIntoForm(MobDef mob) {
@@ -1036,311 +969,488 @@ public class MobManagerPanel {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  COMBAT PREVIEW TAB
+    //  PRACTICE FIGHT TAB
     // ══════════════════════════════════════════════════════════════════════════
 
-    private Node buildCombatPanel() {
-        String btnBase = "-fx-text-fill:white;-fx-background-radius:4;-fx-font-size:11;-fx-padding:3 10 3 10;";
-        Button pauseBtn    = new Button("⏸ Pause");
-        Button stopBtn     = new Button("⏹ Stop");
-        Button stepBackBtn = new Button("◀");
-        Button stepFwdBtn  = new Button("▶");
-        pauseBtn.setStyle("-fx-background-color:#1e3a5f;"+btnBase);
-        stopBtn.setStyle("-fx-background-color:#7b241c;"+btnBase);
-        stepBackBtn.setStyle("-fx-background-color:#3a3a5f;"+btnBase);
-        stepFwdBtn.setStyle("-fx-background-color:#3a3a5f;"+btnBase);
-        stepBackBtn.setDisable(true); stepFwdBtn.setDisable(true);
+    public Node buildPracticeFight() {
+        // ── Load mechanics from game-mechanics.json ───────────────────────────
+        loadPracticeMechanics();
 
-        pauseBtn.setOnAction(e -> {
-            combatPaused = !combatPaused;
-            pauseBtn.setText(combatPaused ? "▶ Play" : "⏸ Pause");
-            pauseBtn.setStyle("-fx-background-color:"+(combatPaused?"#1e5f3a":"#1e3a5f")+";"+btnBase);
-            stepBackBtn.setDisable(!combatPaused); stepFwdBtn.setDisable(!combatPaused);
+        // ── Fighter selectors ─────────────────────────────────────────────────
+        practiceLeftCombo  = new ComboBox<>(); practiceLeftCombo.getStyleClass().add("combo-dark");  practiceLeftCombo.setMaxWidth(Double.MAX_VALUE);
+        practiceRightCombo = new ComboBox<>(); practiceRightCombo.getStyleClass().add("combo-dark"); practiceRightCombo.setMaxWidth(Double.MAX_VALUE);
+        syncPracticeCombos();
+        practiceLeftCombo.setOnAction(e  -> resetPractice());
+        practiceRightCombo.setOnAction(e -> resetPractice());
+
+        // ── Play / Pause / Reset ──────────────────────────────────────────────
+        Button playPauseBtn = btn("▶ Play", "#1e5f2e");
+        playPauseBtn.setMaxWidth(Double.MAX_VALUE);
+        playPauseBtn.setOnAction(e -> {
+            practicePlaying = !practicePlaying;
+            playPauseBtn.setText(practicePlaying ? "⏸ Pause" : "▶ Play");
+            playPauseBtn.setStyle("-fx-background-color:" + (practicePlaying ? "#5f1e1e" : "#1e5f2e") +
+                    ";-fx-text-fill:white;-fx-background-radius:4;-fx-font-size:11;-fx-padding:5 10 5 10;");
+            if (practicePlaying) practiceCombatNextMs = 0;
         });
-        stopBtn.setOnAction(e -> {
-            combatPaused = true;
-            pauseBtn.setText("▶ Play");
-            pauseBtn.setStyle("-fx-background-color:#1e5f3a;"+btnBase);
-            stepBackBtn.setDisable(false); stepFwdBtn.setDisable(false);
-            resetCombatPreview();
+
+        Button resetBtn = btn("↺ Reset", "#2e1a5f");
+        resetBtn.setMaxWidth(Double.MAX_VALUE);
+        resetBtn.setOnAction(e -> {
+            practicePlaying = false;
+            playPauseBtn.setText("▶ Play");
+            playPauseBtn.setStyle("-fx-background-color:#1e5f2e;-fx-text-fill:white;" +
+                    "-fx-background-radius:4;-fx-font-size:11;-fx-padding:5 10 5 10;");
+            resetPractice();
         });
-        stepBackBtn.setOnAction(e -> { if (combatPaused && combatFrozenNs > C_STEP_NS) combatFrozenNs -= C_STEP_NS; });
-        stepFwdBtn.setOnAction(e  -> { if (combatPaused) combatFrozenNs += C_STEP_NS; });
 
         CheckBox faceCheck = new CheckBox("Face Each Other");
         faceCheck.setSelected(true);
         faceCheck.setStyle("-fx-text-fill:#c8c8e0;-fx-font-size:11;");
-        faceCheck.setOnAction(e -> combatFaceEachOther = faceCheck.isSelected());
+        faceCheck.setOnAction(e -> practiceFaceEachOther = faceCheck.isSelected());
 
-        Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
-        HBox titleRow = new HBox(6, lbl("Combat Preview", 13, true), faceCheck, sp, stepBackBtn, stepFwdBtn, pauseBtn, stopBtn);
-        titleRow.setAlignment(Pos.CENTER_LEFT);
-
-        // Canvas + floor strip
-        combatCanvas = new Canvas(COMBAT_CANVAS_W, COMBAT_H);
-        Region floorStrip = new Region();
-        floorStrip.getStyleClass().add("combat-floor");
-        floorStrip.setMinSize(COMBAT_CANVAS_W, COMBAT_FLOOR_H);
-        floorStrip.setMaxSize(COMBAT_CANVAS_W, COMBAT_FLOOR_H);
-        StackPane combatArea = new StackPane(combatCanvas);
-        combatArea.setStyle("-fx-background-color:#0f0f1e;");
-        combatArea.setMinSize(COMBAT_CANVAS_W, COMBAT_H);
-        combatArea.setMaxSize(COMBAT_CANVAS_W, COMBAT_H);
-        VBox innerBox = new VBox(0, combatArea, floorStrip);
-        innerBox.setMinSize(COMBAT_CANVAS_W, COMBAT_TOTAL_H);
-        StackPane canvasBox = new StackPane(innerBox);
-        canvasBox.setStyle("-fx-background-color:#0f0f1e;");
-
-        // Fighter selectors
-        combatLeftCombo  = new ComboBox<>(); combatLeftCombo.getStyleClass().add("combo-dark");  combatLeftCombo.setMaxWidth(Double.MAX_VALUE);
-        combatRightCombo = new ComboBox<>(); combatRightCombo.getStyleClass().add("combo-dark"); combatRightCombo.setMaxWidth(Double.MAX_VALUE);
-        combatLeftCombo.setOnAction(e  -> { if (!suppressCombatComboEvents) resetCombatPreview(); });
-        combatRightCombo.setOnAction(e -> { if (!suppressCombatComboEvents) resetCombatPreview(); });
-
-        Button resetBtn = btn("⚔ Reset Fight", "#2e1a5f");
-        resetBtn.setMaxWidth(Double.MAX_VALUE);
-        resetBtn.setOnAction(e -> resetCombatPreview());
-
-        Label speedLbl = lbl("Speed", 10, true);
-        Slider speedSlider = new Slider(0, 100, 50);
+        // ── Speed slider ──────────────────────────────────────────────────────
+        Slider speedSlider = new Slider(0.25, 4.0, 1.0);
+        speedSlider.setShowTickMarks(true);
+        speedSlider.setShowTickLabels(true);
+        speedSlider.setMajorTickUnit(1.0);
+        speedSlider.setMinorTickCount(3);
+        speedSlider.setSnapToTicks(false);
         speedSlider.setMaxWidth(Double.MAX_VALUE);
-        speedSlider.setStyle("-fx-control-inner-background:#0f0f1e;");
-        Label speedValLbl = new Label("Normal"); speedValLbl.setStyle("-fx-text-fill:#9090b0;-fx-font-size:9;");
-        // Sync initial value from slider position (default 50 → ~2150 ms)
-        { double t0 = speedSlider.getValue()/100.0; combatAttackIntervalMs = Math.round(4000 - t0*(4000-300)); }
-        speedSlider.valueProperty().addListener((obs, o, n) -> {
-            double t = n.doubleValue()/100.0;
-            combatAttackIntervalMs = Math.round(4000 - t*(4000-300));
-            if(t<0.25) speedValLbl.setText("Slow"); else if(t<0.55) speedValLbl.setText("Normal");
-            else if(t<0.80) speedValLbl.setText("Fast"); else speedValLbl.setText("Very Fast");
-        });
-        HBox speedRow = new HBox(4, speedSlider, speedValLbl); speedRow.setAlignment(Pos.CENTER_LEFT); HBox.setHgrow(speedSlider, Priority.ALWAYS);
+        speedSlider.valueProperty().addListener((obs, o, v) -> practiceSpeedMult = v.doubleValue());
+        Label speedLbl = lbl("Speed: 1.0×", 10, false);
+        speedLbl.setStyle("-fx-text-fill:#a0a0c0;");
+        speedSlider.valueProperty().addListener((obs, o, v) ->
+                speedLbl.setText(String.format("Speed: %.2f×", v.doubleValue())));
 
-        Label fallenLbl = lbl("Fallen Duration (sec)", 10, true);
-        Spinner<Integer> fallenSpinner = new Spinner<>(0, 120, (int)(cKipUpDelayMs / 1000));
-        fallenSpinner.setEditable(true);
-        fallenSpinner.setMaxWidth(Double.MAX_VALUE);
-        fallenSpinner.getStyleClass().add("spinner-dark");
-        fallenSpinner.valueProperty().addListener((obs, o, n) -> cKipUpDelayMs = n * 1000L);
+        // ── Combat Settings (from game-mechanics.json) ────────────────────────
+        int defInterval = practiceMechanicsRules.isEmpty() ? 1200 :
+                loadMechanicsTiming("attackIntervalMs", 1200);
+        int defStun     = loadMechanicsTiming("stunDurationMs", 800);
+        int defKo       = loadMechanicsTiming("koRecoveryMs",   3000);
 
-        VBox selectorCol = new VBox(6,
-                lbl("Fighter 1 (left):", 10, true), combatLeftCombo,
-                lbl("Fighter 2 (right):", 10, true), combatRightCombo,
-                resetBtn, speedLbl, speedRow,
-                fallenLbl, fallenSpinner);
-        selectorCol.setPadding(new Insets(4));
-        selectorCol.setPrefWidth(190);
-        selectorCol.setStyle("-fx-background-color:#16213e;-fx-background-radius:4;");
+        pmIntervalSpinner = pmSpinner(100, 10000, defInterval);
+        pmStunSpinner     = pmSpinner(0,   5000,  defStun);
+        pmKoSpinner       = pmSpinner(500, 30000, defKo);
 
-        HBox arenaRow = new HBox(6, canvasBox, selectorCol);
+        // ── Action label ──────────────────────────────────────────────────────
+        practiceActionLabel = new Label("Press ▶ Play to simulate a standard fight.");
+        practiceActionLabel.setStyle("-fx-text-fill:#a0a0c0;-fx-font-size:10;");
+        practiceActionLabel.setWrapText(true);
+
+        // ── Side panel ────────────────────────────────────────────────────────
+        Separator sep1 = new Separator(), sep2 = new Separator();
+
+        CheckBox leftAiCheck = new CheckBox("Use Attack AI");
+        leftAiCheck.setSelected(true);
+        leftAiCheck.setStyle("-fx-text-fill:#c8c8e0;-fx-font-size:11;");
+        leftAiCheck.setOnAction(e -> practiceLeftAI = leftAiCheck.isSelected());
+
+        CheckBox rightAiCheck = new CheckBox("Use Attack AI");
+        rightAiCheck.setSelected(true);
+        rightAiCheck.setStyle("-fx-text-fill:#c8c8e0;-fx-font-size:11;");
+        rightAiCheck.setOnAction(e -> practiceRightAI = rightAiCheck.isSelected());
+
+        CheckBox showHpCheck      = combatCheck("Show Health Bar",  AppSettings.isCombatShowHealthBar());
+        CheckBox showHitsCheck    = combatCheck("Show Hits",        AppSettings.isCombatShowHits());
+        CheckBox showDmgCheck     = combatCheck("Show Damage",      AppSettings.isCombatShowDamage());
+        CheckBox showStanceCheck  = combatCheck("Show Stance",      AppSettings.isCombatShowStance());
+        CheckBox showVerboseCheck = combatCheck("Show Verbose Hits", AppSettings.isCombatShowVerboseHits());
+        showHpCheck.setOnAction(e      -> AppSettings.setCombatShowHealthBar(showHpCheck.isSelected()));
+        showHitsCheck.setOnAction(e    -> AppSettings.setCombatShowHits(showHitsCheck.isSelected()));
+        showDmgCheck.setOnAction(e     -> AppSettings.setCombatShowDamage(showDmgCheck.isSelected()));
+        showStanceCheck.setOnAction(e  -> AppSettings.setCombatShowStance(showStanceCheck.isSelected()));
+        showVerboseCheck.setOnAction(e -> AppSettings.setCombatShowVerboseHits(showVerboseCheck.isSelected()));
+
+        HBox mechRow1 = new HBox(12, showHpCheck, showHitsCheck);
+        HBox mechRow2 = new HBox(12, showDmgCheck, showStanceCheck);
+        mechRow1.setAlignment(Pos.CENTER_LEFT);
+        mechRow2.setAlignment(Pos.CENTER_LEFT);
+
+        VBox sidePanel = new VBox(6,
+                lbl("Fighter 1 (left):", 10, true),  practiceLeftCombo,  leftAiCheck,
+                lbl("Fighter 2 (right):", 10, true), practiceRightCombo, rightAiCheck,
+                faceCheck,
+                new HBox(4, playPauseBtn, resetBtn),
+                sep1,
+                speedLbl, speedSlider,
+                sep2,
+                lbl("Game Mechanics", 11, true),
+                mechRow1, mechRow2, showVerboseCheck,
+                new Separator(),
+                lbl("Preview Settings", 11, true),
+                settingRow("Attack Interval (ms):", pmIntervalSpinner),
+                settingRow("Stun Duration (ms):",   pmStunSpinner),
+                settingRow("KO Recovery (ms):",     pmKoSpinner),
+                practiceActionLabel
+        );
+        sidePanel.setPadding(new Insets(8));
+        sidePanel.setPrefWidth(220);
+        sidePanel.setStyle("-fx-background-color:#16213e;-fx-background-radius:4;");
+
+        // ── Canvas ────────────────────────────────────────────────────────────
+        practiceCanvas = new Canvas(PRACTICE_W, PRACTICE_H);
+
+        Label previewTitle = lbl("Combat Preview", 13, true);
+        previewTitle.setStyle("-fx-text-fill:#e0e0e0;-fx-font-size:13;-fx-font-weight:bold;");
+
+        VBox canvasStack = new VBox(4, previewTitle, practiceCanvas);
+        canvasStack.setStyle("-fx-background-color:#0f0f1e;-fx-padding:6;");
+
+        HBox arenaRow = new HBox(8, canvasStack, sidePanel);
         arenaRow.setAlignment(Pos.TOP_LEFT);
 
-        VBox root = vbox(8, titleRow, arenaRow);
+        VBox root = vbox(8, arenaRow);
 
-        syncCombatCombos();
-        startCombatPreview();
+        practiceTimer = new AnimationTimer() {
+            @Override public void handle(long nowNs) { drawPractice(nowNs); }
+        };
+        practiceTimer.start();
         return root;
     }
 
-    private void startCombatPreview() {
-        combatTimer = new AnimationTimer() {
-            @Override public void handle(long now) {
-                if (combatPaused) { if (combatFrozenNs==0) combatFrozenNs=now; drawCombat(combatFrozenNs); }
-                else              { combatFrozenNs=now; drawCombat(now); }
+    private static CheckBox combatCheck(String label, boolean initial) {
+        CheckBox cb = new CheckBox(label);
+        cb.setSelected(initial);
+        cb.setStyle("-fx-text-fill:#c8c8e0;-fx-font-size:11;");
+        return cb;
+    }
+
+    private VBox settingRow(String label, Spinner<Integer> spinner) {
+        Label l = lbl(label, 10, false);
+        l.setStyle("-fx-text-fill:#a0a0c0;");
+        spinner.setMaxWidth(Double.MAX_VALUE);
+        return new VBox(2, l, spinner);
+    }
+
+    private Spinner<Integer> pmSpinner(int min, int max, int val) {
+        Spinner<Integer> s = new Spinner<>(min, max, val);
+        s.setEditable(true);
+        s.setStyle("-fx-background-color:#0f0f1e;-fx-text-fill:#e0e0e0;");
+        return s;
+    }
+
+    private void loadPracticeMechanics() {
+        practiceMechanicsRules.clear();
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = om.readTree(GameMechanicsPanel.SAVE_FILE.toFile());
+            com.fasterxml.jackson.databind.JsonNode attacks = root.path("attacks");
+            if (attacks.isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode n : attacks) {
+                    GameMechanicsPanel.AttackRule r = new GameMechanicsPanel.AttackRule(
+                            n.path("state").asText("PUNCH"),
+                            n.path("label").asText("Attack"),
+                            n.path("minDamage").asInt(5),
+                            n.path("maxDamage").asInt(12),
+                            n.path("hitZone").asText("BODY"),
+                            n.path("stunMs").asInt(0),
+                            n.path("stunState").asText("GOTHIT01")
+                    );
+                    practiceMechanicsRules.add(r);
+                }
             }
-        };
-        combatTimer.start();
+        } catch (Exception ignored) {}
     }
 
-    private void resetCombatPreview() {
-        cLeftFighter=null; cRightFighter=null; cResolvedLeft=null; cResolvedRight=null;
-        cKoTimeMs=0; cKoText=""; cKoFighter=null; cHealthResetDone=false; cKipUpStartMs=0; combatFrozenNs=0; cDmgNums.clear();
+    private int loadMechanicsTiming(String key, int def) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = om.readTree(GameMechanicsPanel.SAVE_FILE.toFile());
+            return root.path("timing").path(key).asInt(def);
+        } catch (Exception e) { return def; }
     }
 
-    private void resolveCombatFighters(long nowMs) {
-        String lName = combatLeftCombo !=null ? combatLeftCombo.getValue()  : null;
-        String rName = combatRightCombo!=null ? combatRightCombo.getValue() : null;
-        if (lName==null && !mobs.isEmpty()) lName=mobs.get(0).name;
-        if (rName==null && mobs.size()>1)   rName=mobs.get(1).name;
-        boolean changed = !java.util.Objects.equals(lName,cResolvedLeft)||!java.util.Objects.equals(rName,cResolvedRight);
-        if (changed) {
-            cResolvedLeft=lName; cResolvedRight=rName; cDmgNums.clear(); cKoTimeMs=0; cKoText=""; cKipUpStartMs=0; cKoFighter=null; cHealthResetDone=false;
-            MobDef lm=mobByName(lName), rm=mobByName(rName);
-            cLeftFighter  = lm!=null ? new MobFighter(lm, false, nowMs) : null;
-            cRightFighter = rm!=null ? new MobFighter(rm, true,  nowMs) : null;
+    private void syncPracticeCombos() {
+        if (practiceLeftCombo == null || practiceRightCombo == null) return;
+        List<String> names = mobs.stream().map(m -> m.name).collect(java.util.stream.Collectors.toList());
+        String prevL = practiceLeftCombo.getValue(), prevR = practiceRightCombo.getValue();
+        practiceLeftCombo.getItems().setAll(names);
+        practiceRightCombo.getItems().setAll(names);
+        if (names.contains(prevL)) practiceLeftCombo.setValue(prevL);
+        else if (!names.isEmpty()) practiceLeftCombo.setValue(names.get(0));
+        if (names.contains(prevR)) practiceRightCombo.setValue(prevR);
+        else if (names.size() > 1) practiceRightCombo.setValue(names.get(1));
+    }
+
+    private void resetPractice() {
+        practiceResolvedLeft   = null;
+        practiceResolvedRight  = null;
+        practiceLeftAnim       = new PlayerAnimator();
+        practiceRightAnim      = new PlayerAnimator();
+        practiceCombatNextMs   = 0;
+        practiceLeftStunEndMs  = 0;
+        practiceRightStunEndMs = 0;
+        practiceLeftHitMs      = 0;
+        practiceRightHitMs     = 0;
+        practiceCombatTurn     = 0;
+        practiceDmgNums.clear();
+        MobDef lm = mobByName(practiceLeftCombo  != null ? practiceLeftCombo.getValue()  : null);
+        MobDef rm = mobByName(practiceRightCombo != null ? practiceRightCombo.getValue() : null);
+        practiceLeftHp  = lm != null ? lm.baseHp  : 100;
+        practiceRightHp = rm != null ? rm.baseHp : 100;
+        if (practiceActionLabel != null)
+            practiceActionLabel.setText("Press ▶ Play to simulate a standard fight.");
+    }
+
+    private void drawPractice(long nowNs) {
+        long nowMs = nowNs / 1_000_000L;
+        GraphicsContext gc = practiceCanvas.getGraphicsContext2D();
+        double w = practiceCanvas.getWidth(), h = practiceCanvas.getHeight();
+        gc.setFill(Color.web("#0f0f1e")); gc.fillRect(0, 0, w, h);
+
+        String lName = practiceLeftCombo  != null ? practiceLeftCombo.getValue()  : null;
+        String rName = practiceRightCombo != null ? practiceRightCombo.getValue() : null;
+
+        if (!java.util.Objects.equals(lName, practiceResolvedLeft)) {
+            practiceResolvedLeft = lName;
+            practiceLeftAnim = new PlayerAnimator();
+            MobDef init = mobByName(lName);
+            practiceLeftHp = init != null ? init.baseHp : 100;
+            practiceLeftHitMs = 0;
+        }
+        if (!java.util.Objects.equals(rName, practiceResolvedRight)) {
+            practiceResolvedRight = rName;
+            practiceRightAnim = new PlayerAnimator();
+            MobDef init = mobByName(rName);
+            practiceRightHp = init != null ? init.baseHp : 100;
+            practiceRightHitMs = 0;
+        }
+
+        MobDef lm = mobByName(lName), rm = mobByName(rName);
+
+        if (lm == null && rm == null) {
+            gc.setFill(Color.web("#606080")); gc.setFont(javafx.scene.text.Font.font("System", 11));
+            gc.fillText("Select mobs to preview.", w / 2 - 80, h / 2);
+            return;
+        }
+
+        // ── Combat simulation ─────────────────────────────────────────────────
+        if (practicePlaying && lm != null && rm != null) {
+            if (practiceCombatNextMs == 0) practiceCombatNextMs = nowMs;
+
+            // Return stun victims to idle when stun expires
+            if (practiceLeftStunEndMs > 0 && nowMs >= practiceLeftStunEndMs) {
+                practiceLeftAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+                practiceLeftStunEndMs = 0;
+            }
+            if (practiceRightStunEndMs > 0 && nowMs >= practiceRightStunEndMs) {
+                practiceRightAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+                practiceRightStunEndMs = 0;
+            }
+            // Return attacker to idle when one-shot finishes
+            if (practiceLeftAnim.isOneShotDone()  && practiceLeftStunEndMs  == 0)
+                practiceLeftAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+            if (practiceRightAnim.isOneShotDone() && practiceRightStunEndMs == 0)
+                practiceRightAnim.forceState(PlayerAnimator.State.IDLE, nowMs);
+
+            if (nowMs >= practiceCombatNextMs) {
+                int interval = pmIntervalSpinner != null ? pmIntervalSpinner.getValue() : 1200;
+                boolean thisAI = (practiceCombatTurn == 0) ? practiceLeftAI : practiceRightAI;
+
+                if (thisAI) {
+                    MobDef attacker    = (practiceCombatTurn == 0) ? lm   : rm;
+                    MobDef defender    = (practiceCombatTurn == 0) ? rm   : lm;
+                    PlayerAnimator atkAnim = (practiceCombatTurn == 0) ? practiceLeftAnim  : practiceRightAnim;
+                    PlayerAnimator defAnim = (practiceCombatTurn == 0) ? practiceRightAnim : practiceLeftAnim;
+
+                    // Find attack rules whose state is in the attacker's mob states.
+                    // Fall back to any attack-looking state on the mob if no rules match.
+                    List<GameMechanicsPanel.AttackRule> validRules = practiceMechanicsRules.stream()
+                            .filter(r -> {
+                                try { return attacker.states.contains(PlayerAnimator.State.valueOf(r.state.get())); }
+                                catch (Exception e) { return false; }
+                            })
+                            .collect(java.util.stream.Collectors.toList());
+
+                    // Fallback: build synthetic rules from mob states when no mechanics file loaded
+                    if (validRules.isEmpty()) {
+                        List<PlayerAnimator.State> passive = List.of(
+                                PlayerAnimator.State.IDLE, PlayerAnimator.State.RUN,
+                                PlayerAnimator.State.JUMP, PlayerAnimator.State.FALL,
+                                PlayerAnimator.State.GOTHIT01, PlayerAnimator.State.GOTHIT02,
+                                PlayerAnimator.State.GOTHIT03, PlayerAnimator.State.KNOCKED_DOWN,
+                                PlayerAnimator.State.KIP_UP, PlayerAnimator.State.QUAD_IDLE,
+                                PlayerAnimator.State.TROT, PlayerAnimator.State.GALLOP,
+                                PlayerAnimator.State.QUAD_DEATH);
+                        for (PlayerAnimator.State s : attacker.states) {
+                            if (!passive.contains(s)) {
+                                GameMechanicsPanel.AttackRule r = new GameMechanicsPanel.AttackRule(
+                                        s.name(), s.name(), 5, 12, "BODY", 0, "GOTHIT01");
+                                validRules.add(r);
+                            }
+                        }
+                    }
+
+                    if (!validRules.isEmpty()) {
+                        GameMechanicsPanel.AttackRule rule = validRules.get((int)(Math.random() * validRules.size()));
+
+                        try { atkAnim.forceState(PlayerAnimator.State.valueOf(rule.state.get()), nowMs); }
+                        catch (Exception ignored) {}
+
+                        String stunStateName = rule.stunState.get();
+                        if (!"NONE".equals(stunStateName)) {
+                            PlayerAnimator.State stunState = PlayerAnimator.State.GOTHIT01;
+                            try { stunState = PlayerAnimator.State.valueOf(stunStateName); }
+                            catch (Exception ignored) {}
+                            defAnim.forceState(stunState, nowMs);
+                        }
+
+                        int globalStun = pmStunSpinner != null ? pmStunSpinner.getValue() : 800;
+                        int stunMs     = rule.stunMs.get() > 0 ? rule.stunMs.get() : globalStun;
+                        long stunEnd   = nowMs + (long)(stunMs / practiceSpeedMult);
+                        if (practiceCombatTurn == 0) { practiceRightStunEndMs = stunEnd; practiceRightHitMs = nowMs; }
+                        else                         { practiceLeftStunEndMs  = stunEnd; practiceLeftHitMs  = nowMs; }
+
+                        int dmg = rule.minDamage.get() + (int)(Math.random() *
+                                Math.max(1, rule.maxDamage.get() - rule.minDamage.get() + 1));
+
+                        // Deduct HP from defender
+                        double defCx = (practiceCombatTurn == 0) ? w * 0.65 : w * 0.35;
+                        double floorYNow = h - 30;
+                        if (practiceCombatTurn == 0) practiceRightHp = Math.max(0, practiceRightHp - dmg);
+                        else                         practiceLeftHp  = Math.max(0, practiceLeftHp  - dmg);
+                        if (AppSettings.isCombatShowDamage())
+                            practiceDmgNums.add(new Object[]{ defCx, floorYNow - 80, (double)dmg, (double)nowMs, 0.0, rule.label.get() });
+
+                        if (practiceActionLabel != null)
+                            practiceActionLabel.setText(attacker.name + " → " + rule.label.get() +
+                                    " → " + defender.name + " (" + dmg + " dmg)");
+                    } else {
+                        if (practiceActionLabel != null)
+                            practiceActionLabel.setText(attacker.name + " has no attack states defined.");
+                    }
+                }
+
+                practiceCombatNextMs = nowMs + (long)(interval / practiceSpeedMult);
+                practiceCombatTurn   = 1 - practiceCombatTurn;
+            }
+        }
+
+        double leftCx = w * 0.35, rightCx = w * 0.65, floorY = h - 30;
+
+        // ── Floor ─────────────────────────────────────────────────────────────
+        gc.setFill(Color.web("#2a2040"));
+        gc.fillRect(0, floorY, w, h - floorY);
+        gc.setStroke(Color.web("#6a5acd"));
+        gc.setLineWidth(2);
+        gc.strokeLine(0, floorY, w, floorY);
+
+        if (lm != null) {
+            practiceLeftAnim.setFacingRight(practiceFaceEachOther);
+            shadow(gc, leftCx, floorY);
+            practiceLeftAnim.draw(gc, leftCx, floorY, lm.tint, lm.scale * PRACTICE_SCALE, nowMs);
+        }
+        if (rm != null) {
+            practiceRightAnim.setFacingRight(!practiceFaceEachOther);
+            shadow(gc, rightCx, floorY);
+            practiceRightAnim.draw(gc, rightCx, floorY, rm.tint, rm.scale * PRACTICE_SCALE, nowMs);
+        }
+        if (lm != null && rm != null && !practicePlaying) {
+            gc.setFill(Color.web("#f0a030"));
+            gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 14));
+            gc.fillText("VS", w / 2 - 8, floorY - 80);
+        }
+
+        // ── Hit Flash ────────────────────────────────────────────────────────
+        if (AppSettings.isCombatShowHits()) {
+            long HIT_FLASH_MS = 200;
+            if (practiceLeftHitMs  > 0 && nowMs - practiceLeftHitMs  < HIT_FLASH_MS) {
+                double alpha = 0.45 * (1.0 - (double)(nowMs - practiceLeftHitMs) / HIT_FLASH_MS);
+                gc.setFill(Color.color(1, 0.3, 0.3, alpha));
+                gc.fillOval(leftCx - 20, floorY - 100, 40, 80);
+            }
+            if (practiceRightHitMs > 0 && nowMs - practiceRightHitMs < HIT_FLASH_MS) {
+                double alpha = 0.45 * (1.0 - (double)(nowMs - practiceRightHitMs) / HIT_FLASH_MS);
+                gc.setFill(Color.color(1, 0.3, 0.3, alpha));
+                gc.fillOval(rightCx - 20, floorY - 100, 40, 80);
+            }
+        }
+
+        // ── Per-mob stacked overlay: Stance → Name → HP bar (top to bottom) ──
+        gc.setFont(javafx.scene.text.Font.font("System", 9));
+        for (int side = 0; side < 2; side++) {
+            MobDef mob   = (side == 0) ? lm : rm;
+            if (mob == null) continue;
+            PlayerAnimator anim = (side == 0) ? practiceLeftAnim : practiceRightAnim;
+            double cx    = (side == 0) ? leftCx : rightCx;
+            float  curHp = (side == 0) ? practiceLeftHp : practiceRightHp;
+
+            double headTop = floorY - 63.0 * mob.scale * PRACTICE_SCALE;
+            double hpBarY  = headTop - 8;
+            double nameY   = hpBarY  - 10;
+            double stanceY = nameY   - 12;
+
+            // HP bar
+            if (AppSettings.isCombatShowHealthBar())
+                drawHpBar(gc, cx, hpBarY, curHp, mob.baseHp);
+
+            // Name (action)
+            gc.setFill(mob.tint.deriveColor(0, 1.0, 1.5, 1.0));
+            gc.setFont(javafx.scene.text.Font.font("System", 9));
+            gc.fillText(mob.name, cx - mob.name.length() * 2.5, nameY);
+
+            // Stance (topmost)
+            if (AppSettings.isCombatShowStance()) {
+                String st = anim.getState().name();
+                gc.setFill(Color.web("#88aacc"));
+                gc.fillText(st, cx - st.length() * 2.5, stanceY);
+            }
+        }
+
+        // ── Floating Damage / Heal Numbers ────────────────────────────────────
+        if (AppSettings.isCombatShowDamage()) {
+            long DMG_LIFE_MS = 900;
+            practiceDmgNums.removeIf(d -> nowMs - (long)(double)d[3] > DMG_LIFE_MS);
+            gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 13));
+            Color dmgColor  = Color.web(GameMechanicsPanel.loadDisplayColor("damageColor", GameMechanicsPanel.DEFAULT_DAMAGE_COLOR));
+            Color healColor = Color.web(GameMechanicsPanel.loadDisplayColor("healColor",   GameMechanicsPanel.DEFAULT_HEAL_COLOR));
+            boolean verbose = AppSettings.isCombatShowVerboseHits();
+            for (Object[] d : practiceDmgNums) {
+                double age    = nowMs - (double)d[3];
+                double frac   = age / DMG_LIFE_MS;
+                double dy     = frac * 30;
+                double alpha  = 1.0 - frac;
+                boolean isHeal = ((double)d[4]) == 1.0;
+                Color base = isHeal ? healColor : dmgColor;
+                gc.setFill(Color.color(base.getRed(), base.getGreen(), base.getBlue(), alpha));
+                String num  = isHeal ? "+" + (int)(double)d[2] : "-" + (int)(double)d[2];
+                String text = verbose ? num + " " + d[5] : num;
+                gc.fillText(text, (double)d[0] - 8, (double)d[1] - dy);
+            }
         }
     }
 
+    private void drawHpBar(GraphicsContext gc, double cx, double y, float hp, int maxHp) {
+        double bw = 60, bh = 6;
+        double pct = maxHp > 0 ? Math.max(0, hp / maxHp) : 0;
+        Color fill = pct > 0.5 ? Color.web("#44bb44") : pct > 0.25 ? Color.web("#ddaa22") : Color.web("#cc3333");
+        gc.setFill(Color.color(0, 0, 0, 0.5));
+        gc.fillRoundRect(cx - bw / 2 - 1, y - 1, bw + 2, bh + 2, 4, 4);
+        gc.setFill(fill);
+        gc.fillRoundRect(cx - bw / 2, y, bw * pct, bh, 3, 3);
+        gc.setStroke(Color.color(1, 1, 1, 0.3));
+        gc.setLineWidth(1);
+        gc.strokeRoundRect(cx - bw / 2, y, bw, bh, 3, 3);
+    }
+
     private MobDef mobByName(String name) {
-        if (name==null) return null;
+        if (name == null) return null;
         for (MobDef m : mobs) if (m.name.equals(name)) return m;
         return null;
     }
 
-    private void updateCombatFighter(MobFighter f, MobFighter opp, long nowMs, long nowNs,
-                                     double fCx, double oCx, double floorY) {
-        if (f.isKO()||opp==null) return;
-        if (f.isStunned(nowMs)) return;
-        PlayerAnimator.State cs = f.anim.getCurrentState();
-        if (cs==PlayerAnimator.State.GOTHIT01||cs==PlayerAnimator.State.GOTHIT02||
-            cs==PlayerAnimator.State.GOTHIT03||cs==PlayerAnimator.State.KNOCKED_DOWN)
-            f.anim.forceState(f.idleState(), nowMs);
-        if (f.hitPending && nowMs>=f.hitTimeMs) {
-            f.hitPending=false;
-            int dmg=cDamageFor(f.pendingAttack);
-            if (!opp.isKO()) {
-                opp.hp=Math.max(0,opp.hp-dmg);
-                String lbl=cAttackLabel(f.pendingAttack);
-                cDmgNums.add(new DmgNum(fCx+cRng.nextInt(20)-10, floorY-35-cRng.nextInt(8), dmg, lbl, Color.web("#ffdd00"), nowNs));
-                cDmgNums.add(new DmgNum(oCx+cRng.nextInt(20)-10, floorY-42-cRng.nextInt(10),dmg, lbl, Color.web("#ff3344"), nowNs));
-                if (!opp.isKO()) {
-                    PlayerAnimator.State hitSt = opp.hp<10 && opp.hasState(PlayerAnimator.State.KNOCKED_DOWN)
-                            ? PlayerAnimator.State.KNOCKED_DOWN : cHitStateFor(f.pendingAttack, opp);
-                    if (hitSt!=null) { opp.anim.forceState(hitSt,nowMs); opp.stunEndMs=nowMs+C_STUN_MS; }
-                } else {
-                    PlayerAnimator.State dead = opp.knockedState();
-                    if (dead==null) dead=opp.idleState();
-                    opp.anim.forceState(dead,nowMs);
-                    if (dead==PlayerAnimator.State.KNOCKED_DOWN||dead==PlayerAnimator.State.QUAD_DEATH)
-                        opp.anim.setHoldLastFrame(true);
-                    cKoTimeMs=nowMs; cKoText=f.mob.name+" wins!"; cKoFighter=opp; cHealthResetDone=false;
-                    f.hitPending=false; f.anim.forceState(f.idleState(),nowMs);
-                }
-            }
-        }
-        if (!f.hitPending && !opp.isKO() && nowMs>=f.nextAttkMs) {
-            List<PlayerAnimator.State> attacks=f.attackStates();
-            if (!attacks.isEmpty()) {
-                f.pendingAttack=attacks.get(cRng.nextInt(attacks.size()));
-                f.anim.forceState(f.pendingAttack,nowMs);
-                f.hitPending=true; f.hitTimeMs=nowMs+C_HIT_DELAY_MS; f.nextAttkMs=nowMs+combatAttackIntervalMs;
-            }
-        }
+    private void shadow(GraphicsContext gc, double cx, double floorY) {
+        gc.setFill(Color.color(0, 0, 0, 0.35));
+        gc.fillOval(cx - 12, floorY - 2, 24, 6);
     }
 
-    private void drawCombat(long nowNs) {
-        long nowMs=nowNs/1_000_000L;
-        GraphicsContext gc=combatCanvas.getGraphicsContext2D();
-        double w=combatCanvas.getWidth(), h=combatCanvas.getHeight(), floorY=h;
-        gc.setFill(Color.web("#0f0f1e")); gc.fillRect(0,0,w,h);
-        resolveCombatFighters(nowMs);
-        if (cLeftFighter==null&&cRightFighter==null) {
-            gc.setFill(Color.web("#606080")); gc.setFont(javafx.scene.text.Font.font("System",11));
-            gc.fillText("Select two mobs to fight.",w/2-75,h/2); return;
-        }
-        double leftCx=w*0.40, rightCx=w*0.60;
-        if (combatPaused&&cKoTimeMs>0) cKoTimeMs=nowMs-Math.min(nowMs-cKoTimeMs,C_KO_RESET_MS-100);
-        if (cKoTimeMs>0&&nowMs-cKoTimeMs>C_KO_RESET_MS) {
-            long st=0;
-            if(cLeftFighter !=null){cLeftFighter.hp =cLeftFighter.maxHp; cLeftFighter.hitPending =false;cLeftFighter.kipUpTriggered =false;cLeftFighter.nextAttkMs =nowMs+(st+=400);cLeftFighter.anim.forceState(cLeftFighter.idleState(),nowMs);}
-            if(cRightFighter!=null){cRightFighter.hp=cRightFighter.maxHp;cRightFighter.hitPending=false;cRightFighter.kipUpTriggered=false;cRightFighter.nextAttkMs=nowMs+(st+=600);cRightFighter.anim.forceState(cRightFighter.idleState(),nowMs);}
-            cKoTimeMs=0; cKoText=""; cKoFighter=null; cKipUpStartMs=0; cDmgNums.clear();
-        }
-        if (!combatPaused&&cKoTimeMs==0) {
-            updateCombatFighter(cLeftFighter, cRightFighter,nowMs,nowNs,leftCx, rightCx,floorY);
-            updateCombatFighter(cRightFighter,cLeftFighter, nowMs,nowNs,rightCx,leftCx, floorY);
-        }
-        double barW=90, barH=7;
-        // Base sprite height at scale=1.0 is ~63 canvas px; scale bar above head accordingly
-        final double BASE_SPRITE_H = 63.0;
-        if(cLeftFighter !=null){ double barY=floorY-BASE_SPRITE_H*cLeftFighter.mob.scale *COMBAT_SCALE-10; cDrawHpBar(gc,leftCx -barW/2,barY,barW,barH,cLeftFighter.hp, cLeftFighter.maxHp, cLeftFighter.mob.tint, cLeftFighter.mob.name);}
-        if(cRightFighter!=null){ double barY=floorY-BASE_SPRITE_H*cRightFighter.mob.scale*COMBAT_SCALE-10; cDrawHpBar(gc,rightCx-barW/2,barY,barW,barH,cRightFighter.hp,cRightFighter.maxHp,cRightFighter.mob.tint,cRightFighter.mob.name);}
-        gc.setFill(Color.web("#f0a030"));
-        gc.setFont(javafx.scene.text.Font.font("System",javafx.scene.text.FontWeight.BOLD,14));
-        gc.fillText("VS",w/2-8,floorY-105);
-        if(cLeftFighter !=null){if(combatFaceEachOther)cLeftFighter.anim.setFacingRight(true);  cShadow(gc,leftCx, floorY);cLeftFighter.anim.draw(gc,leftCx, floorY,cLeftFighter.mob.tint, cLeftFighter.mob.scale *COMBAT_SCALE,nowMs); double lBarY=floorY-BASE_SPRITE_H*cLeftFighter.mob.scale *COMBAT_SCALE-10; cStateTag(gc,cLeftFighter.anim.getCurrentState().name(), leftCx, lBarY,cLeftFighter.mob.tint);}
-        if(cRightFighter!=null){if(combatFaceEachOther)cRightFighter.anim.setFacingRight(false); cShadow(gc,rightCx,floorY);cRightFighter.anim.draw(gc,rightCx,floorY,cRightFighter.mob.tint,cRightFighter.mob.scale*COMBAT_SCALE,nowMs); double rBarY=floorY-BASE_SPRITE_H*cRightFighter.mob.scale*COMBAT_SCALE-10; cStateTag(gc,cRightFighter.anim.getCurrentState().name(),rightCx,rBarY,cRightFighter.mob.tint);}
-        cDmgNums.removeIf(d->d.dead(nowNs));
-        gc.setFont(javafx.scene.text.Font.font("System",javafx.scene.text.FontWeight.BOLD,12));
-        for(DmgNum d:cDmgNums){double a=d.alpha(nowNs);gc.setFill(d.color.deriveColor(0,1,1.2,a));gc.fillText(d.text,d.x-d.text.length()*3.5,d.currentY(nowNs));}
-        if(cKoTimeMs>0&&cKoFighter!=null){
-            long el=nowMs-cKoTimeMs;
-            boolean hasKipUp   = cKoFighter.hasState(PlayerAnimator.State.KIP_UP);
-            PlayerAnimator.State koSt = cKoFighter.anim.getState();
-            boolean isKnockedDown = koSt==PlayerAnimator.State.KNOCKED_DOWN||koSt==PlayerAnimator.State.QUAD_DEATH;
-            // Trigger get-up after fallen duration
-            if(!cKoFighter.kipUpTriggered && el>=cKipUpDelayMs && isKnockedDown){
-                cKoFighter.anim.setHoldLastFrame(false);
-                if(hasKipUp){
-                    cKoFighter.anim.forceState(PlayerAnimator.State.KIP_UP,nowMs);
-                } else {
-                    cKoFighter.anim.forceState(cKoFighter.idleState(),nowMs);
-                }
-                cKoFighter.kipUpTriggered=true; cKipUpStartMs=nowMs; cKoFighter.nextAttkMs=nowMs+C_KIP_UP_DUR+2000;
-            }
-            if(!cHealthResetDone&&cKoFighter.kipUpTriggered){
-                if(cLeftFighter!=null)cLeftFighter.hp=cLeftFighter.maxHp; if(cRightFighter!=null)cRightFighter.hp=cRightFighter.maxHp; cHealthResetDone=true;
-            }
-            // Clear KO after kip-up animation finishes (time-based, not state-check-based)
-            if(cKoFighter.kipUpTriggered){
-                long sinceKipUp = nowMs - cKipUpStartMs;
-                boolean kipUpDone = hasKipUp ? sinceKipUp >= C_KIP_UP_DUR + 200 : sinceKipUp >= 500;
-                if(kipUpDone){
-                    if(hasKipUp) cKoFighter.anim.forceState(cKoFighter.idleState(),nowMs);
-                    cKoFighter.nextAttkMs=nowMs+1200; cKoFighter.hitPending=false;
-                    cKoTimeMs=0; cKoText=""; cKoFighter=null; cKipUpStartMs=0;
-                }
-            }
-        }
-        if(cKoTimeMs>0){
-            gc.setFill(Color.color(0,0,0,0.5)); gc.fillRect(0,floorY-135,w,30);
-            gc.setFill(Color.web("#f0a030")); gc.setFont(javafx.scene.text.Font.font("System",javafx.scene.text.FontWeight.BOLD,16));
-            gc.fillText("K  O !",w/2-20,floorY-122);
-            gc.setFill(Color.web("#e0e0e0")); gc.setFont(javafx.scene.text.Font.font("System",javafx.scene.text.FontWeight.BOLD,10));
-            gc.fillText(cKoText,w/2-cKoText.length()*3.0,floorY-112);
-        }
-    }
-
-    private void cDrawHpBar(GraphicsContext gc,double x,double y,double w,double h,int hp,int maxHp,Color tint,String name){
-        gc.setFill(Color.color(0.1,0.1,0.15,0.8)); gc.fillRoundRect(x-1,y-1,w+2,h+2,4,4);
-        double pct=Math.max(0,(double)hp/maxHp);
-        gc.setFill(pct>0.5?Color.web("#50c050"):pct>0.25?Color.web("#f0a030"):Color.web("#e94560"));
-        gc.fillRoundRect(x,y,w*pct,h,4,4);
-        gc.setStroke(tint.deriveColor(0,1,0.7,1)); gc.setLineWidth(1); gc.strokeRoundRect(x,y,w,h,4,4);
-        gc.setFill(Color.web("#e0e0e0")); gc.setFont(javafx.scene.text.Font.font("System",8));
-        gc.fillText(name+"  "+hp+"/"+maxHp+" HP",x,y-2);
-    }
-    private void cShadow(GraphicsContext gc,double cx,double floorY){gc.setFill(Color.color(0,0,0,0.35));gc.fillOval(cx-12,floorY-2,24,6);}
-    private void cStateTag(GraphicsContext gc,String s,double cx,double barY,Color tint){gc.setFill(tint.deriveColor(0,1.0,1.5,1.0));gc.setFont(javafx.scene.text.Font.font("System",8));gc.fillText(s,cx-s.length()*2.0,barY-14);}
-
-    private static PlayerAnimator.State cHitStateFor(PlayerAnimator.State attack, MobFighter target) {
-        PlayerAnimator.State zone = switch(attack) {
-            case UPPERCUT,HEAD_KICK,HAYMAKER           -> PlayerAnimator.State.GOTHIT03;
-            case PUNCH,CROSS,HOOK,BODY_KICK,SHOOT      -> PlayerAnimator.State.GOTHIT02;
-            case BITE,POUNCE                           -> PlayerAnimator.State.GOTHIT01;
-            default                                    -> PlayerAnimator.State.GOTHIT01;
-        };
-        if(target.hasState(zone)) return zone;
-        if(target.hasState(PlayerAnimator.State.GOTHIT01)) return PlayerAnimator.State.GOTHIT01;
-        return null;
-    }
-
-    private int cDamageFor(PlayerAnimator.State s) {
-        if(s==null) return 0;
-        return switch(s) {
-            case PUNCH,CROSS,HOOK          -> cRng.nextInt(8)+5;
-            case UPPERCUT                  -> cRng.nextInt(10)+10;
-            case HAYMAKER                  -> cRng.nextInt(12)+18;
-            case HEAD_KICK,BODY_KICK       -> cRng.nextInt(10)+10;
-            case LOW_KICK                  -> cRng.nextInt(8)+7;
-            case SPINNING_BACK_KICK,SIDE_KICK -> cRng.nextInt(12)+14;
-            case SHOOT                     -> cRng.nextInt(15)+12;
-            case BITE                      -> cRng.nextInt(12)+8;
-            case POUNCE                    -> cRng.nextInt(15)+10;
-            default -> 0;
-        };
-    }
-
-    private static String cAttackLabel(PlayerAnimator.State s) {
-        if(s==null) return "";
-        return switch(s) {
-            case PUNCH->"Jab"; case CROSS->"Cross"; case HOOK->"Hook";
-            case UPPERCUT->"Uppercut"; case HAYMAKER->"Haymaker";
-            case HEAD_KICK->"Head Kick"; case LOW_KICK->"Low Kick"; case BODY_KICK->"Body Kick";
-            case SPINNING_BACK_KICK->"Spin Kick"; case SIDE_KICK->"Side Kick";
-            case SHOOT->"Shot"; case BITE->"Bite"; case POUNCE->"Pounce";
-            default->s.name();
-        };
+    private void nameTag(GraphicsContext gc, String name, double cx, double floorY, Color tint, double scale) {
+        final double BASE_H = 63.0;
+        double tagY = floorY - BASE_H * scale * PRACTICE_SCALE - 8;
+        gc.setFill(tint.deriveColor(0, 1.0, 1.5, 1.0));
+        gc.setFont(javafx.scene.text.Font.font("System", 9));
+        gc.fillText(name, cx - name.length() * 2.5, tagY);
     }
 
     /** Re-populates the states FlowPane with only the states that belong to the given body type. */

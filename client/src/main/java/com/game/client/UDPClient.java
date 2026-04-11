@@ -47,7 +47,7 @@ public class UDPClient {
     private Thread            receiverThread;
 
     public UDPClient(ClientConfig config) {
-        this.serverHost = AppSettings.getServerHost();
+        this.serverHost = AppSettings.getExternalServerHost();
         this.adminHost  = config.getAdminHost();
         this.serverPort = AppSettings.getServerPort();
         this.localPort  = config.getClientPort();

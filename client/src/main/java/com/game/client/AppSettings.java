@@ -33,7 +33,9 @@ public final class AppSettings {
     private static volatile int            externalServerPort      = 9876;
     private static volatile boolean        allowExternalAdmin      = false;
     private static volatile boolean        allowExternalDev        = false;
-    private static volatile SoundMode soundMode       = SoundMode.HIGH;
+    private static volatile int        masterVolume    = 100;  // 0–100
+    private static volatile int        soundVolume     = 100;  // 0–100
+    private static volatile int        musicVolume     = 100;  // 0–100
     private static volatile boolean   keepScreenAwake = true;
     private static volatile double    hudOpacity      = 1.0;
     private static volatile String    clientVersion    = GameVersion.VERSION;
@@ -63,6 +65,11 @@ public final class AppSettings {
     private static volatile float     testNpcY         = 14f;
     private static volatile int       rebootDelaySecs  = 60;
     private static volatile String    rebootMessage    = "";
+    private static volatile boolean   combatShowHealthBar  = true;
+    private static volatile boolean   combatShowHits       = true;
+    private static volatile boolean   combatShowDamage     = true;
+    private static volatile boolean   combatShowStance     = true;
+    private static volatile boolean   combatShowVerboseHits = true;
 
     static { load(); }
 
@@ -94,8 +101,9 @@ public final class AppSettings {
         externalServerPort  = intOf(merged,  "server.external.port", externalServerPort);
         allowExternalAdmin  = boolOf(merged, "admin.allowExternalAdmin", allowExternalAdmin);
         allowExternalDev    = boolOf(merged, "admin.allowExternalDev",   allowExternalDev);
-        soundMode       = SoundMode.fromString(merged.getProperty("sound.mode",
-                          merged.getProperty("sound.enabled", soundMode.name())));
+        masterVolume    = intOf(merged,  "master.volume", masterVolume);
+        soundVolume     = intOf(merged,  "sound.volume",  soundVolume);
+        musicVolume     = intOf(merged,  "music.volume",  musicVolume);
         keepScreenAwake = boolOf(merged, "display.keepScreenAwake", keepScreenAwake);
         hudOpacity      = doubleOf(merged, "display.hudOpacity", hudOpacity);
         lastUsername          = merged.getProperty("client.lastUsername",          lastUsername);
@@ -124,6 +132,11 @@ public final class AppSettings {
         testNpcY          = floatOf(merged, "gameplay.testNpcY",   testNpcY);
         rebootDelaySecs   = intOf(merged,   "server.rebootDelaySecs", rebootDelaySecs);
         rebootMessage     = merged.getProperty("server.rebootMessage", rebootMessage);
+        combatShowHealthBar  = boolOf(merged, "combat.showHealthBar",  combatShowHealthBar);
+        combatShowHits       = boolOf(merged, "combat.showHits",       combatShowHits);
+        combatShowDamage     = boolOf(merged, "combat.showDamage",     combatShowDamage);
+        combatShowStance     = boolOf(merged, "combat.showStance",     combatShowStance);
+        combatShowVerboseHits = boolOf(merged, "combat.showVerboseHits", combatShowVerboseHits);
     }
 
     // ── Save ──────────────────────────────────────────────────────────────────
@@ -140,7 +153,9 @@ public final class AppSettings {
         p.setProperty("server.external.port",      String.valueOf(externalServerPort));
         p.setProperty("admin.allowExternalAdmin",  String.valueOf(allowExternalAdmin));
         p.setProperty("admin.allowExternalDev",    String.valueOf(allowExternalDev));
-        p.setProperty("sound.mode",                soundMode.name());
+        p.setProperty("master.volume",             String.valueOf(masterVolume));
+        p.setProperty("sound.volume",              String.valueOf(soundVolume));
+        p.setProperty("music.volume",              String.valueOf(musicVolume));
         p.setProperty("display.resolution",        resolution.name());
         p.setProperty("display.keepScreenAwake",   String.valueOf(keepScreenAwake));
         p.setProperty("display.hudOpacity",        String.valueOf(hudOpacity));
@@ -169,6 +184,11 @@ public final class AppSettings {
         p.setProperty("gameplay.testNpcY",         String.valueOf(testNpcY));
         p.setProperty("server.rebootDelaySecs",    String.valueOf(rebootDelaySecs));
         p.setProperty("server.rebootMessage",      rebootMessage);
+        p.setProperty("combat.showHealthBar",   String.valueOf(combatShowHealthBar));
+        p.setProperty("combat.showHits",        String.valueOf(combatShowHits));
+        p.setProperty("combat.showDamage",      String.valueOf(combatShowDamage));
+        p.setProperty("combat.showStance",      String.valueOf(combatShowStance));
+        p.setProperty("combat.showVerboseHits", String.valueOf(combatShowVerboseHits));
         try {
             Files.createDirectories(USER_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(USER_FILE)) {
@@ -187,7 +207,6 @@ public final class AppSettings {
     public static GameResolution getResolution()   { return resolution; }
     public static String         getServerHost()   { return serverHost; }
     public static int       getServerPort()              { return serverPort; }
-    public static SoundMode getSoundMode()               { return soundMode; }
     public static boolean   isKeepScreenAwake()          { return keepScreenAwake; }
     public static double    getHudOpacity()              { return hudOpacity; }
     public static String    getClientVersion()           { return clientVersion; }
@@ -235,6 +254,16 @@ public final class AppSettings {
     public static void      setTestNpcX(float v)       { testNpcX = v; }
     public static float     getTestNpcY()              { return testNpcY; }
     public static void      setTestNpcY(float v)       { testNpcY = v; }
+    public static boolean   isCombatShowHealthBar()             { return combatShowHealthBar; }
+    public static void      setCombatShowHealthBar(boolean v)   { combatShowHealthBar = v; }
+    public static boolean   isCombatShowHits()                  { return combatShowHits; }
+    public static void      setCombatShowHits(boolean v)        { combatShowHits = v; }
+    public static boolean   isCombatShowDamage()                { return combatShowDamage; }
+    public static void      setCombatShowDamage(boolean v)      { combatShowDamage = v; }
+    public static boolean   isCombatShowStance()                { return combatShowStance; }
+    public static void      setCombatShowStance(boolean v)      { combatShowStance = v; }
+    public static boolean   isCombatShowVerboseHits()               { return combatShowVerboseHits; }
+    public static void      setCombatShowVerboseHits(boolean v)     { combatShowVerboseHits = v; }
     public static int       getRebootDelaySecs()       { return rebootDelaySecs; }
     public static void      setRebootDelaySecs(int v)  { rebootDelaySecs = v; }
     public static String    getRebootMessage()         { return rebootMessage; }
@@ -251,7 +280,12 @@ public final class AppSettings {
     public static void      setAllowExternalAdmin(boolean v)   { allowExternalAdmin   = v; }
     public static boolean   isAllowExternalDev()               { return allowExternalDev; }
     public static void      setAllowExternalDev(boolean v)     { allowExternalDev     = v; }
-    public static void setSoundMode(SoundMode v)         { soundMode       = v; }
+    public static int  getMasterVolume()                 { return masterVolume; }
+    public static void setMasterVolume(int v)            { masterVolume = Math.max(0, Math.min(100, v)); }
+    public static int  getSoundVolume()                  { return soundVolume; }
+    public static void setSoundVolume(int v)             { soundVolume = Math.max(0, Math.min(100, v)); }
+    public static int  getMusicVolume()                  { return musicVolume; }
+    public static void setMusicVolume(int v)             { musicVolume = Math.max(0, Math.min(100, v)); }
     public static void setKeepScreenAwake(boolean v)     { keepScreenAwake = v; }
     public static void setHudOpacity(double v)           { hudOpacity      = v; }
     public static void setLastUsername(String v)         { lastUsername    = v; }

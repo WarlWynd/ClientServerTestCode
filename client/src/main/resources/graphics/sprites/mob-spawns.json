@@ -1,0 +1,21 @@
+{
+  "BoardFour.csv" : [ {
+    "mob" : "Wolf",
+    "col" : 14,
+    "row" : 21,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Skeleton",
+    "col" : 19,
+    "row" : 21,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  }, {
+    "mob" : "Warlord",
+    "col" : 38,
+    "row" : 20,
+    "respawnSec" : 30,
+    "maxCount" : 2
+  } ]
+}

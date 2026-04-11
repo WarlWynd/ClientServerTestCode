@@ -254,10 +254,9 @@ public class AdminPanel {
                 }
                 showStatus(msg, ok);
             });
-            case ADMIN_RESTART_RESPONSE -> {
-                if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
-            }
-            case ADMIN_DEPLOY_RESPONSE -> {
+            case ADMIN_SAVE_SETTINGS_RESPONSE,
+                 ADMIN_RESTART_RESPONSE,
+                 ADMIN_DEPLOY_RESPONSE -> {
                 if (gameSettingsPanel != null) gameSettingsPanel.onPacket(packet);
             }
         }

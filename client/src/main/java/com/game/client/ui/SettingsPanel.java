@@ -2,7 +2,6 @@ package com.game.client.ui;
 
 import com.game.client.AppSettings;
 import com.game.client.GameResolution;
-import com.game.client.SoundMode;
 import com.game.client.ThemeManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -45,24 +44,20 @@ public class SettingsPanel {
     public Node buildView() {
 
         // ── Audio ─────────────────────────────────────────────────────────────
-        ToggleGroup soundGroup = new ToggleGroup();
-        HBox radioRow = new HBox(16);
-        radioRow.setAlignment(Pos.CENTER_LEFT);
+        Spinner<Integer> masterSpinner = volumeSpinner(AppSettings.getMasterVolume());
+        masterSpinner.valueProperty().addListener((obs, old, val) -> AppSettings.setMasterVolume(val));
 
-        for (SoundMode mode : SoundMode.values()) {
-            RadioButton rb = new RadioButton(mode.label);
-            rb.setToggleGroup(soundGroup);
-            rb.setUserData(mode);
-            rb.setSelected(AppSettings.getSoundMode() == mode);
-            rb.getStyleClass().add("radio-secondary");
-            radioRow.getChildren().add(rb);
-        }
+        Spinner<Integer> soundSpinner = volumeSpinner(AppSettings.getSoundVolume());
+        soundSpinner.valueProperty().addListener((obs, old, val) -> AppSettings.setSoundVolume(val));
 
-        soundGroup.selectedToggleProperty().addListener((obs, old, val) -> {
-            if (val != null) AppSettings.setSoundMode((SoundMode) val.getUserData());
-        });
+        Spinner<Integer> musicSpinner = volumeSpinner(AppSettings.getMusicVolume());
+        musicSpinner.valueProperty().addListener((obs, old, val) -> AppSettings.setMusicVolume(val));
 
-        VBox audioSection = section("Audio", row(radioRow));
+        HBox audioRow = new HBox(24, subSection("Sound Effects", soundSpinner), subSection("Music", musicSpinner));
+        audioRow.setAlignment(Pos.CENTER_LEFT);
+        VBox audioSection = section("Audio",
+                subSection("Master Volume", masterSpinner),
+                audioRow);
 
         // ── Display ───────────────────────────────────────────────────────────
         CheckBox keepAwakeCheck = new CheckBox("Keep screen awake");
@@ -186,10 +181,12 @@ public class SettingsPanel {
                 row(hudRow),
                 row(resLabel),
                 row(resCol),
-                row(resNote),
-                row("Tabs:",        tabSideRow),
+                row(resNote));
+
+        VBox uiSection = section("User Interface",
+                row("Tabs:",      tabSideRow),
                 row("Tab Emoji:", tabLabelRow),
-                row("Theme:",      themeRow));
+                row("Theme:",     themeRow));
 
         // ── Controls (key bindings) ───────────────────────────────────────────
         HBox jumpRow       = keyBindRow("Jump:",        AppSettings.getKeyJump(),       AppSettings::setKeyJump);
@@ -201,6 +198,25 @@ public class SettingsPanel {
         HBox punchRow      = keyBindRow("Punch:",        AppSettings.getKeyPunch(),      AppSettings::setKeyPunch);
         HBox attackRow     = keyBindRow("Attack:",       AppSettings.getKeyAttack(),     AppSettings::setKeyAttack);
         VBox controlsSection = section("Controls", jumpRow, sprintRow, fireRow, climbUpRow, climbDownRow, kickRow, punchRow, attackRow);
+
+        // ── Combat Display ────────────────────────────────────────────────────
+        CheckBox showHpCheck      = settingsCheck("Show Health Bar",  AppSettings.isCombatShowHealthBar());
+        CheckBox showHitsCheck    = settingsCheck("Show Hits",        AppSettings.isCombatShowHits());
+        CheckBox showDmgCheck     = settingsCheck("Show Damage",      AppSettings.isCombatShowDamage());
+        CheckBox showStanceCheck  = settingsCheck("Show Stance",      AppSettings.isCombatShowStance());
+        CheckBox showVerboseCheck = settingsCheck("Show Verbose Hits", AppSettings.isCombatShowVerboseHits());
+        showHpCheck.setOnAction(e      -> AppSettings.setCombatShowHealthBar(showHpCheck.isSelected()));
+        showHitsCheck.setOnAction(e    -> AppSettings.setCombatShowHits(showHitsCheck.isSelected()));
+        showDmgCheck.setOnAction(e     -> AppSettings.setCombatShowDamage(showDmgCheck.isSelected()));
+        showStanceCheck.setOnAction(e  -> AppSettings.setCombatShowStance(showStanceCheck.isSelected()));
+        showVerboseCheck.setOnAction(e -> AppSettings.setCombatShowVerboseHits(showVerboseCheck.isSelected()));
+        HBox combatRow1 = new HBox(24, showHpCheck, showHitsCheck);
+        HBox combatRow2 = new HBox(24, showDmgCheck, showStanceCheck);
+        HBox combatRow3 = new HBox(24, showVerboseCheck);
+        combatRow1.setAlignment(Pos.CENTER_LEFT);
+        combatRow2.setAlignment(Pos.CENTER_LEFT);
+        combatRow3.setAlignment(Pos.CENTER_LEFT);
+        VBox combatSection = section("Combat", row(combatRow1), row(combatRow2), row(combatRow3));
 
         // ── Account ───────────────────────────────────────────────────────────
         VBox accountSection = section("Account", comingSoon());
@@ -221,8 +237,9 @@ public class SettingsPanel {
         });
 
         resetBtn.setOnAction(e -> {
-            soundGroup.getToggles().forEach(t ->
-                    t.setSelected(t.getUserData() == AppSettings.getSoundMode()));
+            masterSpinner.getValueFactory().setValue(AppSettings.getMasterVolume());
+            soundSpinner.getValueFactory().setValue(AppSettings.getSoundVolume());
+            musicSpinner.getValueFactory().setValue(AppSettings.getMusicVolume());
             keepAwakeCheck.setSelected(AppSettings.isKeepScreenAwake());
             hudGroup.getToggles().forEach(t ->
                     t.setSelected(Math.abs((double) t.getUserData() - AppSettings.getHudOpacity()) < 0.01));
@@ -272,7 +289,7 @@ public class SettingsPanel {
         buttons.setPadding(new Insets(16, 20, 20, 20));
 
         // ── Scroll container ──────────────────────────────────────────────────
-        VBox content = new VBox(audioSection, displaySection, controlsSection, accountSection, buttons);
+        VBox content = new VBox(audioSection, displaySection, uiSection, controlsSection, combatSection, accountSection, buttons);
         content.getStyleClass().add("app-root");
 
         ScrollPane scroll = new ScrollPane(content);
@@ -280,6 +297,24 @@ public class SettingsPanel {
         scroll.getStyleClass().add("scroll-dark");
 
         return scroll;
+    }
+
+    // ── Audio helpers ─────────────────────────────────────────────────────────
+
+    private static Spinner<Integer> volumeSpinner(int initial) {
+        Spinner<Integer> spinner = new Spinner<>(0, 100, initial, 1);
+        spinner.setEditable(true);
+        spinner.setPrefWidth(80);
+        spinner.getStyleClass().addAll(Spinner.STYLE_CLASS_SPLIT_ARROWS_HORIZONTAL, "spinner-dark");
+        return spinner;
+    }
+
+    private static VBox subSection(String title, Node control) {
+        Label lbl = new Label(title);
+        lbl.getStyleClass().addAll("text-secondary", "font-12");
+        VBox box = new VBox(4, lbl, control);
+        box.setPadding(new Insets(4, 0, 6, 0));
+        return box;
     }
 
     // ── Section builder ───────────────────────────────────────────────────────
@@ -323,6 +358,12 @@ public class SettingsPanel {
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(2, 0, 2, 0));
         return row;
+    }
+
+    private static CheckBox settingsCheck(String label, boolean initial) {
+        CheckBox cb = new CheckBox(label);
+        cb.setSelected(initial);
+        return cb;
     }
 
     private static Label comingSoon() {

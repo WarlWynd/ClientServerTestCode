@@ -59,22 +59,22 @@ public class GraphicsDevScreen {
     }
 
     public Node build() {
-        Tab filesTab      = new Tab("📁 Files",          buildFilesView());
-        Tab spritesTab    = new Tab("🕹 Sprite Preview", buildSpritePreview());
-        Tab editorTab     = new Tab("✏ Pose Editor",     new SpriteEditorPanel().build());
-        Tab charEditorTab = new Tab("🧍 Sprite Editor",  new SpriteCharacterPanel().build());
-        Tab mobTab        = new Tab("👾 Mob Manager",    new MobManagerPanel().build());
-        Tab lootTab       = new Tab("📦 Loot Tables",   new LootTablePanel().build());
-        Tab itemTab       = new Tab("⚔ Item Registry",  new ItemRegistryPanel().build());
+        Tab filesTab      = new Tab("📁 Files",            buildFilesView());
+        Tab spritesTab    = new Tab("🕹 Sprite Preview",   buildSpritePreview());
+        Tab editorTab     = new Tab("✏ Pose Editor",       new SpriteEditorPanel().build());
+        Tab mobTab        = new Tab("👾 Mob Manager",      new MobManagerPanel().build());
+        Tab lootTab       = new Tab("📦 Loot Tables",     new LootTablePanel().build());
+        Tab itemTab       = new Tab("🗡 Item Registry",    new ItemRegistryPanel().build());
+        Tab mechanicsTab  = new Tab("🎮 Game Mechanics",   new GameMechanicsPanel().build());
         filesTab.setClosable(false);
         spritesTab.setClosable(false);
         editorTab.setClosable(false);
-        charEditorTab.setClosable(false);
         mobTab.setClosable(false);
         lootTab.setClosable(false);
         itemTab.setClosable(false);
+        mechanicsTab.setClosable(false);
 
-        TabPane inner = new TabPane(filesTab, spritesTab, editorTab, charEditorTab, mobTab, lootTab, itemTab);
+        TabPane inner = new TabPane(filesTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;

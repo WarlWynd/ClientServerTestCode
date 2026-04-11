@@ -38,6 +38,7 @@ public class GameSettingsPanel {
     private TextField rebootDelayField;
     private TextField rebootMessageField;
     private Label     rebootStatusLabel;
+    private Label     commitStatusLabel;
     private Consumer<Integer> onServerRestart;
 
     public GameSettingsPanel(UDPClient client) {
@@ -52,6 +53,14 @@ public class GameSettingsPanel {
     public void onPacket(Packet packet) {
         Platform.runLater(() -> {
             switch (packet.type) {
+                case ADMIN_SAVE_SETTINGS_RESPONSE -> {
+                    boolean ok  = packet.payload.has("success") && packet.payload.get("success").asBoolean();
+                    String  msg = ok ? "Saved to server." :
+                            packet.payload.has("message")
+                                    ? packet.payload.get("message").asText("Save failed.")
+                                    : "Save failed.";
+                    if (commitStatusLabel != null) setStatus(commitStatusLabel, msg, ok);
+                }
                 case ADMIN_RESTART_RESPONSE -> {
                     boolean ok = packet.payload.get("success").asBoolean();
                     if (ok) {
@@ -297,7 +306,8 @@ public class GameSettingsPanel {
         VBox rebootSection = section("Reboot Settings", delayRow, msgRow, rebootHint, actionRow);
 
         // ── Save / status ─────────────────────────────────────────────────────
-        Label statusLabel = new Label();
+        commitStatusLabel = new Label();
+        Label statusLabel = commitStatusLabel;
         statusLabel.getStyleClass().add("font-11");
 
         Button saveBtn = new Button("Test Locally");

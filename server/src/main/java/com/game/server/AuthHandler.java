@@ -2,6 +2,7 @@ package com.game.server;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.server.db.CharacterRepository;
+import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.SessionRepository;
 import com.game.server.db.UserRepository;
 import com.game.server.model.Session;
@@ -26,9 +27,10 @@ public class AuthHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AuthHandler.class);
 
-    final         UserRepository    userRepo    = new UserRepository();
-    private final SessionRepository sessionRepo = new SessionRepository();
-    private final CharacterRepository charRepo  = new CharacterRepository();
+    final         UserRepository          userRepo    = new UserRepository();
+    private final SessionRepository       sessionRepo = new SessionRepository();
+    private final CharacterRepository     charRepo    = new CharacterRepository();
+    private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
 
     private GameHandler gameHandler;
 
@@ -60,19 +62,32 @@ public class AuthHandler {
             // Register address immediately so FORCE_LOGOUT can reach this client
             // even before they send a GAME_JOIN packet.
             if (gameHandler != null) gameHandler.registerLoginAddress(session.token(), addr, port);
+
+            // Determine effective role flags based on connection origin and server settings.
+            // Admin/dev tabs are suppressed for external connections unless the server permits it.
+            // Always read from MySQL — do not use any cached value.
+            boolean localConn = isLocalAddress(addr);
+            ServerSettingsRepository.Settings settings = settingsRepo.load();
+            boolean extAdminOk = settings.allowExternalAdmin();
+            boolean extDevOk   = settings.allowExternalDev();
+            boolean effectiveAdmin      = user.get().isAdmin()      && (localConn || extAdminOk);
+            boolean effectiveGraphicsDev = user.get().isGraphicsDev() && (localConn || extDevOk);
+            boolean effectiveBoardDev    = user.get().isBoardDev()    && (localConn || extDevOk);
+            boolean effectiveAudioDev    = user.get().isAudioDev()    && (localConn || extDevOk);
+
             out.put("success",      true);
             out.put("sessionToken", session.token());
             out.put("username",     session.username());
-            out.put("isAdmin",       user.get().isAdmin());
-            out.put("isGraphicsDev", user.get().isGraphicsDev());
-            out.put("isBoardDev",    user.get().isBoardDev());
-            out.put("isAudioDev",    user.get().isAudioDev());
+            out.put("isAdmin",       effectiveAdmin);
+            out.put("isGraphicsDev", effectiveGraphicsDev);
+            out.put("isBoardDev",    effectiveBoardDev);
+            out.put("isAudioDev",    effectiveAudioDev);
             String charName = charRepo.getCharacterName(user.get().id());
             out.put("hasCharacter",   charName != null);
             if (charName != null) out.put("characterName", charName);
-            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} boardDev={} audioDev={} from {}:{}",
-                    user.get().username(), user.get().isAdmin(), user.get().isGraphicsDev(), user.get().isBoardDev(),
-                    user.get().isAudioDev(), addr.getHostAddress(), port);
+            log.info("LOGIN  ok  user='{}' admin={} graphicsDev={} boardDev={} audioDev={} local={} from {}:{}",
+                    user.get().username(), effectiveAdmin, effectiveGraphicsDev, effectiveBoardDev,
+                    effectiveAudioDev, localConn, addr.getHostAddress(), port);
         } else {
             out.put("success", false);
             out.put("message", "Invalid username or password.");
@@ -143,6 +158,11 @@ public class AuthHandler {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Returns true if the address is loopback or a private/site-local LAN address. */
+    private static boolean isLocalAddress(InetAddress addr) {
+        return addr.isLoopbackAddress() || addr.isSiteLocalAddress();
+    }
 
     private void send(DatagramSocket socket, PacketType type, String token,
                       ObjectNode payload, InetAddress addr, int port) throws Exception {
