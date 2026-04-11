@@ -76,8 +76,11 @@ public class ItemRegistryPanel {
         String       description;
         int          statArmor;                        // damage reduction %
         int          statHp, statMana;
+        int          statHpRegen, statManaRegen;
         int          statInt, statStr, statWis, statCha;
         int          statSta, statAgi, statDex, statLuk;
+        int          statFireRes, statColdRes, statPoisonRes, statDiseaseRes, statMagicRes;
+        int          statHaste, statEnhDmg;
         int          value; // gold value
 
         ItemDef(String name, ItemCategory category) {
@@ -98,8 +101,10 @@ public class ItemRegistryPanel {
     private CheckBox          noLogCheck;
     private TextArea          descField;
     private Spinner<Integer>  spArmor;
-    private Spinner<Integer>  spHp, spMana;
+    private Spinner<Integer>  spHp, spMana, spHpRegen, spManaRegen;
     private Spinner<Integer>  spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue;
+    private Spinner<Integer>  spFireRes, spColdRes, spPoisonRes, spDiseaseRes, spMagicRes;
+    private Spinner<Integer>  spHaste, spEnhDmg;
     private Label             statusLabel;
     private TextField         searchField;
 
@@ -228,23 +233,39 @@ public class ItemRegistryPanel {
         spValue = intSpinner(-9999, 99999, 0);
 
         // ── Stats grid ────────────────────────────────────────────────────────
-        spArmor = intSpinner(0, 100, 0);
-        spHp   = statSpinner(); spMana = statSpinner();
-        spInt  = statSpinner(); spStr  = statSpinner(); spWis = statSpinner(); spCha = statSpinner();
-        spSta  = statSpinner(); spAgi  = statSpinner(); spDex = statSpinner(); spLuk = statSpinner();
+        spArmor      = intSpinner(0, 100, 0);
+        spHp         = statSpinner(); spMana       = statSpinner();
+        spHpRegen    = statSpinner(); spManaRegen  = statSpinner();
+        spInt        = statSpinner(); spStr        = statSpinner();
+        spWis        = statSpinner(); spCha        = statSpinner();
+        spSta        = statSpinner(); spAgi        = statSpinner();
+        spDex        = statSpinner(); spLuk        = statSpinner();
+        spFireRes    = statSpinner(); spColdRes    = statSpinner();
+        spPoisonRes  = statSpinner(); spDiseaseRes = statSpinner();
+        spMagicRes   = statSpinner();
+        spHaste      = statSpinner(); spEnhDmg     = statSpinner();
 
-        spArmor.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.statArmor = n; });
-        spHp.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statHp   = n; });
-        spMana.valueProperty().addListener((o, p, n)  -> { if (selected != null) selected.statMana = n; });
-        spInt.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statInt  = n; });
-        spStr.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statStr  = n; });
-        spWis.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statWis  = n; });
-        spCha.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statCha  = n; });
-        spSta.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statSta  = n; });
-        spAgi.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statAgi  = n; });
-        spDex.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statDex  = n; });
-        spLuk.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statLuk  = n; });
-        spValue.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.value    = n; });
+        spArmor.valueProperty().addListener((o, p, n)      -> { if (selected != null) selected.statArmor     = n; });
+        spHp.valueProperty().addListener((o, p, n)         -> { if (selected != null) selected.statHp        = n; });
+        spMana.valueProperty().addListener((o, p, n)       -> { if (selected != null) selected.statMana      = n; });
+        spHpRegen.valueProperty().addListener((o, p, n)    -> { if (selected != null) selected.statHpRegen   = n; });
+        spManaRegen.valueProperty().addListener((o, p, n)  -> { if (selected != null) selected.statManaRegen = n; });
+        spInt.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statInt       = n; });
+        spStr.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statStr       = n; });
+        spWis.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statWis       = n; });
+        spCha.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statCha       = n; });
+        spSta.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statSta       = n; });
+        spAgi.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statAgi       = n; });
+        spDex.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statDex       = n; });
+        spLuk.valueProperty().addListener((o, p, n)        -> { if (selected != null) selected.statLuk       = n; });
+        spFireRes.valueProperty().addListener((o, p, n)    -> { if (selected != null) selected.statFireRes   = n; });
+        spColdRes.valueProperty().addListener((o, p, n)    -> { if (selected != null) selected.statColdRes   = n; });
+        spPoisonRes.valueProperty().addListener((o, p, n)  -> { if (selected != null) selected.statPoisonRes = n; });
+        spDiseaseRes.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.statDiseaseRes= n; });
+        spMagicRes.valueProperty().addListener((o, p, n)   -> { if (selected != null) selected.statMagicRes  = n; });
+        spHaste.valueProperty().addListener((o, p, n)      -> { if (selected != null) selected.statHaste     = n; });
+        spEnhDmg.valueProperty().addListener((o, p, n)     -> { if (selected != null) selected.statEnhDmg    = n; });
+        spValue.valueProperty().addListener((o, p, n)      -> { if (selected != null) selected.value         = n; });
 
         GridPane statsGrid = new GridPane();
         statsGrid.setHgap(10); statsGrid.setVgap(6);
@@ -252,17 +273,26 @@ public class ItemRegistryPanel {
                            "-fx-border-color: #3a3a6a; -fx-border-radius: 4;");
 
         int row = 0;
-        addStatRow(statsGrid, row++, "ARMOR (Dmg Reduction %)", spArmor, "#7090c0");
-        addStatRow(statsGrid, row++, "HP   (Hit Points)",   spHp,   "#e05050");
-        addStatRow(statsGrid, row++, "MANA (Mana Pool)",    spMana, "#5080ff");
-        addStatRow(statsGrid, row++, "INT  (Intelligence)", spInt,  "#53c0f0");
-        addStatRow(statsGrid, row++, "STR  (Strength)",     spStr,  "#e94560");
-        addStatRow(statsGrid, row++, "WIS  (Wisdom)",       spWis,  "#c8a020");
-        addStatRow(statsGrid, row++, "CHA  (Charisma)",     spCha,  "#bd10e0");
-        addStatRow(statsGrid, row++, "STA  (Stamina)",      spSta,  "#50c050");
-        addStatRow(statsGrid, row++, "AGI  (Agility)",      spAgi,  "#ff8844");
-        addStatRow(statsGrid, row++, "DEX  (Dexterity)",    spDex,  "#44cc88");
-        addStatRow(statsGrid, row++, "LUK  (Luck)",         spLuk,  "#f0e030");
+        addStatRow(statsGrid, row++, "ARMOR (Dmg Reduction %)",  spArmor,      "#7090c0");
+        addStatRow(statsGrid, row++, "HP   (Hit Points)",        spHp,         "#e05050");
+        addStatRow(statsGrid, row++, "HP Regen",                 spHpRegen,    "#e07070");
+        addStatRow(statsGrid, row++, "MANA (Mana Pool)",         spMana,       "#5080ff");
+        addStatRow(statsGrid, row++, "Mana Regen",               spManaRegen,  "#7090ff");
+        addStatRow(statsGrid, row++, "INT  (Intelligence)",      spInt,        "#53c0f0");
+        addStatRow(statsGrid, row++, "STR  (Strength)",          spStr,        "#e94560");
+        addStatRow(statsGrid, row++, "WIS  (Wisdom)",            spWis,        "#c8a020");
+        addStatRow(statsGrid, row++, "CHA  (Charisma)",          spCha,        "#bd10e0");
+        addStatRow(statsGrid, row++, "STA  (Stamina)",           spSta,        "#50c050");
+        addStatRow(statsGrid, row++, "AGI  (Agility)",           spAgi,        "#ff8844");
+        addStatRow(statsGrid, row++, "DEX  (Dexterity)",         spDex,        "#44cc88");
+        addStatRow(statsGrid, row++, "LUK  (Luck)",              spLuk,        "#f0e030");
+        addStatRow(statsGrid, row++, "Fire Resist",              spFireRes,    "#ff4422");
+        addStatRow(statsGrid, row++, "Cold Resist",              spColdRes,    "#44aaff");
+        addStatRow(statsGrid, row++, "Poison Resist",            spPoisonRes,  "#88cc44");
+        addStatRow(statsGrid, row++, "Disease Resist",           spDiseaseRes, "#aa8844");
+        addStatRow(statsGrid, row++, "Magic Resist",             spMagicRes,   "#cc88ff");
+        addStatRow(statsGrid, row++, "Haste",                    spHaste,      "#ffcc00");
+        addStatRow(statsGrid, row++, "Enhanced Damage",          spEnhDmg,     "#ff6666");
 
         ColumnConstraints label_c = new ColumnConstraints(); label_c.setPrefWidth(140);
         ColumnConstraints spin_c  = new ColumnConstraints(); spin_c.setHgrow(Priority.ALWAYS);
@@ -334,6 +364,18 @@ public class ItemRegistryPanel {
                 "  Attack speed, crit chance\n\n" +
                 "LUK — Luck\n"          +
                 "  Drop rates, crit bonus\n\n" +
+                "HP Regen\n"            +
+                "  HP restored per tick\n\n" +
+                "Mana Regen\n"          +
+                "  Mana restored per tick\n\n" +
+                "Fire/Cold/Poison/\n"   +
+                "Disease/Magic Resist\n"+
+                "  % damage reduction\n"+
+                "  for that damage type\n\n" +
+                "Haste\n"               +
+                "  Attack/cast speed %\n\n" +
+                "Enhanced Damage\n"     +
+                "  % bonus to all damage\n\n" +
                 "─────────────────\n"   +
                 "Positive values = bonus\n" +
                 "Negative values = penalty\n\n" +
@@ -380,14 +422,19 @@ public class ItemRegistryPanel {
         dup.armorSlot   = selected.armorSlot;
         dup.lore        = selected.lore;
         dup.noLog       = selected.noLog;
-        dup.statArmor   = selected.statArmor;
-        dup.description = selected.description;
-        dup.statHp   = selected.statHp;  dup.statMana = selected.statMana;
-        dup.statInt  = selected.statInt; dup.statStr  = selected.statStr;
-        dup.statWis  = selected.statWis; dup.statCha  = selected.statCha;
-        dup.statSta  = selected.statSta; dup.statAgi  = selected.statAgi;
-        dup.statDex  = selected.statDex; dup.statLuk  = selected.statLuk;
-        dup.value    = selected.value;
+        dup.statArmor      = selected.statArmor;
+        dup.description    = selected.description;
+        dup.statHp         = selected.statHp;         dup.statMana       = selected.statMana;
+        dup.statHpRegen    = selected.statHpRegen;    dup.statManaRegen  = selected.statManaRegen;
+        dup.statInt        = selected.statInt;        dup.statStr        = selected.statStr;
+        dup.statWis        = selected.statWis;        dup.statCha        = selected.statCha;
+        dup.statSta        = selected.statSta;        dup.statAgi        = selected.statAgi;
+        dup.statDex        = selected.statDex;        dup.statLuk        = selected.statLuk;
+        dup.statFireRes    = selected.statFireRes;    dup.statColdRes    = selected.statColdRes;
+        dup.statPoisonRes  = selected.statPoisonRes;  dup.statDiseaseRes = selected.statDiseaseRes;
+        dup.statMagicRes   = selected.statMagicRes;
+        dup.statHaste      = selected.statHaste;      dup.statEnhDmg     = selected.statEnhDmg;
+        dup.value          = selected.value;
         int idx = items.indexOf(selected) + 1;
         items.add(idx, dup);
         refreshList(searchField.getText());
@@ -411,6 +458,8 @@ public class ItemRegistryPanel {
         spArmor.getValueFactory().setValue(it.statArmor);
         spHp.getValueFactory().setValue(it.statHp);
         spMana.getValueFactory().setValue(it.statMana);
+        spHpRegen.getValueFactory().setValue(it.statHpRegen);
+        spManaRegen.getValueFactory().setValue(it.statManaRegen);
         spInt.getValueFactory().setValue(it.statInt);
         spStr.getValueFactory().setValue(it.statStr);
         spWis.getValueFactory().setValue(it.statWis);
@@ -419,13 +468,23 @@ public class ItemRegistryPanel {
         spAgi.getValueFactory().setValue(it.statAgi);
         spDex.getValueFactory().setValue(it.statDex);
         spLuk.getValueFactory().setValue(it.statLuk);
+        spFireRes.getValueFactory().setValue(it.statFireRes);
+        spColdRes.getValueFactory().setValue(it.statColdRes);
+        spPoisonRes.getValueFactory().setValue(it.statPoisonRes);
+        spDiseaseRes.getValueFactory().setValue(it.statDiseaseRes);
+        spMagicRes.getValueFactory().setValue(it.statMagicRes);
+        spHaste.getValueFactory().setValue(it.statHaste);
+        spEnhDmg.getValueFactory().setValue(it.statEnhDmg);
         spValue.getValueFactory().setValue(it.value);
     }
 
     private void clearForm() {
         nameField.setText("");
         descField.setText("");
-        for (Spinner<Integer> sp : List.of(spArmor, spHp, spMana, spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue))
+        for (Spinner<Integer> sp : List.of(spArmor, spHp, spMana, spHpRegen, spManaRegen,
+                spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk,
+                spFireRes, spColdRes, spPoisonRes, spDiseaseRes, spMagicRes,
+                spHaste, spEnhDmg, spValue))
             if (sp != null) sp.getValueFactory().setValue(0);
     }
 
@@ -492,12 +551,17 @@ public class ItemRegistryPanel {
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 com.fasterxml.jackson.databind.JsonNode stats = n.path("stats");
-                it.statArmor = stats.path("ARMOR").asInt(0);
-                it.statHp   = stats.path("HP").asInt(0);   it.statMana = stats.path("MANA").asInt(0);
-                it.statInt  = stats.path("INT").asInt(0);  it.statStr  = stats.path("STR").asInt(0);
-                it.statWis  = stats.path("WIS").asInt(0);  it.statCha  = stats.path("CHA").asInt(0);
-                it.statSta  = stats.path("STA").asInt(0);  it.statAgi  = stats.path("AGI").asInt(0);
-                it.statDex  = stats.path("DEX").asInt(0);  it.statLuk  = stats.path("LUK").asInt(0);
+                it.statArmor      = stats.path("ARMOR").asInt(0);
+                it.statHp         = stats.path("HP").asInt(0);          it.statMana       = stats.path("MANA").asInt(0);
+                it.statHpRegen    = stats.path("HP_REGEN").asInt(0);    it.statManaRegen  = stats.path("MANA_REGEN").asInt(0);
+                it.statInt        = stats.path("INT").asInt(0);         it.statStr        = stats.path("STR").asInt(0);
+                it.statWis        = stats.path("WIS").asInt(0);         it.statCha        = stats.path("CHA").asInt(0);
+                it.statSta        = stats.path("STA").asInt(0);         it.statAgi        = stats.path("AGI").asInt(0);
+                it.statDex        = stats.path("DEX").asInt(0);         it.statLuk        = stats.path("LUK").asInt(0);
+                it.statFireRes    = stats.path("FIRE_RES").asInt(0);    it.statColdRes    = stats.path("COLD_RES").asInt(0);
+                it.statPoisonRes  = stats.path("POISON_RES").asInt(0);  it.statDiseaseRes = stats.path("DISEASE_RES").asInt(0);
+                it.statMagicRes   = stats.path("MAGIC_RES").asInt(0);
+                it.statHaste      = stats.path("HASTE").asInt(0);       it.statEnhDmg     = stats.path("ENH_DMG").asInt(0);
                 map.put(it.name, it);
             }
         } catch (Exception ignored) {}
@@ -520,12 +584,17 @@ public class ItemRegistryPanel {
                 n.put("description", it.description);
                 n.put("value",       it.value);
                 ObjectNode stats = om.createObjectNode();
-                stats.put("ARMOR", it.statArmor);
-                stats.put("HP",  it.statHp);  stats.put("MANA", it.statMana);
-                stats.put("INT", it.statInt); stats.put("STR",  it.statStr);
-                stats.put("WIS", it.statWis); stats.put("CHA",  it.statCha);
-                stats.put("STA", it.statSta); stats.put("AGI",  it.statAgi);
-                stats.put("DEX", it.statDex); stats.put("LUK",  it.statLuk);
+                stats.put("ARMOR",       it.statArmor);
+                stats.put("HP",          it.statHp);         stats.put("MANA",        it.statMana);
+                stats.put("HP_REGEN",    it.statHpRegen);    stats.put("MANA_REGEN",  it.statManaRegen);
+                stats.put("INT",         it.statInt);        stats.put("STR",         it.statStr);
+                stats.put("WIS",         it.statWis);        stats.put("CHA",         it.statCha);
+                stats.put("STA",         it.statSta);        stats.put("AGI",         it.statAgi);
+                stats.put("DEX",         it.statDex);        stats.put("LUK",         it.statLuk);
+                stats.put("FIRE_RES",    it.statFireRes);    stats.put("COLD_RES",    it.statColdRes);
+                stats.put("POISON_RES",  it.statPoisonRes);  stats.put("DISEASE_RES", it.statDiseaseRes);
+                stats.put("MAGIC_RES",   it.statMagicRes);
+                stats.put("HASTE",       it.statHaste);      stats.put("ENH_DMG",     it.statEnhDmg);
                 n.set("stats", stats);
                 root.add(n);
             }
@@ -554,12 +623,17 @@ public class ItemRegistryPanel {
                 it.description = n.path("description").asText("");
                 it.value       = n.path("value").asInt(0);
                 JsonNode stats = n.path("stats");
-                it.statArmor = stats.path("ARMOR").asInt(0);
-                it.statHp   = stats.path("HP").asInt(0);   it.statMana = stats.path("MANA").asInt(0);
-                it.statInt  = stats.path("INT").asInt(0);  it.statStr  = stats.path("STR").asInt(0);
-                it.statWis  = stats.path("WIS").asInt(0);  it.statCha  = stats.path("CHA").asInt(0);
-                it.statSta  = stats.path("STA").asInt(0);  it.statAgi  = stats.path("AGI").asInt(0);
-                it.statDex  = stats.path("DEX").asInt(0);  it.statLuk  = stats.path("LUK").asInt(0);
+                it.statArmor      = stats.path("ARMOR").asInt(0);
+                it.statHp         = stats.path("HP").asInt(0);          it.statMana       = stats.path("MANA").asInt(0);
+                it.statHpRegen    = stats.path("HP_REGEN").asInt(0);    it.statManaRegen  = stats.path("MANA_REGEN").asInt(0);
+                it.statInt        = stats.path("INT").asInt(0);         it.statStr        = stats.path("STR").asInt(0);
+                it.statWis        = stats.path("WIS").asInt(0);         it.statCha        = stats.path("CHA").asInt(0);
+                it.statSta        = stats.path("STA").asInt(0);         it.statAgi        = stats.path("AGI").asInt(0);
+                it.statDex        = stats.path("DEX").asInt(0);         it.statLuk        = stats.path("LUK").asInt(0);
+                it.statFireRes    = stats.path("FIRE_RES").asInt(0);    it.statColdRes    = stats.path("COLD_RES").asInt(0);
+                it.statPoisonRes  = stats.path("POISON_RES").asInt(0);  it.statDiseaseRes = stats.path("DISEASE_RES").asInt(0);
+                it.statMagicRes   = stats.path("MAGIC_RES").asInt(0);
+                it.statHaste      = stats.path("HASTE").asInt(0);       it.statEnhDmg     = stats.path("ENH_DMG").asInt(0);
                 items.add(it);
             }
         } catch (Exception ignored) {}
