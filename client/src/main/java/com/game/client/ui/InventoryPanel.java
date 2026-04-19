@@ -13,9 +13,12 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +36,7 @@ public class InventoryPanel {
 
     private final UDPClient client;
     private final ObservableList<InventoryRow> rows = FXCollections.observableArrayList();
+    private Map<String, ItemRegistryPanel.ItemDef> itemMap = ItemRegistryPanel.loadItemMap();
     private TableView<InventoryRow> table;
     private Label statusLabel;
     private Label platinumLabel;
@@ -101,6 +105,32 @@ public class InventoryPanel {
         TableColumn<InventoryRow, String>  equippedCol = new TableColumn<>("Equipped");
 
         nameCol.setCellValueFactory(new PropertyValueFactory<>("itemName"));
+        nameCol.setCellFactory(col -> new TableCell<>() {
+            @Override protected void updateItem(String name, boolean empty) {
+                super.updateItem(name, empty);
+                if (empty || name == null) { setText(null); setStyle(""); setContextMenu(null); return; }
+                setText(name);
+                ItemRegistryPanel.ItemDef def = itemMap.get(name);
+                String color = def != null && def.tier != null
+                        ? def.tier.color()
+                        : ItemRegistryPanel.ItemTier.COMMON.color();
+                setStyle("-fx-text-fill: " + color + ";");
+                // Right-click context menu: cast spells attached to this item
+                if (def != null && !def.spells.isEmpty()) {
+                    ContextMenu cm = new ContextMenu();
+                    Menu castMenu = new Menu("✨ Cast Spell");
+                    for (String spellName : def.spells) {
+                        MenuItem mi = new MenuItem(spellName);
+                        mi.setOnAction(e -> castSpell(spellName));
+                        castMenu.getItems().add(mi);
+                    }
+                    cm.getItems().add(castMenu);
+                    setContextMenu(cm);
+                } else {
+                    setContextMenu(null);
+                }
+            }
+        });
         qtyCol.setCellValueFactory(new PropertyValueFactory<>("quantity"));
         equippedCol.setCellValueFactory(new PropertyValueFactory<>("equipped"));
 
@@ -185,20 +215,37 @@ public class InventoryPanel {
     };
 
     private Node buildArmorTab() {
+        // ── Paper-doll layout: left slots | body silhouette | right slots ────────
         GridPane grid = new GridPane();
-        grid.setHgap(12);
-        grid.setVgap(10);
+        grid.setHgap(8);
+        grid.setVgap(6);
         grid.setPadding(new Insets(14));
+        grid.setAlignment(Pos.CENTER);
+
+        ColumnConstraints leftCC = new ColumnConstraints();
+        leftCC.setPrefWidth(190); leftCC.setHgrow(Priority.ALWAYS);
+        ColumnConstraints centerCC = new ColumnConstraints();
+        centerCC.setMinWidth(140); centerCC.setPrefWidth(140); centerCC.setMaxWidth(140);
+        ColumnConstraints rightCC = new ColumnConstraints();
+        rightCC.setPrefWidth(190); rightCC.setHgrow(Priority.ALWAYS);
+        grid.getColumnConstraints().addAll(leftCC, centerCC, rightCC);
 
         for (int r = 0; r < SLOT_GRID.length; r++) {
-            for (int c = 0; c < SLOT_GRID[r].length; c++) {
-                ItemRegistryPanel.ArmorSlot slot = SLOT_GRID[r][c];
-                if (slot == null) continue;
-                VBox cell = buildSlotCell(slot);
-                grid.add(cell, c, r);
-                GridPane.setHgrow(cell, Priority.ALWAYS);
-            }
+            VBox lc = buildSlotCell(SLOT_GRID[r][0]);
+            VBox rc = buildSlotCell(SLOT_GRID[r][1]);
+            grid.add(lc, 0, r);
+            grid.add(rc, 2, r);
+            GridPane.setHgrow(lc, Priority.ALWAYS);
+            GridPane.setHgrow(rc, Priority.ALWAYS);
         }
+
+        Canvas bodyCanvas = new Canvas(140, 450);
+        drawBodySilhouette(bodyCanvas);
+        StackPane bodyPane = new StackPane(bodyCanvas);
+        bodyPane.setAlignment(Pos.CENTER);
+        GridPane.setRowSpan(bodyPane, SLOT_GRID.length);
+        GridPane.setValignment(bodyPane, javafx.geometry.VPos.CENTER);
+        grid.add(bodyPane, 1, 0);
 
         armorStatSummary = new Label("");
         armorStatSummary.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
@@ -215,6 +262,85 @@ public class InventoryPanel {
         sp.setFitToWidth(true);
         sp.setStyle("-fx-background-color: #1a1a2e; -fx-background: #1a1a2e;");
         return sp;
+    }
+
+    private void drawBodySilhouette(Canvas canvas) {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        double w = canvas.getWidth(), h = canvas.getHeight();
+        gc.clearRect(0, 0, w, h);
+
+        Color fill   = Color.web("#0d1628");
+        Color stroke = Color.web("#3a5080");
+        gc.setFill(fill);
+        gc.setStroke(stroke);
+        gc.setLineWidth(1.5);
+
+        double cx = w / 2;
+
+        // Proportions — total body height ≈ 326, centered in 450px canvas
+        double headR = 28;
+        double startY = (h - 326) / 2;
+
+        // Head
+        gc.fillOval(cx - headR, startY, headR * 2, headR * 2);
+        gc.strokeOval(cx - headR, startY, headR * 2, headR * 2);
+
+        // Neck
+        double neckTop = startY + headR * 2, neckH = 14;
+        gc.fillRect(cx - 5, neckTop, 10, neckH);
+        gc.strokeRect(cx - 5, neckTop, 10, neckH);
+
+        // Torso
+        double torsoTop = neckTop + neckH, torsoW = 56, torsoH = 120;
+        gc.fillRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
+        gc.strokeRect(cx - torsoW / 2, torsoTop, torsoW, torsoH);
+
+        // Shoulder bumps
+        double sR = 17, sY = torsoTop - 2;
+        gc.fillOval(cx - torsoW / 2 - sR + 2, sY, sR * 2, sR * 1.2);
+        gc.strokeOval(cx - torsoW / 2 - sR + 2, sY, sR * 2, sR * 1.2);
+        gc.fillOval(cx + torsoW / 2 - sR - 2, sY, sR * 2, sR * 1.2);
+        gc.strokeOval(cx + torsoW / 2 - sR - 2, sY, sR * 2, sR * 1.2);
+
+        // Arms
+        double armW = 17, armH = 100, armTop = torsoTop + 8;
+        gc.fillRect(cx - torsoW / 2 - armW - 1, armTop, armW, armH);
+        gc.strokeRect(cx - torsoW / 2 - armW - 1, armTop, armW, armH);
+        gc.fillRect(cx + torsoW / 2 + 1, armTop, armW, armH);
+        gc.strokeRect(cx + torsoW / 2 + 1, armTop, armW, armH);
+
+        // Wrists
+        double wristY = armTop + armH, wristH = 14;
+        gc.fillRect(cx - torsoW / 2 - armW - 1, wristY, armW, wristH);
+        gc.strokeRect(cx - torsoW / 2 - armW - 1, wristY, armW, wristH);
+        gc.fillRect(cx + torsoW / 2 + 1, wristY, armW, wristH);
+        gc.strokeRect(cx + torsoW / 2 + 1, wristY, armW, wristH);
+
+        // Hands
+        double handW = 20, handH = 18, handY = wristY + wristH;
+        gc.fillOval(cx - torsoW / 2 - handW - 0, handY, handW, handH);
+        gc.strokeOval(cx - torsoW / 2 - handW - 0, handY, handW, handH);
+        gc.fillOval(cx + torsoW / 2, handY, handW, handH);
+        gc.strokeOval(cx + torsoW / 2, handY, handW, handH);
+
+        // Waist (belt)
+        double waistY = torsoTop + torsoH, waistH = 12;
+        gc.fillRect(cx - torsoW / 2 - 2, waistY, torsoW + 4, waistH);
+        gc.strokeRect(cx - torsoW / 2 - 2, waistY, torsoW + 4, waistH);
+
+        // Legs
+        double legTop = waistY + waistH, legW = 22, legH = 110, legGap = 3;
+        gc.fillRect(cx - legGap - legW, legTop, legW, legH);
+        gc.strokeRect(cx - legGap - legW, legTop, legW, legH);
+        gc.fillRect(cx + legGap, legTop, legW, legH);
+        gc.strokeRect(cx + legGap, legTop, legW, legH);
+
+        // Feet
+        double feetY = legTop + legH, feetW = 30, feetH = 14;
+        gc.fillRect(cx - legGap - legW - 6, feetY, feetW, feetH);
+        gc.strokeRect(cx - legGap - legW - 6, feetY, feetW, feetH);
+        gc.fillRect(cx + legGap - 2, feetY, feetW, feetH);
+        gc.strokeRect(cx + legGap - 2, feetY, feetW, feetH);
     }
 
     private VBox buildSlotCell(ItemRegistryPanel.ArmorSlot slot) {
@@ -264,8 +390,10 @@ public class InventoryPanel {
 
             Label lbl = slotLabels.get(slot);
             if (lbl != null) {
+                String color = def.tier != null ? def.tier.color()
+                        : ItemRegistryPanel.ItemTier.COMMON.color();
                 lbl.setText(row.getItemName());
-                lbl.setStyle("-fx-text-fill: #d0d8e0; -fx-font-size: 12; -fx-font-style: normal;");
+                lbl.setStyle("-fx-text-fill: " + color + "; -fx-font-size: 12; -fx-font-style: normal;");
             }
 
             totals[0]  += def.statArmor;
@@ -329,6 +457,24 @@ public class InventoryPanel {
         }
     }
 
+    private void castSpell(String spellName) {
+        if (client == null || !SessionStore.isLoggedIn()) {
+            setStatus("Not connected.");
+            return;
+        }
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode payload =
+                    com.game.shared.PacketSerializer.mapper().createObjectNode();
+            payload.put("spellName", spellName);
+            client.send(new com.game.shared.Packet(
+                    com.game.shared.PacketType.SPELL_CAST_REQUEST,
+                    SessionStore.getToken(), payload));
+            setStatus("Casting: " + spellName + "…");
+        } catch (Exception ex) {
+            setStatus("Cast error: " + ex.getMessage());
+        }
+    }
+
     // ── Packet handling (called from GameScreen.onPacket) ─────────────────────
 
     public void onPacket(Packet packet) {
@@ -349,6 +495,7 @@ public class InventoryPanel {
                 int gd = packet.payload.has("gold")     ? packet.payload.get("gold").asInt()     : 0;
                 int sv = packet.payload.has("silver")   ? packet.payload.get("silver").asInt()   : 0;
                 int br = packet.payload.has("bronze")   ? packet.payload.get("bronze").asInt()   : 0;
+                itemMap = ItemRegistryPanel.loadItemMap();
                 Platform.runLater(() -> {
                     rows.setAll(newRows);
                     setStatus("Loaded " + rows.size() + " item(s).");
@@ -387,6 +534,11 @@ public class InventoryPanel {
                 String  msg = packet.payload.has("message") ? packet.payload.get("message").asText("") : "";
                 if (ok) requestInventory();
                 Platform.runLater(() -> setStatus(msg));
+            }
+            case SPELL_CAST_RESPONSE -> {
+                boolean ok  = packet.payload.has("success") && packet.payload.get("success").asBoolean();
+                String  msg = packet.payload.has("message") ? packet.payload.get("message").asText("") : "";
+                Platform.runLater(() -> setStatus(ok ? "✓ " + msg : "✗ " + msg));
             }
         }
     }

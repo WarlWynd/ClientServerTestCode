@@ -69,6 +69,10 @@ public enum PacketType {
     INVENTORY_GIVE_ITEM_REQUEST,
     INVENTORY_GIVE_ITEM_RESPONSE,
 
+    // ── Spells ───────────────────────────────────────────────────────────
+    SPELL_CAST_REQUEST,
+    SPELL_CAST_RESPONSE,
+
     // ── Quests ───────────────────────────────────────────────────────────
     QUEST_LIST_REQUEST,
     QUEST_LIST_RESPONSE,

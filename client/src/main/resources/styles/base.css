@@ -244,9 +244,15 @@
 .dark-table .column-header-background {
     -fx-background-color: -af-surface;
 }
-.dark-table .column-header-background .label {
-    -fx-text-fill: -af-text-secondary;
+.dark-table .column-header {
+    -fx-background-color: -af-surface;
+    -fx-border-color: -af-border-light;
+    -fx-border-width: 0 1 1 0;
+}
+.dark-table .column-header .label {
+    -fx-text-fill: -af-text-primary;
     -fx-font-weight: bold;
+    -fx-font-size: 12;
 }
 .dark-table .column-header-background .filler {
     -fx-background-color: -af-surface;

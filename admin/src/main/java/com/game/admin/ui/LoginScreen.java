@@ -42,11 +42,11 @@ public class LoginScreen {
         subtitle.setFont(Font.font("System", 13));
         subtitle.setTextFill(Color.web("#8080a0"));
 
-        TextField     usernameField = new TextField();
+        TextField     emailField    = new TextField();
         PasswordField passwordField = new PasswordField();
-        usernameField.setPromptText("Username");
+        emailField.setPromptText("Email");
         passwordField.setPromptText("Password");
-        for (var f : new Control[]{usernameField, passwordField}) {
+        for (var f : new Control[]{emailField, passwordField}) {
             f.setStyle("""
                     -fx-background-color: #16213e;
                     -fx-text-fill: #e0e0e0;
@@ -76,10 +76,10 @@ public class LoginScreen {
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(280);
 
-        loginButton.setOnAction(e -> doLogin(usernameField.getText(), passwordField.getText()));
-        passwordField.setOnAction(e -> doLogin(usernameField.getText(), passwordField.getText()));
+        loginButton.setOnAction(e -> doLogin(emailField.getText(), passwordField.getText()));
+        passwordField.setOnAction(e -> doLogin(emailField.getText(), passwordField.getText()));
 
-        VBox root = new VBox(14, title, subtitle, usernameField, passwordField, loginButton, statusLabel);
+        VBox root = new VBox(14, title, subtitle, emailField, passwordField, loginButton, statusLabel);
         root.setAlignment(Pos.CENTER);
         root.setPadding(new Insets(50));
         root.setStyle("-fx-background-color: #1a1a2e;");
@@ -88,16 +88,16 @@ public class LoginScreen {
         stage.show();
     }
 
-    private void doLogin(String username, String password) {
-        if (username.isBlank() || password.isBlank()) {
-            statusLabel.setText("Please enter username and password.");
+    private void doLogin(String email, String password) {
+        if (email.isBlank() || password.isBlank()) {
+            statusLabel.setText("Please enter email and password.");
             return;
         }
         loginButton.setDisable(true);
         statusLabel.setText("Connecting...");
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
-        payload.put("username", username);
+        payload.put("email", email);
         payload.put("password", password);
         client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
     }

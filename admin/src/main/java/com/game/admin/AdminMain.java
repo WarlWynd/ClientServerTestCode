@@ -17,7 +17,9 @@ public class AdminMain extends Application {
         AdminConfig config = new AdminConfig();
 
         stage.setTitle("Admin Console");
-        stage.setResizable(false);
+        stage.setResizable(true);
+        stage.setWidth(1440);
+        stage.setHeight(900);
         stage.setOnCloseRequest(e -> shutdown());
 
         udpClient = new AdminUDPClient(config);

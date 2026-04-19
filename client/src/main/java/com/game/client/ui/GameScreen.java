@@ -161,8 +161,6 @@ public class GameScreen {
     private Tab     gameTab;
     private boolean gameLoopRunning = false;
     private Timeline pingTimer;
-    private AdminPanel        adminPanel;
-    private GraphicsDevScreen graphicsDevScreen;
     private InventoryPanel    inventoryPanel;
     private Tab               inventoryTab;
     private QuestPanel        questPanel;
@@ -394,43 +392,6 @@ public class GameScreen {
         tabs.add(questTab);
         tabs.add(settingsTab);
 
-        if (SessionStore.isAdmin()) {
-            adminPanel = new AdminPanel(client);
-            adminPanel.setRestartCallback(this::startReconnectCountdown);
-            String adminIp = client.getAdminHost();
-            Tab adminTab = new Tab("🛡 Admin " + adminIp, withIpBanner(adminPanel.buildView(), adminIp));
-            adminTab.setClosable(false);
-            adminTab.getProperties().put("connectionIp", adminIp);
-            Tab audioTab = new Tab("🎵 Audio Dev " + adminIp, withIpBanner(new AudioDevScreen(stage).build(), adminIp));
-            audioTab.setClosable(false);
-            audioTab.getProperties().put("connectionIp", adminIp);
-            graphicsDevScreen = new GraphicsDevScreen(stage, client);
-            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(graphicsDevScreen.build(), adminIp));
-            graphicsTab.setClosable(false);
-            graphicsTab.getProperties().put("connectionIp", adminIp);
-            Tab boardTab = new Tab("🗺 Board Dev " + adminIp, withIpBanner(new BoardDevScreen(stage,
-                    () -> tabPane.getSelectionModel().select(gameTab)).build(), adminIp));
-            boardTab.setClosable(false);
-            boardTab.getProperties().put("connectionIp", adminIp);
-            tabs.add(adminTab);
-            tabs.add(audioTab);
-            tabs.add(graphicsTab);
-            tabs.add(boardTab);
-        } else if (SessionStore.isGraphicsDev()) {
-            String adminIp = client.getAdminHost();
-            Tab graphicsTab = new Tab("🎨 Graphics Dev " + adminIp, withIpBanner(new GraphicsDevScreen(stage, null).build(), adminIp));
-            graphicsTab.setClosable(false);
-            graphicsTab.getProperties().put("connectionIp", adminIp);
-            tabs.add(graphicsTab);
-        } else if (SessionStore.isBoardDev()) {
-            String adminIp = client.getAdminHost();
-            Tab boardTab = new Tab("🗺 Board Dev " + adminIp, withIpBanner(new BoardDevScreen(stage,
-                    () -> tabPane.getSelectionModel().select(gameTab)).build(), adminIp));
-            boardTab.setClosable(false);
-            boardTab.getProperties().put("connectionIp", adminIp);
-            tabs.add(boardTab);
-        }
-
         tabPane = new TabPane(tabs.toArray(new Tab[0]));
 
         // Store full labels so we can toggle icon-only mode without data loss
@@ -494,7 +455,6 @@ public class GameScreen {
         };
         gameLoop.start();
         gameLoopRunning = true;
-        if (adminPanel != null) adminPanel.start();
 
         // ── Ping ─────────────────────────────────────────────────────────────
         pingTimer = new Timeline(new KeyFrame(Duration.seconds(2),
@@ -935,7 +895,6 @@ public class GameScreen {
     // ── Packet handling ──────────────────────────────────────────────────────
 
     private void onPacket(Packet packet) {
-        if (adminPanel != null) adminPanel.onPacket(packet);
         switch (packet.type) {
             case GAME_STATE -> {
                 lastGameStateMs = System.currentTimeMillis();
@@ -1207,7 +1166,6 @@ public class GameScreen {
         if (countdownTimer != null) countdownTimer.stop();
         if (retryTimer     != null) retryTimer.stop();
         clearSystemMessage();
-        if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,    PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST, PacketSerializer.emptyPayload());
         SessionStore.clear();
@@ -1220,7 +1178,6 @@ public class GameScreen {
         heartbeatTimer.stop();
         if (countdownTimer != null) countdownTimer.stop();
         if (retryTimer     != null) retryTimer.stop();
-        if (adminPanel != null) adminPanel.stop();
         sendPacket(PacketType.GAME_LEAVE,     PacketSerializer.emptyPayload());
         sendPacket(PacketType.LOGOUT_REQUEST,  PacketSerializer.emptyPayload());
         SessionStore.clear();
@@ -1367,18 +1324,6 @@ public class GameScreen {
         bronzeAmtLabel  .setText(String.valueOf(bronze));
     }
 
-
-    /** Wraps a tab's content node with a small IP/connection banner at the very top. */
-    private static javafx.scene.Node withIpBanner(javafx.scene.Node content, String ip) {
-        Label banner = new Label("Connects to: " + ip);
-        banner.setStyle("-fx-font-size: 11px; -fx-text-fill: #888888; -fx-padding: 3 8 3 8;"
-                + " -fx-background-color: #1e1e1e; -fx-border-color: #333333;"
-                + " -fx-border-width: 0 0 1 0;");
-        banner.setMaxWidth(Double.MAX_VALUE);
-        VBox wrapper = new VBox(banner, content);
-        VBox.setVgrow(content, Priority.ALWAYS);
-        return wrapper;
-    }
 
     private void sendPacket(PacketType type, ObjectNode payload) {
         client.send(new Packet(type, SessionStore.getToken(), payload));

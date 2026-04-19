@@ -5,7 +5,7 @@ plugins {
 
 javafx {
     version = "23"
-    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics']
+    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media', 'javafx.swing']
 }
 
 repositories {
@@ -14,6 +14,7 @@ repositories {
 
 dependencies {
     implementation project(':shared')
+    implementation project(':client')
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     implementation 'ch.qos.logback:logback-classic:1.5.8'
 }

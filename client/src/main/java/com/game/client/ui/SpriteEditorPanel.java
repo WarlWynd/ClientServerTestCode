@@ -569,9 +569,11 @@ public class SpriteEditorPanel {
         return leftScroll;
     }
 
-    /** Returns just the PNG sprite viewer pane — used as the Pose Editor tab content. */
+    /** Returns the full Pose Editor — stick-figure editor on the left, PNG sprite viewer on the right. */
     public Node buildPngEditor() {
-        return buildRightPane();
+        SplitPane split = new SplitPane(build(), buildRightPane());
+        split.setDividerPositions(0.55);
+        return split;
     }
 
     // ── PNG Sprite Viewer (right pane) ───────────────────────────────────────

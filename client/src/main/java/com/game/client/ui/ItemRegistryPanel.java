@@ -66,11 +66,40 @@ public class ItemRegistryPanel {
         }
     }
 
+    // ── Item tier (quality) ───────────────────────────────────────────────────
+    public enum ItemTier {
+        POOR, COMMON, UNCOMMON, RARE, EPIC, LEGENDARY;
+
+        public String color() {
+            return switch (this) {
+                case POOR      -> "#9d9d9d";
+                case COMMON    -> "#e0e0e0";
+                case UNCOMMON  -> "#1eff00";
+                case RARE      -> "#0070dd";
+                case EPIC      -> "#a335ee";
+                case LEGENDARY -> "#ff8000";
+            };
+        }
+
+        public String label() {
+            return switch (this) {
+                case POOR      -> "Poor";
+                case COMMON    -> "Common";
+                case UNCOMMON  -> "Uncommon";
+                case RARE      -> "Rare";
+                case EPIC      -> "Epic";
+                case LEGENDARY -> "Legendary";
+            };
+        }
+    }
+
     // ── Data model ────────────────────────────────────────────────────────────
     public static class ItemDef {
         String       name;
         ItemCategory category;
         ArmorSlot    armorSlot = ArmorSlot.NONE;
+        ItemTier     tier      = ItemTier.COMMON;
+        int          minLevel  = 0;
         boolean      lore      = false;   // true = only 1 allowed in inventory
         boolean      noLog     = false;   // true = removed from inventory on logout
         String       description;
@@ -82,6 +111,7 @@ public class ItemRegistryPanel {
         int          statFireRes, statColdRes, statPoisonRes, statDiseaseRes, statMagicRes;
         int          statHaste, statEnhDmg;
         int          value; // gold value
+        java.util.List<String> spells = new java.util.ArrayList<>(); // spell names castable from this item
 
         ItemDef(String name, ItemCategory category) {
             this.name = name; this.category = category; this.description = "";
@@ -105,6 +135,9 @@ public class ItemRegistryPanel {
     private Spinner<Integer>  spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk, spValue;
     private Spinner<Integer>  spFireRes, spColdRes, spPoisonRes, spDiseaseRes, spMagicRes;
     private Spinner<Integer>  spHaste, spEnhDmg;
+    private ComboBox<String>  tierCombo;
+    private Spinner<Integer>  spMinLevel;
+    private ListView<String>  spellsView;   // spells assignable to selected item
     private Label             statusLabel;
     private TextField         searchField;
 
@@ -145,7 +178,12 @@ public class ItemRegistryPanel {
                 if (!empty) {
                     String bare = item.length() > 2 ? item.substring(2).trim() : item.trim();
                     String padding = COINS.contains(bare) ? "1 4 1 4" : "4 4 4 4";
-                    setStyle("-fx-text-fill: #e0e0e0; -fx-font-size: 12;" +
+                    String color = items.stream()
+                            .filter(it -> it.name.equals(bare))
+                            .findFirst()
+                            .map(it -> (it.tier != null ? it.tier : ItemTier.COMMON).color())
+                            .orElse(ItemTier.COMMON.color());
+                    setStyle("-fx-text-fill: " + color + "; -fx-font-size: 12;" +
                             "-fx-padding: " + padding + ";" +
                             "-fx-background-color: " + (isSelected() ? "#3a3a6a" : "transparent") + ";");
                 }
@@ -157,6 +195,9 @@ public class ItemRegistryPanel {
             // Find the actual item (strip icon prefix, handle search filter)
             String bare = n.length() > 2 ? n.substring(2).trim() : n.trim();
             items.stream().filter(it -> it.name.equals(bare)).findFirst().ifPresent(this::loadIntoForm);
+        });
+        itemList.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2 && selected != null) showItemPopup(selected);
         });
 
         Button addWeaponBtn  = btn("+ Weapon",    "#3a1a1a");
@@ -210,6 +251,35 @@ public class ItemRegistryPanel {
             if (selected != null && slotCombo.getValue() != null)
                 selected.armorSlot = ArmorSlot.valueOf(slotCombo.getValue());
         });
+
+        tierCombo = new ComboBox<>();
+        for (ItemTier t : ItemTier.values()) tierCombo.getItems().add(t.label());
+        tierCombo.getStyleClass().add("combo-dark");
+        tierCombo.setMaxWidth(Double.MAX_VALUE);
+        javafx.util.Callback<javafx.scene.control.ListView<String>, ListCell<String>> tierCellFactory =
+            lv -> new ListCell<>() {
+                @Override protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    setText(empty ? null : item);
+                    if (!empty) {
+                        int idx = tierCombo.getItems().indexOf(item);
+                        ItemTier t = idx >= 0 ? ItemTier.values()[idx] : ItemTier.COMMON;
+                        setStyle("-fx-text-fill: " + t.color() + "; -fx-font-size: 12;" +
+                                "-fx-background-color: " + (isSelected() ? "#3a3a6a" : "#0f0f1e") + ";");
+                    }
+                }
+            };
+        tierCombo.setCellFactory(tierCellFactory);
+        tierCombo.setButtonCell(tierCellFactory.call(null));
+        tierCombo.setOnAction(e -> {
+            if (selected != null) {
+                int idx = tierCombo.getSelectionModel().getSelectedIndex();
+                if (idx >= 0) selected.tier = ItemTier.values()[idx];
+            }
+        });
+
+        spMinLevel = intSpinner(0, 999, 0);
+        spMinLevel.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.minLevel = n; });
 
         loreCheck = new CheckBox("Lore  (only 1 allowed per character)");
         loreCheck.setStyle("-fx-text-fill: #c8a020; -fx-font-size: 12;");
@@ -309,15 +379,44 @@ public class ItemRegistryPanel {
         valueRow.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(spValue, Priority.ALWAYS);
 
+        // ── Spell assignment ──────────────────────────────────────────────────
+        spellsView = new ListView<>();
+        spellsView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        spellsView.setPrefHeight(100);
+        spellsView.setStyle("-fx-background-color: #0f0f1e; -fx-border-color: #3a3a6a;" +
+                            "-fx-control-inner-background: #0f0f1e;");
+        spellsView.setCellFactory(lv -> new ListCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                if (!empty)
+                    setStyle("-fx-text-fill: #a080ff; -fx-font-size: 11;" +
+                             "-fx-background-color: " + (isSelected() ? "#3a3a6a" : "transparent") + ";");
+            }
+        });
+        // Selection changes update the item's spell list
+        spellsView.getSelectionModel().getSelectedItems()
+                .addListener((javafx.collections.ListChangeListener<String>) c -> {
+                    if (selected != null) {
+                        selected.spells.clear();
+                        selected.spells.addAll(spellsView.getSelectionModel().getSelectedItems());
+                    }
+                });
+        Label spellsHint = new Label("Ctrl+click to select multiple");
+        spellsHint.setStyle("-fx-text-fill: #606080; -fx-font-size: 10;");
+
         VBox cfgCol = vbox(8,
                 lbl("Item Configuration", 13, true),
                 new VBox(4, lbl("Name:",        11, false), nameField),
                 new VBox(4, lbl("Category:",    11, false), categoryCombo),
-                new VBox(4, lbl("Item Slot:", 11, false), slotCombo),
+                new VBox(4, lbl("Item Slot:",   11, false), slotCombo),
+                new VBox(4, lbl("Tier:",        11, false), tierCombo),
+                new VBox(4, lbl("Min Level:",   11, false), spMinLevel),
                 loreCheck,
                 noLogCheck,
                 new VBox(4, lbl("Description:", 11, false), descField),
                 valueRow,
+                new VBox(4, lbl("Usable Spells:", 11, true), spellsView, spellsHint),
                 lbl("Stat Bonuses  (negative = penalty):", 11, true),
                 statsGrid,
                 saveBtn, statusLabel);
@@ -420,6 +519,8 @@ public class ItemRegistryPanel {
         if (selected == null) return;
         ItemDef dup = new ItemDef(selected.name + " (copy)", selected.category);
         dup.armorSlot   = selected.armorSlot;
+        dup.tier        = selected.tier;
+        dup.minLevel    = selected.minLevel;
         dup.lore        = selected.lore;
         dup.noLog       = selected.noLog;
         dup.statArmor      = selected.statArmor;
@@ -435,6 +536,7 @@ public class ItemRegistryPanel {
         dup.statMagicRes   = selected.statMagicRes;
         dup.statHaste      = selected.statHaste;      dup.statEnhDmg     = selected.statEnhDmg;
         dup.value          = selected.value;
+        dup.spells.addAll(selected.spells);
         int idx = items.indexOf(selected) + 1;
         items.add(idx, dup);
         refreshList(searchField.getText());
@@ -452,6 +554,8 @@ public class ItemRegistryPanel {
         nameField.setText(it.name);
         categoryCombo.setValue(it.category.name());
         slotCombo.setValue(it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
+        tierCombo.getSelectionModel().select((it.tier != null ? it.tier : ItemTier.COMMON).ordinal());
+        spMinLevel.getValueFactory().setValue(it.minLevel);
         loreCheck.setSelected(it.lore);
         noLogCheck.setSelected(it.noLog);
         descField.setText(it.description);
@@ -476,15 +580,25 @@ public class ItemRegistryPanel {
         spHaste.getValueFactory().setValue(it.statHaste);
         spEnhDmg.getValueFactory().setValue(it.statEnhDmg);
         spValue.getValueFactory().setValue(it.value);
+        // Reload spell list from library and restore selection
+        java.util.List<String> spellNames = new java.util.ArrayList<>(
+                SpellLibraryPanel.loadSpellMap().keySet());
+        spellsView.getItems().setAll(spellNames);
+        spellsView.getSelectionModel().clearSelection();
+        for (String sp : it.spells) {
+            int idx = spellNames.indexOf(sp);
+            if (idx >= 0) spellsView.getSelectionModel().select(idx);
+        }
     }
 
     private void clearForm() {
         nameField.setText("");
         descField.setText("");
+        if (tierCombo != null) tierCombo.getSelectionModel().select(ItemTier.COMMON.ordinal());
         for (Spinner<Integer> sp : List.of(spArmor, spHp, spMana, spHpRegen, spManaRegen,
                 spInt, spStr, spWis, spCha, spSta, spAgi, spDex, spLuk,
                 spFireRes, spColdRes, spPoisonRes, spDiseaseRes, spMagicRes,
-                spHaste, spEnhDmg, spValue))
+                spHaste, spEnhDmg, spValue, spMinLevel))
             if (sp != null) sp.getValueFactory().setValue(0);
     }
 
@@ -546,6 +660,9 @@ public class ItemRegistryPanel {
                 ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
                 try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
                 catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
+                try { it.tier = ItemTier.valueOf(n.path("tier").asText("COMMON")); }
+                catch (IllegalArgumentException ignored) { it.tier = ItemTier.COMMON; }
+                it.minLevel    = n.path("minLevel").asInt(0);
                 it.lore        = n.path("lore").asBoolean(false);
                 it.noLog       = n.path("noLog").asBoolean(false);
                 it.description = n.path("description").asText("");
@@ -562,6 +679,7 @@ public class ItemRegistryPanel {
                 it.statPoisonRes  = stats.path("POISON_RES").asInt(0);  it.statDiseaseRes = stats.path("DISEASE_RES").asInt(0);
                 it.statMagicRes   = stats.path("MAGIC_RES").asInt(0);
                 it.statHaste      = stats.path("HASTE").asInt(0);       it.statEnhDmg     = stats.path("ENH_DMG").asInt(0);
+                for (com.fasterxml.jackson.databind.JsonNode sp : n.path("spells")) it.spells.add(sp.asText());
                 map.put(it.name, it);
             }
         } catch (Exception ignored) {}
@@ -579,6 +697,8 @@ public class ItemRegistryPanel {
                 n.put("name",        it.name);
                 n.put("category",    it.category.name());
                 n.put("armorSlot",   it.armorSlot != null ? it.armorSlot.name() : ArmorSlot.NONE.name());
+                n.put("tier",        (it.tier != null ? it.tier : ItemTier.COMMON).name());
+                n.put("minLevel",    it.minLevel);
                 n.put("lore",        it.lore);
                 n.put("noLog",       it.noLog);
                 n.put("description", it.description);
@@ -596,6 +716,9 @@ public class ItemRegistryPanel {
                 stats.put("MAGIC_RES",   it.statMagicRes);
                 stats.put("HASTE",       it.statHaste);      stats.put("ENH_DMG",     it.statEnhDmg);
                 n.set("stats", stats);
+                ArrayNode spellArr = om.createArrayNode();
+                for (String sp : it.spells) spellArr.add(sp);
+                n.set("spells", spellArr);
                 root.add(n);
             }
             Files.createDirectories(SAVE_FILE.getParent());
@@ -618,6 +741,9 @@ public class ItemRegistryPanel {
                 ItemDef it = new ItemDef(n.path("name").asText("Item"), cat);
                 try { it.armorSlot = ArmorSlot.valueOf(n.path("armorSlot").asText("NONE")); }
                 catch (IllegalArgumentException ignored) { it.armorSlot = ArmorSlot.NONE; }
+                try { it.tier = ItemTier.valueOf(n.path("tier").asText("COMMON")); }
+                catch (IllegalArgumentException ignored) { it.tier = ItemTier.COMMON; }
+                it.minLevel    = n.path("minLevel").asInt(0);
                 it.lore        = n.path("lore").asBoolean(false);
                 it.noLog       = n.path("noLog").asBoolean(false);
                 it.description = n.path("description").asText("");
@@ -634,6 +760,7 @@ public class ItemRegistryPanel {
                 it.statPoisonRes  = stats.path("POISON_RES").asInt(0);  it.statDiseaseRes = stats.path("DISEASE_RES").asInt(0);
                 it.statMagicRes   = stats.path("MAGIC_RES").asInt(0);
                 it.statHaste      = stats.path("HASTE").asInt(0);       it.statEnhDmg     = stats.path("ENH_DMG").asInt(0);
+                for (JsonNode sp : n.path("spells")) it.spells.add(sp.asText());
                 items.add(it);
             }
         } catch (Exception ignored) {}
@@ -730,6 +857,107 @@ public class ItemRegistryPanel {
             statusLabel.setText("Error: " + ex.getMessage());
             statusLabel.setStyle("-fx-text-fill: #e94560; -fx-font-size: 11;");
         }
+    }
+
+    // ── Item popup ────────────────────────────────────────────────────────────
+
+    private void showItemPopup(ItemDef it) {
+        ItemTier tier = it.tier != null ? it.tier : ItemTier.COMMON;
+        String tierColor = tier.color();
+
+        // ── Header ────────────────────────────────────────────────────────────
+        Label nameLbl = new Label(categoryIcon(it.category) + "  " + it.name);
+        nameLbl.setStyle("-fx-text-fill: " + tierColor + "; -fx-font-size: 16; -fx-font-weight: bold;");
+        nameLbl.setWrapText(true);
+
+        Label tierLbl = new Label(tier.label());
+        tierLbl.setStyle("-fx-text-fill: " + tierColor + "; -fx-font-size: 12; -fx-font-style: italic;");
+
+        Label catLbl = new Label(it.category.name().charAt(0) + it.category.name().substring(1).toLowerCase()
+                + (it.armorSlot != null && it.armorSlot != ArmorSlot.NONE ? "  —  " + it.armorSlot.label() : ""));
+        catLbl.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 12;");
+
+        if (it.minLevel > 0) {
+            Label lvlLbl = new Label("Requires Level " + it.minLevel);
+            lvlLbl.setStyle("-fx-text-fill: #e05050; -fx-font-size: 12; -fx-font-weight: bold;");
+            // will be added below
+        }
+
+        VBox header = new VBox(4, nameLbl, tierLbl, catLbl);
+        if (it.minLevel > 0) {
+            Label lvlLbl = new Label("Requires Level " + it.minLevel);
+            lvlLbl.setStyle("-fx-text-fill: #e05050; -fx-font-size: 12; -fx-font-weight: bold;");
+            header.getChildren().add(lvlLbl);
+        }
+        header.setStyle("-fx-background-color: #0f0f1e; -fx-padding: 14 16 10 16;" +
+                        "-fx-border-color: " + tierColor + "; -fx-border-width: 0 0 2 0;");
+
+        // ── Description ───────────────────────────────────────────────────────
+        VBox descBox = new VBox();
+        if (it.description != null && !it.description.isBlank()) {
+            Label desc = new Label(it.description);
+            desc.setStyle("-fx-text-fill: #c8c8a0; -fx-font-size: 12; -fx-font-style: italic;");
+            desc.setWrapText(true);
+            desc.setMaxWidth(340);
+            descBox.getChildren().add(desc);
+            descBox.setStyle("-fx-padding: 10 16 6 16;");
+        }
+
+        // ── Stats ─────────────────────────────────────────────────────────────
+        record StatEntry(String name, int value, String color) {}
+        java.util.List<StatEntry> stats = new java.util.ArrayList<>();
+        if (it.statArmor    != 0) stats.add(new StatEntry("Armor (Dmg Reduction %)", it.statArmor,    "#7090c0"));
+        if (it.statHp       != 0) stats.add(new StatEntry("HP",                      it.statHp,       "#e05050"));
+        if (it.statHpRegen  != 0) stats.add(new StatEntry("HP Regen",                it.statHpRegen,  "#e07070"));
+        if (it.statMana     != 0) stats.add(new StatEntry("Mana",                    it.statMana,     "#5080ff"));
+        if (it.statManaRegen!= 0) stats.add(new StatEntry("Mana Regen",              it.statManaRegen,"#7090ff"));
+        if (it.statInt      != 0) stats.add(new StatEntry("INT",                     it.statInt,      "#53c0f0"));
+        if (it.statStr      != 0) stats.add(new StatEntry("STR",                     it.statStr,      "#e94560"));
+        if (it.statWis      != 0) stats.add(new StatEntry("WIS",                     it.statWis,      "#c8a020"));
+        if (it.statCha      != 0) stats.add(new StatEntry("CHA",                     it.statCha,      "#bd10e0"));
+        if (it.statSta      != 0) stats.add(new StatEntry("STA",                     it.statSta,      "#50c050"));
+        if (it.statAgi      != 0) stats.add(new StatEntry("AGI",                     it.statAgi,      "#ff8844"));
+        if (it.statDex      != 0) stats.add(new StatEntry("DEX",                     it.statDex,      "#44cc88"));
+        if (it.statLuk      != 0) stats.add(new StatEntry("LUK",                     it.statLuk,      "#f0e030"));
+        if (it.statFireRes  != 0) stats.add(new StatEntry("Fire Resist",              it.statFireRes,  "#ff4422"));
+        if (it.statColdRes  != 0) stats.add(new StatEntry("Cold Resist",              it.statColdRes,  "#44aaff"));
+        if (it.statPoisonRes!= 0) stats.add(new StatEntry("Poison Resist",            it.statPoisonRes,"#88cc44"));
+        if (it.statDiseaseRes!=0) stats.add(new StatEntry("Disease Resist",           it.statDiseaseRes,"#aa8844"));
+        if (it.statMagicRes != 0) stats.add(new StatEntry("Magic Resist",             it.statMagicRes, "#cc88ff"));
+        if (it.statHaste    != 0) stats.add(new StatEntry("Haste",                   it.statHaste,    "#ffcc00"));
+        if (it.statEnhDmg   != 0) stats.add(new StatEntry("Enhanced Damage",         it.statEnhDmg,   "#ff6666"));
+
+        VBox statsBox = new VBox(4);
+        statsBox.setStyle("-fx-padding: 6 16 14 16;");
+        for (StatEntry s : stats) {
+            String sign = s.value() > 0 ? "+" : "";
+            Label sl = new Label(sign + s.value() + "  " + s.name());
+            sl.setStyle("-fx-text-fill: " + s.color() + "; -fx-font-size: 13; -fx-font-weight: bold;");
+            statsBox.getChildren().add(sl);
+        }
+        if (stats.isEmpty()) {
+            Label noStats = new Label("No stat bonuses.");
+            noStats.setStyle("-fx-text-fill: #606080; -fx-font-size: 12; -fx-font-style: italic; -fx-padding: 6 16 14 16;");
+            statsBox.getChildren().add(noStats);
+        }
+
+        // ── Value footer ──────────────────────────────────────────────────────
+        Label valueLbl = new Label("Vendor value:  " + it.value + " gold");
+        valueLbl.setStyle("-fx-text-fill: #ffd700; -fx-font-size: 11; -fx-padding: 8 16 8 16;" +
+                          "-fx-border-color: #2a2a4a; -fx-border-width: 1 0 0 0;");
+
+        VBox content = new VBox(header, descBox, statsBox, valueLbl);
+        content.setStyle("-fx-background-color: #1a1a2e;");
+
+        javafx.scene.Scene scene = new javafx.scene.Scene(content);
+        scene.setFill(javafx.scene.paint.Color.web("#1a1a2e"));
+
+        javafx.stage.Stage popup = new javafx.stage.Stage();
+        popup.setTitle(it.name);
+        popup.setScene(scene);
+        popup.setResizable(false);
+        popup.initModality(javafx.stage.Modality.NONE);
+        popup.show();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

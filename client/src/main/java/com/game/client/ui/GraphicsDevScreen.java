@@ -70,19 +70,15 @@ public class GraphicsDevScreen {
         SpriteEditorPanel spriteEditor = new SpriteEditorPanel();
         Tab editorTab     = new Tab("✏ Pose Editor",       spriteEditor.buildPngEditor());
         Tab mobTab        = new Tab("👾 Mob Manager",      new MobManagerPanel().build());
-        Tab lootTab       = new Tab("📦 Loot Tables",     new LootTablePanel().build());
-        Tab itemTab       = new Tab("🗡 Item Registry",    new ItemRegistryPanel(client).build());
         Tab mechanicsTab  = new Tab("🎮 Game Mechanics",   new GameMechanicsPanel().build());
         filesTab.setClosable(false);
         spritesTab.setClosable(false);
         importTab.setClosable(false);
         editorTab.setClosable(false);
         mobTab.setClosable(false);
-        lootTab.setClosable(false);
-        itemTab.setClosable(false);
         mechanicsTab.setClosable(false);
 
-        TabPane inner = new TabPane(filesTab, importTab, spritesTab, editorTab, mobTab, lootTab, itemTab, mechanicsTab);
+        TabPane inner = new TabPane(filesTab, importTab, spritesTab, editorTab, mobTab, mechanicsTab);
         inner.getStyleClass().add("tab-pane-dark");
         inner.setStyle("-fx-tab-min-width: 120;");
         return inner;
@@ -428,9 +424,35 @@ public class GraphicsDevScreen {
         // Preview animation timer + playback state
         PlayerAnimator[] previewAnim = { new PlayerAnimator() };
         javafx.animation.AnimationTimer[] timer = { null };
-        boolean[] paused   = { false };
+        boolean[] paused   = { true  };
         boolean[] repeat   = { true  };
         long[]    pausedAt = { 0L    };
+
+        // Direction picker for top preview
+        PlayerAnimator.Direction[] previewDir = { PlayerAnimator.Direction.RIGHT };
+        String pdNorm = "-fx-background-color: #0f3460; -fx-text-fill: #c8c8e0; " +
+                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8;";
+        String pdSel  = "-fx-background-color: #e94560; -fx-text-fill: white; " +
+                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8; -fx-font-weight: bold;";
+        ToggleGroup previewDirGroup = new ToggleGroup();
+        ToggleButton pdFront = new ToggleButton("⬤ Front");
+        ToggleButton pdLeft  = new ToggleButton("◀ Left");
+        ToggleButton pdRight = new ToggleButton("▶ Right");
+        ToggleButton pdBack  = new ToggleButton("⬛ Back");
+        pdFront.setUserData(PlayerAnimator.Direction.FRONT);
+        pdLeft.setUserData(PlayerAnimator.Direction.LEFT);
+        pdRight.setUserData(PlayerAnimator.Direction.RIGHT);
+        pdBack.setUserData(PlayerAnimator.Direction.BACK);
+        for (ToggleButton b : new ToggleButton[]{ pdFront, pdLeft, pdRight, pdBack }) {
+            b.setToggleGroup(previewDirGroup);
+            b.setStyle(pdNorm);
+            b.selectedProperty().addListener((obs, o, n) -> b.setStyle(n ? pdSel : pdNorm));
+        }
+        pdRight.setSelected(true);
+        Label previewDirHdr = new Label("Direction:");
+        previewDirHdr.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 12;");
+        HBox previewDirBar = new HBox(4, previewDirHdr, pdFront, pdLeft, pdRight, pdBack);
+        previewDirBar.setAlignment(Pos.CENTER_LEFT);
 
         Button playBtn   = new Button("▶ Play");
         Button pauseBtn  = new Button("⏸ Pause");
@@ -512,12 +534,11 @@ public class GraphicsDevScreen {
             PlayerAnimator.State s = statePicker.getSelectionModel().getSelectedItem();
             if (s == null) return;
             if (timer[0] != null) timer[0].stop();
-            paused[0] = false;
             pausedAt[0] = 0L;
 
             // Drive animation directly from imported sprite images (bypasses
             // poseCount() mapping which caps quadruped states to 1 frame on RIGHT direction).
-            javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s, PlayerAnimator.Direction.RIGHT);
+            javafx.scene.image.Image[] sprites = PlayerAnimator.getStateSprites(s, previewDir[0]);
             currentSprites[0]  = sprites;
             sharedSpriteIdx[0] = 0;
             frameCounterLabel.setText(sprites != null && sprites.length > 0 ? "1 / " + sprites.length : "— / —");
@@ -534,7 +555,7 @@ public class GraphicsDevScreen {
 
             previewAnim[0] = new PlayerAnimator();
             previewAnim[0].forceState(s);
-            previewAnim[0].setForcedDirection(PlayerAnimator.Direction.RIGHT);
+            previewAnim[0].setForcedDirection(previewDir[0]);
 
             timer[0] = new javafx.animation.AnimationTimer() {
                 public void handle(long now) {
@@ -566,12 +587,18 @@ public class GraphicsDevScreen {
             timer[0].start();
         };
 
-        playBtn.setOnAction(e -> startPreview.run()); // always restart from frame 0
+        playBtn.setOnAction(e -> { paused[0] = false; startPreview.run(); }); // always restart from frame 0
         pauseBtn.setOnAction(e -> { paused[0] = true; });
         repeatBtn.setOnAction(e -> {
             repeat[0] = !repeat[0];
             repeatBtn.setText(repeat[0] ? "🔁 Repeat: ON" : "🔁 Repeat: OFF");
             if (previewAnim[0] != null) previewAnim[0].setHoldLastFrame(!repeat[0]);
+        });
+
+        previewDirGroup.selectedToggleProperty().addListener((obs, old, now) -> {
+            if (now == null) { old.setSelected(true); return; }
+            previewDir[0] = (PlayerAnimator.Direction) now.getUserData();
+            startPreview.run();
         });
 
         // ── Staged files list ─────────────────────────────────────────────────
@@ -939,70 +966,8 @@ browseBtn.setOnAction(e -> {
             }
         });
 
-        // ── Combat Preview ────────────────────────────────────────────────────
-        Label combatLabel = styledLabel("Combat Preview", 13, true);
-
-        // Direction toggle bar
-        String dNorm = "-fx-background-color: #0f3460; -fx-text-fill: #c8c8e0; " +
-                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8;";
-        String dSel  = "-fx-background-color: #e94560; -fx-text-fill: white; " +
-                "-fx-background-radius: 4; -fx-font-size: 11; -fx-padding: 4 8 4 8; -fx-font-weight: bold;";
-        ToggleGroup combatDirGroup = new ToggleGroup();
-        ToggleButton cdFront = new ToggleButton("⬤ Front");
-        ToggleButton cdLeft  = new ToggleButton("◀ Left");
-        ToggleButton cdRight = new ToggleButton("▶ Right");
-        ToggleButton cdBack  = new ToggleButton("⬛ Back");
-        cdFront.setUserData(PlayerAnimator.Direction.FRONT);
-        cdLeft.setUserData(PlayerAnimator.Direction.LEFT);
-        cdRight.setUserData(PlayerAnimator.Direction.RIGHT);
-        cdBack.setUserData(PlayerAnimator.Direction.BACK);
-        for (ToggleButton b : new ToggleButton[]{ cdFront, cdLeft, cdRight, cdBack }) {
-            b.setToggleGroup(combatDirGroup);
-            b.setStyle(dNorm);
-            b.selectedProperty().addListener((obs, o, n) -> b.setStyle(n ? dSel : dNorm));
-        }
-        cdRight.setSelected(true);
-        Label combatDirHdr = new Label("Direction:");
-        combatDirHdr.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 12;");
-        HBox combatDirBar = new HBox(4, combatDirHdr, cdFront, cdLeft, cdRight, cdBack);
-        combatDirBar.setAlignment(Pos.CENTER_LEFT);
-
-        Canvas combatCanvas = new Canvas(200, 220);
-        StackPane combatCanvasPane = new StackPane(combatCanvas);
-        combatCanvasPane.getStyleClass().add("canvas-preview-bg");
-        combatCanvasPane.setPrefSize(200, 220);
-        VBox.setVgrow(combatCanvasPane, Priority.ALWAYS);
-
-        PlayerAnimator[] combatAnim = { new PlayerAnimator() };
-        AnimationTimer[] combatTimer = { null };
-        combatAnim[0].setForcedDirection(PlayerAnimator.Direction.RIGHT);
-        {
-            PlayerAnimator.State initS = statePicker.getSelectionModel().getSelectedItem();
-            if (initS != null) combatAnim[0].forceState(initS);
-        }
-
-        combatDirGroup.selectedToggleProperty().addListener((obs, old, now) -> {
-            if (now == null) { old.setSelected(true); return; }
-            combatAnim[0].setForcedDirection((PlayerAnimator.Direction) now.getUserData());
-        });
-
-        // Keep combat preview in sync with state / body-type picker
-        statePicker.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> {
-            if (n != null) combatAnim[0].forceState(n);
-        });
-
-        combatTimer[0] = new AnimationTimer() {
-            public void handle(long now) {
-                GraphicsContext gc = combatCanvas.getGraphicsContext2D();
-                double cw = combatCanvas.getWidth(), ch = combatCanvas.getHeight();
-                gc.setFill(Color.web("#1a1a2e"));
-                gc.fillRect(0, 0, cw, ch);
-                combatAnim[0].draw(gc, cw / 2, ch - 20, Color.WHITE, 1.5, now / 1_000_000L);
-            }
-        };
-
         // Init
-        Platform.runLater(() -> { refreshFrameList.run(); combatTimer[0].start(); });
+        Platform.runLater(() -> { refreshFrameList.run(); startPreview.run(); });
 
         // ── Layout ────────────────────────────────────────────────────────────
         VBox leftCol = new VBox(10,
@@ -1018,13 +983,8 @@ browseBtn.setOnAction(e -> {
         leftCol.setPadding(new Insets(14));
         leftCol.getStyleClass().add("app-card");
 
-        Separator rightSep = new Separator();
-        rightSep.setStyle("-fx-background-color: #3a3a6a;");
-
         VBox rightCol = new VBox(10,
-                previewLabel, importingForLabel, canvasPane, playbackRow,
-                rightSep,
-                combatLabel, combatDirBar, combatCanvasPane);
+                previewLabel, importingForLabel, previewDirBar, canvasPane, playbackRow);
         rightCol.setPadding(new Insets(14));
         rightCol.getStyleClass().add("app-card");
         HBox.setHgrow(rightCol, Priority.ALWAYS);
