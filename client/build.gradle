@@ -1,5 +1,4 @@
 plugins {
-    id 'org.openjfx.javafxplugin' version '0.1.0'
     id 'application'
 }
 
@@ -19,26 +18,32 @@ processResources {
     }
 }
 
-javafx {
-    version = "26"
-    modules = ['javafx.controls', 'javafx.fxml', 'javafx.graphics', 'javafx.media', 'javafx.swing']
+repositories {
+    mavenCentral()
 }
 
 dependencies {
     implementation project(':shared')
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     implementation 'ch.qos.logback:logback-classic:1.5.8'
+
+    // ── jMonkeyEngine 3.6.1-stable ────────────────────────────────────────────
+    implementation 'org.jmonkeyengine:jme3-core:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-desktop:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-lwjgl3:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-terrain:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-effects:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-plugins:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-bullet:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-bullet-native:3.6.1-stable'
+
+    // ── Lemur GUI ────────────────────────────────────────────────────────────
+    implementation 'com.simsilica:lemur:1.16.0'
+    implementation 'com.simsilica:lemur-proto:1.13.0'
 }
 
 application {
     mainClass = 'com.game.client.ClientMain'
-    applicationDefaultJvmArgs = [
-        '--enable-preview',
-        '--add-opens=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
-        '--enable-native-access=ALL-UNNAMED'
-    ]
-    // Pass --synced when running via Gradle so the sync redirect is skipped in dev
-    run.args '--synced'
 }
 
 // Always run from the repo root so relative paths like

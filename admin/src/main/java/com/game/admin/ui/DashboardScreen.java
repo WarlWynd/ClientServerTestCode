@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.game.admin.AdminSession;
 import com.game.admin.AdminUDPClient;
-import com.game.client.ui.*;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
@@ -49,12 +48,9 @@ public class DashboardScreen {
 
         TabPane tabs = new TabPane(
                 buildPlayersTab(),
-                buildGraphicsDevTab(),
                 buildItemDevTab(),
                 buildSpellDevTab(),
-                buildQuestDevTab(),
-                buildBoardDevTab(),
-                buildAudioDevTab()
+                buildQuestDevTab()
         );
         tabs.getStyleClass().add("tab-pane-dark");
         tabs.setTabMinWidth(110);
@@ -165,15 +161,9 @@ public class DashboardScreen {
 
     // ── Dev tabs ──────────────────────────────────────────────────────────────
 
-    private Tab buildGraphicsDevTab() {
-        Tab tab = new Tab("🎨  Graphics Dev", new GraphicsDevScreen(stage, null).build());
-        tab.setClosable(false);
-        return tab;
-    }
-
     private Tab buildItemDevTab() {
         Tab lootTab = new Tab("📦 Loot Tables",  new LootTablePanel().build());
-        Tab itemTab = new Tab("🗡 Item Registry", new ItemRegistryPanel(null).build());
+        Tab itemTab = new Tab("🗡 Item Registry", new ItemRegistryPanel().build());
         lootTab.setClosable(false);
         itemTab.setClosable(false);
         TabPane inner = new TabPane(lootTab, itemTab);
@@ -193,18 +183,6 @@ public class DashboardScreen {
 
     private Tab buildQuestDevTab() {
         Tab tab = new Tab("📜  Quest Dev", new QuestDevPanel().build());
-        tab.setClosable(false);
-        return tab;
-    }
-
-    private Tab buildBoardDevTab() {
-        Tab tab = new Tab("🗺  Board Dev", new BoardDevScreen(stage, () -> {}).build());
-        tab.setClosable(false);
-        return tab;
-    }
-
-    private Tab buildAudioDevTab() {
-        Tab tab = new Tab("🎵  Audio Dev", new AudioDevScreen(stage).build());
         tab.setClosable(false);
         return tab;
     }
