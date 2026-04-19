@@ -16,7 +16,6 @@ import com.simsilica.lemur.Label;
 import com.simsilica.lemur.TextField;
 import com.simsilica.lemur.component.SpringGridLayout;
 import com.simsilica.lemur.style.BaseStyles;
-import com.simsilica.lemur.style.BaseStyles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +41,6 @@ public class LoginAppState extends BaseAppState {
     @Override
     protected void initialize(Application app) {
         GuiGlobals.initialize(app);
-        BaseStyles.loadGlassStyle();
-        GuiGlobals.getInstance().getStyles().setDefaultStyle(BaseStyles.GLASS);
 
         guiNode = ((SimpleApplication) app).getGuiNode();
         buildLoginForm(app);

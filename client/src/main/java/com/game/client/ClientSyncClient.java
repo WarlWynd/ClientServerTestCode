@@ -115,7 +115,7 @@ public final class ClientSyncClient {
                 if (dlResp.statusCode() == 200) {
                     Files.write(localFile, dlResp.body(),
                             StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-                    if ("sounds".equals(type)) AudioManager.invalidate(name);
+                    // audio cache invalidation handled by audio system on next load
                     downloaded++;
                     log.info("Synced {}/{}", type, name);
                 } else {
