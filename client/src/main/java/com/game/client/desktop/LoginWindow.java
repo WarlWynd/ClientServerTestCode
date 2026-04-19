@@ -1,11 +1,13 @@
-package com.game.admin.ui;
+package com.game.client.desktop;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.game.admin.AdminSession;
-import com.game.admin.AdminUDPClient;
+import com.game.client.ClientConfig;
+import com.game.client.SessionStore;
+import com.game.client.UDPClient;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -25,41 +27,37 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
-public class LoginScreen {
+public class LoginWindow extends Application {
 
     private static final Path PREFS_FILE = Paths.get(
-            System.getProperty("user.home"), ".game", "admin-prefs.properties");
+            System.getProperty("user.home"), ".game", "client-prefs.properties");
 
-    private final Stage          stage;
-    private final AdminUDPClient client;
+    private UDPClient udpClient;
+    private Label     statusLabel;
+    private Button    loginButton;
+    private String    pendingEmail;
+    private String    pendingPassword;
+    private boolean   rememberEmail;
+    private boolean   rememberPassword;
 
-    private Label   statusLabel;
-    private Button  loginButton;
-    private String  pendingEmail;
-    private String  pendingPassword;
-    private boolean rememberEmail;
-    private boolean rememberPassword;
-
-    public LoginScreen(Stage stage, AdminUDPClient client) {
-        this.stage  = stage;
-        this.client = client;
-    }
-
-    public void show() {
-        client.setPacketListener(this::onPacket);
+    @Override
+    public void start(Stage stage) throws Exception {
+        ClientConfig config = new ClientConfig();
+        udpClient = new UDPClient(config);
+        udpClient.setPacketListener(this::onPacket);
+        udpClient.start();
 
         Properties prefs        = loadPrefs();
-        String     savedEmail   = prefs.getProperty("email", "");
+        String     savedEmail   = prefs.getProperty("email",    "");
         String     savedPassword= prefs.getProperty("password", "");
         boolean    saveEmail    = !savedEmail.isEmpty();
         boolean    savePassword = !savedPassword.isEmpty();
 
-        // ── Branding ──────────────────────────────────────────────────────────
-        Label title = new Label("Admin Console");
+        Label title = new Label("Adventure Friends");
         title.setFont(Font.font("System", FontWeight.BOLD, 18));
         title.setTextFill(Color.web("#e0e0ff"));
 
-        Label subtitle = new Label("Administrator Login");
+        Label subtitle = new Label("Player Login");
         subtitle.setFont(Font.font("System", 10));
         subtitle.setTextFill(Color.web("#8080a0"));
 
@@ -70,7 +68,6 @@ public class LoginScreen {
         sep.setStyle("-fx-background-color: #3a3a6a;");
         sep.setPadding(new Insets(4, 0, 4, 0));
 
-        // ── Form ─────────────────────────────────────────────────────────────
         String fieldStyle = """
                 -fx-background-color: #16213e;
                 -fx-text-fill: #e0e0e0;
@@ -113,24 +110,27 @@ public class LoginScreen {
         statusLabel.setFont(Font.font("System", 9));
         statusLabel.setWrapText(true);
 
-        // ── Root ──────────────────────────────────────────────────────────────
         VBox root = new VBox(8, brandBox, sep, emailField, passwordField, checkRow, loginButton, statusLabel);
         root.setAlignment(Pos.CENTER_LEFT);
         root.setPadding(new Insets(20, 20, 20, 20));
         root.setStyle("-fx-background-color: #1a1a2e;");
 
-        loginButton.setOnAction(e -> {
+        Runnable submit = () -> {
             rememberEmail    = rememberEmailBox.isSelected();
             rememberPassword = rememberPasswordBox.isSelected();
-            doLogin(emailField.getText(), passwordField.getText());
-        });
-        passwordField.setOnAction(e -> {
-            rememberEmail    = rememberEmailBox.isSelected();
-            rememberPassword = rememberPasswordBox.isSelected();
-            doLogin(emailField.getText(), passwordField.getText());
-        });
+            pendingEmail     = emailField.getText();
+            pendingPassword  = passwordField.getText();
+            doLogin(pendingEmail, pendingPassword);
+        };
 
+        loginButton.setOnAction(e -> submit.run());
+        passwordField.setOnAction(e -> submit.run());
+
+        stage.setTitle("Adventure Friends");
+        stage.setWidth(300);
+        stage.setResizable(false);
         stage.setScene(new Scene(root, 300, 260));
+        stage.setOnCloseRequest(e -> { udpClient.stop(); Platform.exit(); });
         stage.show();
         Platform.runLater(emailField::requestFocus);
     }
@@ -140,21 +140,19 @@ public class LoginScreen {
             statusLabel.setText("Please enter email and password.");
             return;
         }
-        pendingEmail    = email;
-        pendingPassword = password;
         loginButton.setDisable(true);
         statusLabel.setText("Connecting...");
 
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("email",    email);
         payload.put("password", password);
-        client.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
+        udpClient.send(new Packet(PacketType.LOGIN_REQUEST, null, payload));
     }
 
     private void onPacket(Packet packet) {
         if (packet.type != PacketType.LOGIN_RESPONSE) return;
         Platform.runLater(() -> {
-            boolean success = packet.payload.get("success").asBoolean();
+            boolean success = packet.payload.path("success").asBoolean(false);
             if (!success) {
                 statusLabel.setText(packet.payload.has("message")
                         ? packet.payload.get("message").asText()
@@ -162,22 +160,20 @@ public class LoginScreen {
                 loginButton.setDisable(false);
                 return;
             }
-            boolean isAdmin = packet.payload.has("isAdmin")
-                    && packet.payload.get("isAdmin").asBoolean();
-            if (!isAdmin) {
-                statusLabel.setText("Access denied — this account is not an admin.");
-                loginButton.setDisable(false);
-                return;
-            }
+            // Accept either key name the server might use
+            String token = packet.payload.path("sessionToken").asText(
+                    packet.payload.path("token").asText(""));
+            String  username = packet.payload.path("username").asText("");
+            boolean isAdmin  = packet.payload.path("isAdmin").asBoolean(
+                    packet.payload.path("admin").asBoolean(false));
+
             savePrefs(
                     rememberEmail    ? pendingEmail    : "",
                     rememberPassword ? pendingPassword : "");
-            AdminSession.set(
-                    packet.payload.get("sessionToken").asText(),
-                    packet.payload.get("username").asText());
-            stage.setResizable(true);
-            stage.setMaximized(true);
-            new DashboardScreen(stage, client).show();
+
+            SessionStore.set(token, username, isAdmin, false, false, false);
+            udpClient.stop();
+            Platform.exit();
         });
     }
 
@@ -199,12 +195,10 @@ public class LoginScreen {
         try {
             Files.createDirectories(PREFS_FILE.getParent());
             try (OutputStream out = Files.newOutputStream(PREFS_FILE)) {
-                p.store(out, "Admin Console — saved credentials");
+                p.store(out, "Client — saved credentials");
             }
         } catch (Exception ignored) {}
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static CheckBox styledCheckBox(String text, boolean selected) {
         CheckBox cb = new CheckBox(text);

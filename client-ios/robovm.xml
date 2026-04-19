@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <executableName>AdventureFriends</executableName>
+    <mainClass>com.game.client.ios.IOSLauncher</mainClass>
+    <os>ios</os>
+    <arch>thumbv7:arm64</arch>
+    <resources>
+        <resource>
+            <directory>../client-core/src/main/resources</directory>
+        </resource>
+    </resources>
+    <forceLinkClasses>
+        <pattern>com.jme3.**.*</pattern>
+        <pattern>com.simsilica.**.*</pattern>
+        <pattern>com.game.**.*</pattern>
+    </forceLinkClasses>
+</config>

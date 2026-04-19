@@ -184,6 +184,7 @@ public class SpellLibraryPanel {
         nameField.textProperty().addListener((obs, o, n) -> {
             if (selected != null) { selected.name = n; refreshList(searchField.getText()); }
         });
+        nameField.focusedProperty().addListener((obs, o, n) -> { if (!n && selected != null) save(); });
 
         descField = new TextArea();
         descField.setPromptText("Spell description…");
@@ -192,11 +193,12 @@ public class SpellLibraryPanel {
         descField.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0;" +
                            "-fx-border-color: #3a3a6a; -fx-control-inner-background: #0f0f1e;");
         descField.textProperty().addListener((obs, o, n) -> { if (selected != null) selected.description = n; });
+        descField.focusedProperty().addListener((obs, o, n) -> { if (!n && selected != null) save(); });
 
         spMana     = intSpinner(0, 9999, 0);
         spCooldown = intSpinner(0, 9999, 0);
-        spMana    .valueProperty().addListener((o, p, n) -> { if (selected != null) selected.manaCost = n; });
-        spCooldown.valueProperty().addListener((o, p, n) -> { if (selected != null) selected.cooldown  = n; });
+        spMana    .valueProperty().addListener((o, p, n) -> { if (selected != null) { selected.manaCost = n; save(); } });
+        spCooldown.valueProperty().addListener((o, p, n) -> { if (selected != null) { selected.cooldown  = n; save(); } });
 
         targetCombo = new ComboBox<>();
         for (TargetType t : TargetType.values()) targetCombo.getItems().add(t.label());
@@ -205,7 +207,7 @@ public class SpellLibraryPanel {
         targetCombo.setOnAction(e -> {
             if (selected != null) {
                 int idx = targetCombo.getSelectionModel().getSelectedIndex();
-                if (idx >= 0) selected.targetType = TargetType.values()[idx];
+                if (idx >= 0) { selected.targetType = TargetType.values()[idx]; save(); }
             }
         });
 
@@ -219,6 +221,7 @@ public class SpellLibraryPanel {
             if (selected != null) {
                 selected.effects.add(new SpellEffect());
                 rebuildEffectsBox();
+                save();
             }
         });
 
@@ -290,16 +293,18 @@ public class SpellLibraryPanel {
         ComboBox<String> typeCombo = new ComboBox<>();
         for (EffectType t : EffectType.values()) typeCombo.getItems().add(t.label());
         typeCombo.getSelectionModel().select(ef.type.ordinal());
-        typeCombo.setStyle("-fx-background-color: #1a1a3a; -fx-text-fill: #e0e0e0; -fx-font-size: 11;");
+        typeCombo.setStyle("-fx-background-color: #1a1a3a; -fx-font-size: 11;");
         typeCombo.setPrefWidth(140);
+        typeCombo.setButtonCell(styledCell("#e0e0e0"));
 
         // ── Stat combo (STAT_ADD / STAT_REMOVE) ───────────────────────────────
         ComboBox<String> statCombo = new ComboBox<>();
         statCombo.getItems().addAll(STAT_KEYS);
         statCombo.setValue(ef.stat);
-        statCombo.setStyle("-fx-background-color: #1a1a3a; -fx-text-fill: #44cc88; -fx-font-size: 11;");
+        statCombo.setStyle("-fx-background-color: #1a1a3a; -fx-font-size: 11;");
         statCombo.setPrefWidth(110);
-        statCombo.setOnAction(e -> ef.stat = statCombo.getValue());
+        statCombo.setButtonCell(styledCell("#44cc88"));
+        statCombo.setOnAction(e -> { ef.stat = statCombo.getValue(); save(); });
         statCombo.setVisible(ef.type.hasStat());
         statCombo.setManaged(ef.type.hasStat());
 
@@ -307,15 +312,15 @@ public class SpellLibraryPanel {
         ComboBox<String> dmgTypeCombo = new ComboBox<>();
         for (DamageType d : DamageType.values()) dmgTypeCombo.getItems().add(d.label());
         dmgTypeCombo.getSelectionModel().select(ef.damageType.ordinal());
-        dmgTypeCombo.setStyle("-fx-background-color: #1a1a3a; -fx-text-fill: " +
-                ef.damageType.color() + "; -fx-font-size: 11;");
+        dmgTypeCombo.setStyle("-fx-background-color: #1a1a3a; -fx-font-size: 11;");
         dmgTypeCombo.setPrefWidth(90);
+        dmgTypeCombo.setButtonCell(styledCell(ef.damageType.color()));
         dmgTypeCombo.setOnAction(e -> {
             int i = dmgTypeCombo.getSelectionModel().getSelectedIndex();
             if (i >= 0) {
                 ef.damageType = DamageType.values()[i];
-                dmgTypeCombo.setStyle("-fx-background-color: #1a1a3a; -fx-text-fill: " +
-                        ef.damageType.color() + "; -fx-font-size: 11;");
+                dmgTypeCombo.setButtonCell(styledCell(ef.damageType.color()));
+                save();
             }
         });
         dmgTypeCombo.setVisible(ef.type.hasDmgType());
@@ -327,6 +332,7 @@ public class SpellLibraryPanel {
             if (i >= 0) {
                 ef.type = EffectType.values()[i];
                 rebuildEffectsBox();
+                save();
             }
         });
 
@@ -335,20 +341,20 @@ public class SpellLibraryPanel {
         valSpin.setEditable(true);
         valSpin.setPrefWidth(80);
         valSpin.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0; -fx-font-size: 11;");
-        valSpin.valueProperty().addListener((o, p, n) -> ef.value = n);
+        valSpin.valueProperty().addListener((o, p, n) -> { ef.value = n; save(); });
 
         // ── % checkbox ───────────────────────────────────────────────────────
         CheckBox pctCheck = new CheckBox("%");
         pctCheck.setSelected(ef.isPercent);
         pctCheck.setStyle("-fx-text-fill: #c0c0c0; -fx-font-size: 11;");
-        pctCheck.setOnAction(e -> ef.isPercent = pctCheck.isSelected());
+        pctCheck.setOnAction(e -> { ef.isPercent = pctCheck.isSelected(); save(); });
 
         // ── Duration spinner ──────────────────────────────────────────────────
         Spinner<Integer> durSpin = new Spinner<>(0, 9999, ef.duration);
         durSpin.setEditable(true);
         durSpin.setPrefWidth(70);
         durSpin.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0; -fx-font-size: 11;");
-        durSpin.valueProperty().addListener((o, p, n) -> ef.duration = n);
+        durSpin.valueProperty().addListener((o, p, n) -> { ef.duration = n; save(); });
         Label durLbl = new Label("sec");
         durLbl.setStyle("-fx-text-fill: #9090b0; -fx-font-size: 11;");
 
@@ -362,7 +368,7 @@ public class SpellLibraryPanel {
         Button removeBtn = new Button("✕");
         removeBtn.setStyle("-fx-background-color: #5f1e1e; -fx-text-fill: white;" +
                            "-fx-font-size: 11; -fx-padding: 3 7 3 7; -fx-background-radius: 3;");
-        removeBtn.setOnAction(e -> { effects.remove(idx); rebuildEffectsBox(); });
+        removeBtn.setOnAction(e -> { effects.remove(idx); rebuildEffectsBox(); save(); });
 
         // ── Layout: two lines per effect ──────────────────────────────────────
         HBox line1 = new HBox(6, idxLbl, typeCombo, statCombo, dmgTypeCombo,
@@ -388,7 +394,8 @@ public class SpellLibraryPanel {
         SpellDef s = new SpellDef("New Spell");
         spells.add(s);
         refreshList(searchField.getText());
-        spellList.getSelectionModel().select(s.name);
+        spellList.getSelectionModel().select(spellList.getItems().size() - 1);
+        save();
     }
 
     private void deleteSelected() {
@@ -398,6 +405,7 @@ public class SpellLibraryPanel {
         clearForm();
         refreshList(searchField.getText());
         if (!spells.isEmpty()) spellList.getSelectionModel().select(0);
+        save();
     }
 
     private void duplicateSelected() {
@@ -416,6 +424,7 @@ public class SpellLibraryPanel {
         spells.add(spells.indexOf(selected) + 1, dup);
         refreshList(searchField.getText());
         spellList.getSelectionModel().select(dup.name);
+        save();
     }
 
     private void loadIntoForm(SpellDef s) {
@@ -569,6 +578,16 @@ public class SpellLibraryPanel {
         s.setMaxWidth(Double.MAX_VALUE);
         s.setStyle("-fx-background-color: #0f0f1e; -fx-text-fill: #e0e0e0;");
         return s;
+    }
+
+    private ListCell<String> styledCell(String color) {
+        return new ListCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty ? null : item);
+                setStyle("-fx-text-fill: " + color + "; -fx-background-color: #1a1a3a; -fx-font-size: 11;");
+            }
+        };
     }
 
     private VBox vbox(int spacing, Node... children) {

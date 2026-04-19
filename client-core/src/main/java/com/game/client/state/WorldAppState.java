@@ -25,12 +25,10 @@ public class WorldAppState extends BaseAppState {
 
     private static final Logger log = LoggerFactory.getLogger(WorldAppState.class);
 
-    private final NetworkAppState network;
     private SimpleApplication app;
     private Node worldNode;
 
-    public WorldAppState(NetworkAppState network) {
-        this.network = network;
+    public WorldAppState() {
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -46,9 +44,6 @@ public class WorldAppState extends BaseAppState {
         setupCamera();
 
         app.getRootNode().attachChild(worldNode);
-
-        // Attach HUD
-        getStateManager().attach(new HUDAppState(network));
 
         log.info("World loaded.");
     }

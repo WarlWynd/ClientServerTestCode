@@ -11,11 +11,9 @@ import com.jme3.app.state.BaseAppState;
 import com.jme3.scene.Node;
 import com.simsilica.lemur.Button;
 import com.simsilica.lemur.Container;
-import com.simsilica.lemur.GuiGlobals;
 import com.simsilica.lemur.Label;
 import com.simsilica.lemur.TextField;
 import com.simsilica.lemur.component.SpringGridLayout;
-import com.simsilica.lemur.style.BaseStyles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +38,6 @@ public class LoginAppState extends BaseAppState {
 
     @Override
     protected void initialize(Application app) {
-        GuiGlobals.initialize(app);
-
         guiNode = ((SimpleApplication) app).getGuiNode();
         buildLoginForm(app);
 
@@ -125,8 +121,8 @@ public class LoginAppState extends BaseAppState {
     }
 
     private void onLoginSuccess() {
-        log.info("Login successful — entering world");
-        getStateManager().attach(new WorldAppState(network));
+        log.info("Login successful — entering dungeon world");
+        getStateManager().attach(new DungeonWorldAppState(network));
         getStateManager().detach(this);
     }
 }

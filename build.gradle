@@ -66,6 +66,9 @@ task uploadSyncAppJar(dependsOn: ':syncapp:jar') {
 }
 
 subprojects {
+    // Android and iOS use their own plugin ecosystems — skip the standard Java setup
+    if (project.name in ['client-android', 'client-ios']) return
+
     apply plugin: 'java'
 
     java {

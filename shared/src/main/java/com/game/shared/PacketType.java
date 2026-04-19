@@ -33,6 +33,10 @@ public enum PacketType {
     PLAYER_UPDATE,
     GAME_STATE,
 
+    // ── Dungeon ──────────────────────────────────────────────────────────────
+    DUNGEON_MAP,       // server → client: tile grid for the current level
+    ENTITY_STATE,      // server → client: all entity positions, facings, states
+
     // ── Server broadcasts ────────────────────────────────────────────────────
     SERVER_NOTICE,
     SERVER_SETTINGS,

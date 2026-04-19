@@ -1,0 +1,33 @@
+plugins {
+    id 'java-library'
+}
+
+def gitCommit = {
+    try {
+        def proc = ['git', 'rev-parse', '--short', 'HEAD'].execute(null, rootDir)
+        proc.waitFor()
+        proc.text.trim() ?: 'unknown'
+    } catch (Exception ignored) { 'unknown' }
+}()
+
+processResources {
+    inputs.property('gitCommit', gitCommit)
+    filesMatching('build-info.properties') {
+        expand(gitCommit: gitCommit,
+               buildTime: new Date().format("yyyy-MM-dd HH:mm:ss z"))
+    }
+}
+
+dependencies {
+    api project(':shared')
+    api 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
+    api 'ch.qos.logback:logback-classic:1.5.8'
+
+    api 'org.jmonkeyengine:jme3-core:3.6.1-stable'
+    api 'org.jmonkeyengine:jme3-terrain:3.6.1-stable'
+    api 'org.jmonkeyengine:jme3-effects:3.6.1-stable'
+    api 'org.jmonkeyengine:jme3-plugins:3.6.1-stable'
+
+    api 'com.simsilica:lemur:1.16.0'
+    api 'com.simsilica:lemur-proto:1.13.0'
+}

@@ -97,7 +97,25 @@
       "Bash(wscript.exe client-silent.vbs)",
       "Bash(grep -n \"ComboBox\\\\|combo\" /e/multiplayer-game/client/src/main/java/com/game/client/ui/*.java)",
       "Bash(grep -v \"//\")",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(find /c -name \"mvn\" -maxdepth 6)",
+      "Bash(git -C E:/multiplayer-game add client/src/main/java/com/game/client/ui/SpriteEditorPanel.java)",
+      "Bash(git -C E:/multiplayer-game commit -m ':*)",
+      "Bash(xargs wc:*)",
+      "Bash(mkdir -p E:/multiplayer-game/client-core/src/main/java/com/game/client/state)",
+      "Bash(mkdir -p E:/multiplayer-game/client-core/src/main/resources)",
+      "Bash(mkdir -p E:/multiplayer-game/client-android/src/main/java/com/game/client/android)",
+      "Bash(mkdir -p E:/multiplayer-game/client-android/src/main/res/values)",
+      "Bash(mkdir -p E:/multiplayer-game/client-android/src/main/res/xml)",
+      "Bash(cp -r E:/multiplayer-game/client/src/main/java/com/game/client/. E:/multiplayer-game/client-core/src/main/java/com/game/client/)",
+      "Bash(cp -r E:/multiplayer-game/client/src/main/resources/. E:/multiplayer-game/client-core/src/main/resources/)",
+      "WebSearch",
+      "WebFetch(domain:xahlee.info)",
+      "WebFetch(domain:www.character.codes)",
+      "WebFetch(domain:www.alanwood.net)",
+      "WebFetch(domain:www.compart.com)",
+      "Bash(./gradlew :admin:compileJava)"
     ]
   }
 }

@@ -1,0 +1,45 @@
+// Android build — requires Android SDK installed and ANDROID_HOME set (or local.properties).
+// Build: ./gradlew :client-android:assembleDebug
+// Install: ./gradlew :client-android:installDebug  (device/emulator must be connected)
+//
+// NOTE: client-core uses Thread.ofVirtual() (Java 21 virtual threads) which is not
+// available on Android. Before this module compiles, UDPClient needs an Android-compatible
+// network implementation using Executors or HandlerThread.
+
+plugins {
+    id 'com.android.application' version '8.3.2' apply false
+}
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.game.client.android'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.game.client.android'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+        coreLibraryDesugaringEnabled true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    implementation project(':client-core')
+    implementation 'org.jmonkeyengine:jme3-android:3.6.1-stable'
+    implementation 'org.jmonkeyengine:jme3-android-native:3.6.1-stable'
+}

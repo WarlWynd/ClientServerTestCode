@@ -1,0 +1,28 @@
+// iOS build — requires macOS + Xcode. Cannot be compiled or deployed from Windows.
+//
+// To enable on macOS, add the RoboVM plugin to settings.gradle pluginManagement,
+// then add:
+//   id 'org.robovm.robovm' version '2.3.21'
+// and uncomment the robovm {} block and jme3-ios dependency below.
+//
+// Build commands (macOS only):
+//   ./gradlew :client-ios:launchIPhoneSimulator
+//   ./gradlew :client-ios:createIPA
+
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':client-core')
+    // implementation 'org.jmonkeyengine:jme3-ios:3.6.1-stable'
+}
+
+// robovm {
+//     iosSignIdentity = 'iPhone Developer'
+//     iosSimulatorSdk = 'latest'
+//     archs           = 'thumbv7:arm64'
+//     configFile      = file('robovm.xml')
+// }

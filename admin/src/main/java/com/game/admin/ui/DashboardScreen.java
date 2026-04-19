@@ -50,7 +50,9 @@ public class DashboardScreen {
                 buildPlayersTab(),
                 buildItemDevTab(),
                 buildSpellDevTab(),
-                buildQuestDevTab()
+                buildQuestDevTab(),
+                buildBoardDevTab(),
+                buildAdminTilesTab()
         );
         tabs.getStyleClass().add("tab-pane-dark");
         tabs.setTabMinWidth(110);
@@ -183,6 +185,18 @@ public class DashboardScreen {
 
     private Tab buildQuestDevTab() {
         Tab tab = new Tab("📜  Quest Dev", new QuestDevPanel().build());
+        tab.setClosable(false);
+        return tab;
+    }
+
+    private Tab buildBoardDevTab() {
+        Tab tab = new Tab("🗺  Board Dev", new BoardDevPanel().build());
+        tab.setClosable(false);
+        return tab;
+    }
+
+    private Tab buildAdminTilesTab() {
+        Tab tab = new Tab("🟦  Admin Tiles", new AdminTilesPanel().build());
         tab.setClosable(false);
         return tab;
     }

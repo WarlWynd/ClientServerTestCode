@@ -1,6 +1,14 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'multiplayer-game'
-include 'shared', 'server', 'client', 'admin', 'syncapp'
+include 'shared', 'server', 'client-core', 'client', 'client-android', 'client-ios', 'admin', 'syncapp'
