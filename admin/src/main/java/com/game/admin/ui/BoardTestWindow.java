@@ -50,8 +50,8 @@ public class BoardTestWindow {
             case S, DOWN     -> tryMove(-DX[facing], -DZ[facing]);
             case PAGE_UP     -> { view3D.adjustPitch(-5); return; }
             case PAGE_DOWN   -> { view3D.adjustPitch(+5); return; }
-            case A, LEFT     -> facing = (facing + 1) % 4;
-            case D, RIGHT    -> facing = (facing + 3) % 4;
+            case A, LEFT     -> facing = (facing + 3) % 4;
+            case D, RIGHT    -> facing = (facing + 1) % 4;
             default -> { return; }
         }
         view3D.updatePlayer(px, pz, facing);

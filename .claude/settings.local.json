@@ -115,7 +115,11 @@
       "WebFetch(domain:www.character.codes)",
       "WebFetch(domain:www.alanwood.net)",
       "WebFetch(domain:www.compart.com)",
-      "Bash(./gradlew :admin:compileJava)"
+      "Bash(./gradlew :admin:compileJava)",
+      "Bash(./gradlew :client-core:compileJava :client:desktop:compileJava)",
+      "Bash(./gradlew :client-core:compileJava)",
+      "Bash(./gradlew :client:desktop:compileJava)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

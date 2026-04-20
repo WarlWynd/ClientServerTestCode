@@ -98,10 +98,34 @@ public class ProceduralTextures {
     private static Texture2D cave() {
         Pixels p = new Pixels();
         for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
-            float n = fbm(x * 0.05f, y * 0.05f, 777);
-            int v = clamp(38 + (int)(n * 34));
-            if (hash(x * 13 + y * 97, 42) % 75 == 0) v = clamp(v + 45);
-            p.set(x, y, clamp(v - 4), clamp(v - 8), clamp(v - 12));
+            // Base rock with strata banding
+            float n      = fbm(x * 0.045f, y * 0.045f, 777);
+            float strata = smoothNoise(x * 0.018f, y * 0.085f, 911) * 20;
+            int v = clamp(44 + (int)(n * 28) + (int)strata);
+
+            // Coal seams — dark diagonal veins
+            float coal = smoothNoise(x * 0.032f + y * 0.014f, y * 0.048f, 1337);
+            if (coal > 0.70f) v = clamp(v - 30);
+
+            // Pick/chisel marks — two crossing scratch families
+            int s1 = Math.abs(((x * 7 + y * 3) % 53) - 26);
+            int s2 = Math.abs(((x * 3 - y * 8) % 47) - 23);
+            if (s1 < 1 || s2 < 1) v = clamp(v - 18);
+
+            // Iron ore — reddish-brown flecks
+            if (hash(x * 17 + y * 83, 55) % 88 == 0) {
+                p.set(x, y, clamp(v + 58), clamp(v + 18), clamp(v - 8));
+                continue;
+            }
+            // Gold ore — rare golden flecks
+            if (hash(x * 31 + y * 53, 99) % 210 == 0) {
+                p.set(x, y, clamp(v + 82), clamp(v + 66), clamp(v - 12));
+                continue;
+            }
+            // Quartz — occasional bright white crystal fleck
+            if (hash(x * 13 + y * 97, 42) % 80 == 0) v = clamp(v + 50);
+
+            p.set(x, y, clamp(v - 2), clamp(v - 5), clamp(v - 1));
         }
         return p.toTexture();
     }

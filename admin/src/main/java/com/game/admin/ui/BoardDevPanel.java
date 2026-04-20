@@ -658,8 +658,8 @@ public class BoardDevPanel {
 
         win.getStage().getScene().setOnKeyPressed((KeyEvent e) -> {
             switch (e.getCode()) {
-                case A, LEFT  -> facing[0] = (facing[0] + 1) % 4;
-                case D, RIGHT -> facing[0] = (facing[0] + 3) % 4;
+                case A, LEFT  -> facing[0] = (facing[0] + 3) % 4;
+                case D, RIGHT -> facing[0] = (facing[0] + 1) % 4;
                 case PAGE_UP   -> { win.adjustPitch(-5); return; }
                 case PAGE_DOWN -> { win.adjustPitch(+5); return; }
                 default -> { return; }
