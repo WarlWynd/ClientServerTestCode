@@ -21,9 +21,9 @@ public class DungeonRenderer {
     public static Node buildScene(DungeonMap map, AssetManager assets) {
         Node root = new Node("dungeon");
 
-        Material floorMat = unshaded(assets, new ColorRGBA(0.40f, 0.35f, 0.30f, 1f));
-        Material wallMat  = unshaded(assets, new ColorRGBA(0.22f, 0.20f, 0.18f, 1f));
-        Material ceilMat  = unshaded(assets, new ColorRGBA(0.18f, 0.16f, 0.15f, 1f));
+        Material floorMat = lit(assets, new ColorRGBA(0.40f, 0.35f, 0.30f, 1f));
+        Material wallMat  = lit(assets, new ColorRGBA(0.22f, 0.20f, 0.18f, 1f));
+        Material ceilMat  = lit(assets, new ColorRGBA(0.12f, 0.10f, 0.09f, 1f));
 
         float ts = DungeonMap.TILE_SIZE;
         float wh = DungeonMap.WALL_HEIGHT;
@@ -64,7 +64,7 @@ public class DungeonRenderer {
 
     private static Node buildPerimeterWalls(DungeonMap map, AssetManager assets) {
         Node walls = new Node("perimeterWalls");
-        Material mat = unshaded(assets, new ColorRGBA(0.35f, 0.32f, 0.28f, 1f));
+        Material mat = lit(assets, new ColorRGBA(0.35f, 0.32f, 0.28f, 1f));
 
         float ts   = DungeonMap.TILE_SIZE;
         float totalW = map.width * ts;   // world width  (X)
@@ -72,7 +72,7 @@ public class DungeonRenderer {
         float cx     = (map.width  - 1) * ts / 2f;
         float cz     = (map.depth  - 1) * ts / 2f;
 
-        float wallH   = 15f;   // tall so it's visible above interior walls
+        float wallH   = DungeonMap.WALL_HEIGHT * 2f;   // tall so it's visible above interior walls
         float halfH   = wallH / 2f;
         float thick   = 1f;
         float halfT   = thick / 2f;
@@ -105,6 +105,16 @@ public class DungeonRenderer {
         Geometry g = new Geometry(name, new Box(hx, hy, hz));
         g.setMaterial(mat);
         return g;
+    }
+
+    private static Material lit(AssetManager assets, ColorRGBA diffuse) {
+        Material m = new Material(assets, "Common/MatDefs/Light/Lighting.j3md");
+        m.setBoolean("UseMaterialColors", true);
+        m.setColor("Diffuse",  diffuse);
+        m.setColor("Ambient",  diffuse.mult(0.4f));
+        m.setColor("Specular", new ColorRGBA(0.15f, 0.12f, 0.08f, 1f));
+        m.setFloat("Shininess", 8f);
+        return m;
     }
 
     private static Material unshaded(AssetManager assets, ColorRGBA color) {

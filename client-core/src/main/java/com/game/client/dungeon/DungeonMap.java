@@ -1,5 +1,7 @@
 package com.game.client.dungeon;
 
+import com.game.shared.WorldConstants;
+
 import static com.game.client.dungeon.DungeonTile.*;
 
 /**
@@ -9,8 +11,8 @@ import static com.game.client.dungeon.DungeonTile.*;
  */
 public class DungeonMap {
 
-    public static final float TILE_SIZE   = 3f;
-    public static final float WALL_HEIGHT = 3f;
+    public static final float TILE_SIZE   = WorldConstants.TILE_SIZE;
+    public static final float WALL_HEIGHT = WorldConstants.WALL_HEIGHT;
 
     private final DungeonTile[][] tiles; // [z][x]
     public  final int width;
