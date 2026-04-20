@@ -46,10 +46,12 @@ public class BoardTestWindow {
 
     private void handleKey(KeyCode code) {
         switch (code) {
-            case W, UP    -> tryMove( DX[facing],  DZ[facing]);
-            case S, DOWN  -> tryMove(-DX[facing], -DZ[facing]);
-            case A, LEFT  -> facing = (facing + 1) % 4;
-            case D, RIGHT -> facing = (facing + 3) % 4;
+            case W, UP       -> tryMove( DX[facing],  DZ[facing]);
+            case S, DOWN     -> tryMove(-DX[facing], -DZ[facing]);
+            case PAGE_UP     -> { view3D.adjustPitch(-5); return; }
+            case PAGE_DOWN   -> { view3D.adjustPitch(+5); return; }
+            case A, LEFT     -> facing = (facing + 1) % 4;
+            case D, RIGHT    -> facing = (facing + 3) % 4;
             default -> { return; }
         }
         view3D.updatePlayer(px, pz, facing);

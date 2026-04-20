@@ -1,0 +1,211 @@
+package com.game.client.dungeon;
+
+import com.jme3.texture.Image;
+import com.jme3.texture.Texture2D;
+import com.jme3.texture.image.ColorSpace;
+import com.jme3.util.BufferUtils;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Generates and caches tile textures as jME3 Texture2D objects.
+ * Algorithms are identical to the admin ProceduralTextures so client and admin look the same.
+ */
+public class ProceduralTextures {
+
+    private static final int S = 256;
+    private static final Map<String, Texture2D> CACHE = new HashMap<>();
+
+    public static Texture2D get(String name) {
+        return CACHE.computeIfAbsent(name, ProceduralTextures::generate);
+    }
+
+    private static Texture2D generate(String name) {
+        return switch (name) {
+            case "Stone"       -> stone();
+            case "Brick"       -> brick();
+            case "Wood"        -> wood();
+            case "Ice"         -> ice();
+            case "Cave"        -> cave();
+            case "Marble"      -> marble();
+            case "Wood Planks" -> woodPlanks();
+            case "Dirt"        -> dirt();
+            case "Grass"       -> grass();
+            default            -> stone();
+        };
+    }
+
+    // ── Texture generators ────────────────────────────────────────────────────
+
+    private static Texture2D stone() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float n = fbm(x * 0.04f, y * 0.04f, 12345);
+            int v = clamp(108 + (int)(n * 42));
+            int crack = Math.abs(((x * 3 + y * 7) % 97) - 48);
+            if (crack < 1) v = clamp(v - 38);
+            p.set(x, y, v, v, v);
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D brick() {
+        Pixels p = new Pixels();
+        int bH = 20, bW = 52, m = 3;
+        for (int y = 0; y < S; y++) {
+            int row  = y / bH, offX = (row % 2 == 0) ? 0 : bW / 2;
+            boolean mY = (y % bH) < m || (y % bH) >= bH - m;
+            for (int x = 0; x < S; x++) {
+                int lx = (x + offX) % bW;
+                boolean mX = lx < m || lx >= bW - m;
+                if (mX || mY) { p.set(x, y, 128, 118, 108); }
+                else {
+                    int id = (x + offX) / bW + row * 100;
+                    int vr = hash(id, 1) % 22;
+                    float gr = smoothNoise((x + offX) * 0.28f, y * 0.45f, 0) * 14;
+                    p.set(x, y, clamp(158 + vr + (int)gr), clamp(68 + vr/2), clamp(52 + vr/3));
+                }
+            }
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D wood() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float grain = smoothNoise(y * 0.07f, x * 0.009f, 99) * 32;
+            float knot  = (float)(Math.sin(y * 0.55f + smoothNoise(x * 0.09f, y * 0.09f, 77) * 3.0)) * 14;
+            int v = (int)(grain + knot);
+            p.set(x, y, clamp(128 + v), clamp(73 + v/2), clamp(28 + v/4));
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D ice() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float n = fbm(x * 0.055f, y * 0.055f, 555);
+            int base = clamp(192 + (int)(n * 32));
+            int facet = Math.abs(((x * 5 + y * 3) % 61) - 30);
+            int fv = facet < 1 ? -22 : 0;
+            p.set(x, y, clamp(base + fv - 12), clamp(base + fv + 2), clamp(base + fv + 22));
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D cave() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float n = fbm(x * 0.05f, y * 0.05f, 777);
+            int v = clamp(38 + (int)(n * 34));
+            if (hash(x * 13 + y * 97, 42) % 75 == 0) v = clamp(v + 45);
+            p.set(x, y, clamp(v - 4), clamp(v - 8), clamp(v - 12));
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D marble() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float turb = fbm(x * 0.028f, y * 0.028f, 333) * 85;
+            float vein = (float) Math.sin((x * 0.065f + turb) * Math.PI);
+            int base = 198, v = clamp(base + (int)(vein * 26));
+            int dark = (int)(Math.abs(vein) * 42);
+            p.set(x, y, clamp(v - dark/3), clamp(v - dark/3), clamp(v - dark/4));
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D woodPlanks() {
+        Pixels p = new Pixels();
+        int pW = 38, seam = 2;
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            int lx = x % pW;
+            if (lx < seam) { p.set(x, y, 32, 18, 6); }
+            else {
+                int id = x / pW;
+                float grain = smoothNoise(y * 0.065f, (x + id * 200) * 0.012f, 11) * 26;
+                int vr = hash(id, 7) % 16;
+                p.set(x, y, clamp(152 + vr + (int)grain), clamp(97 + vr/2 + (int)grain/2), clamp(42 + (int)grain/4));
+            }
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D dirt() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float n = fbm(x * 0.058f, y * 0.058f, 222);
+            int base = clamp(102 + (int)(n * 38));
+            boolean pebble = hash(x * 17 + y * 31, 13) % 48 == 0;
+            int pv = pebble ? 20 : 0;
+            p.set(x, y, clamp(base + 22 + pv), clamp(base + pv), clamp(base - 26 + pv));
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D grass() {
+        Pixels p = new Pixels();
+        for (int y = 0; y < S; y++) for (int x = 0; x < S; x++) {
+            float n     = fbm(x * 0.048f, y * 0.048f, 888);
+            float blade = smoothNoise(x * 0.75f, y * 0.045f, 44) * 22;
+            p.set(x, y, clamp(42 + (int)(n * 18)), clamp(112 + (int)(n * 32) + (int)blade), clamp(28 + (int)(n * 10)));
+        }
+        return p.toTexture();
+    }
+
+    // ── Noise ─────────────────────────────────────────────────────────────────
+
+    private static float smoothNoise(float x, float y, int seed) {
+        int ix = (int) Math.floor(x), iy = (int) Math.floor(y);
+        float fx = x - ix, fy = y - iy;
+        float a = lattice(ix, iy, seed),    b = lattice(ix+1, iy, seed);
+        float c = lattice(ix, iy+1, seed),  d = lattice(ix+1, iy+1, seed);
+        float s = fx*fx*(3-2*fx), t = fy*fy*(3-2*fy);
+        return (a + s*(b-a)) + t*((c + s*(d-c)) - (a + s*(b-a)));
+    }
+
+    private static float fbm(float x, float y, int seed) {
+        float v = 0, amp = 1f, freq = 1f, sum = 0;
+        for (int i = 0; i < 4; i++) {
+            v += smoothNoise(x*freq, y*freq, seed + i*97) * amp;
+            sum += amp; freq *= 2; amp *= 0.5f;
+        }
+        return v / sum;
+    }
+
+    private static float lattice(int ix, int iy, int seed) {
+        int n = ix * 1619 + iy * 31337 + seed * 1013;
+        n = (n ^ (n >> 8)) * 1540483477;
+        return (n & 0xFFFF) / 65535.0f;
+    }
+
+    private static int hash(int v, int seed) {
+        v ^= seed;
+        v = ((v >> 16) ^ v) * 0x45d9f3b;
+        return Math.abs(v);
+    }
+
+    private static int clamp(int v) { return Math.max(0, Math.min(255, v)); }
+
+    // ── ByteBuffer helper ────────────────────────────────────────────────────
+
+    private static class Pixels {
+        final ByteBuffer buf = BufferUtils.createByteBuffer(S * S * 4);
+        void set(int x, int y, int r, int g, int b) {
+            int idx = (y * S + x) * 4;
+            buf.put(idx,   (byte) r);
+            buf.put(idx+1, (byte) g);
+            buf.put(idx+2, (byte) b);
+            buf.put(idx+3, (byte) 255);
+        }
+        Texture2D toTexture() {
+            Image img = new Image(Image.Format.RGBA8, S, S, buf, ColorSpace.sRGB);
+            Texture2D tex = new Texture2D(img);
+            tex.setWrap(com.jme3.texture.Texture.WrapMode.Repeat);
+            return tex;
+        }
+    }
+}

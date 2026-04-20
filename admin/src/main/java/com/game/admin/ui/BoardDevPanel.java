@@ -651,7 +651,7 @@ public class BoardDevPanel {
 
         Board3DViewWindow win = new Board3DViewWindow(mini);
         win.show();
-        win.getStage().setTitle("Preview (" + tx + "," + tz + ") — A/D to turn");
+        win.getStage().setTitle("Preview (" + tx + "," + tz + ") — A/D turn  PgUp/PgDn pitch");
 
         int[] facing = {0};
         win.positionPreviewCamera(C, C, facing[0]);
@@ -660,6 +660,8 @@ public class BoardDevPanel {
             switch (e.getCode()) {
                 case A, LEFT  -> facing[0] = (facing[0] + 1) % 4;
                 case D, RIGHT -> facing[0] = (facing[0] + 3) % 4;
+                case PAGE_UP   -> { win.adjustPitch(-5); return; }
+                case PAGE_DOWN -> { win.adjustPitch(+5); return; }
                 default -> { return; }
             }
             win.positionPreviewCamera(C, C, facing[0]);

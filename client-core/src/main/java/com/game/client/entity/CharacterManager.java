@@ -100,6 +100,13 @@ public class CharacterManager {
         applyState(e, v);
     }
 
+    public void setVisible(String id, boolean visible) {
+        Visual v = visuals.get(id);
+        if (v != null) v.root.setCullHint(visible
+                ? com.jme3.scene.Spatial.CullHint.Dynamic
+                : com.jme3.scene.Spatial.CullHint.Always);
+    }
+
     public void removeEntity(String id) {
         entities.remove(id);
         Visual v = visuals.remove(id);

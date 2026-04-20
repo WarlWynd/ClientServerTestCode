@@ -13,6 +13,7 @@ import com.jme3.app.state.BaseAppState;
 import com.jme3.asset.AssetManager;
 import com.jme3.material.Material;
 import com.jme3.material.RenderState;
+import com.jme3.material.RenderState.BlendMode;
 import com.jme3.math.ColorRGBA;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Geometry;
@@ -21,6 +22,7 @@ import com.jme3.scene.shape.Quad;
 import com.simsilica.lemur.Button;
 import com.simsilica.lemur.Container;
 import com.simsilica.lemur.Label;
+import com.simsilica.lemur.component.QuadBackgroundComponent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,11 +43,19 @@ public class HUDAppState extends BaseAppState {
     private static final int BTN_GAP    = 4;
     private static final int BTN_MARGIN = 12;
 
-    // Colors
+    // Minimap colors
     private static final ColorRGBA COLOR_WALL   = new ColorRGBA(0.13f, 0.11f, 0.09f, 1f);
     private static final ColorRGBA COLOR_FLOOR  = new ColorRGBA(0.52f, 0.47f, 0.42f, 1f);
     private static final ColorRGBA COLOR_PLAYER = new ColorRGBA(1.00f, 0.88f, 0.08f, 1f);
     private static final ColorRGBA COLOR_MAP_BG = new ColorRGBA(0.04f, 0.04f, 0.04f, 1f);
+
+    // RPG UI palette
+    private static final ColorRGBA COLOR_GOLD      = new ColorRGBA(0.92f, 0.76f, 0.18f, 1.00f);
+    private static final ColorRGBA COLOR_GOLD_DIM  = new ColorRGBA(0.58f, 0.42f, 0.06f, 0.95f);
+    private static final ColorRGBA COLOR_BTN_BG    = new ColorRGBA(0.12f, 0.08f, 0.05f, 0.92f);
+    private static final ColorRGBA COLOR_PANEL_BG  = new ColorRGBA(0.07f, 0.04f, 0.02f, 0.90f);
+    private static final ColorRGBA COLOR_HP        = new ColorRGBA(0.90f, 0.20f, 0.10f, 1.00f);
+    private static final ColorRGBA COLOR_MP        = new ColorRGBA(0.20f, 0.46f, 0.95f, 1.00f);
 
     private final NetworkAppState        network;
     private final DungeonMap             map;
@@ -144,10 +154,21 @@ public class HUDAppState extends BaseAppState {
 
     private void buildStats(int screenH) {
         statsPanel = new Container();
-        statsPanel.addChild(new Label(SessionStore.getUsername()));
-        hpLabel   = statsPanel.addChild(new Label("HP: —"));
-        manaLabel = statsPanel.addChild(new Label("MP: —"));
-        // Top-left: container grows downward from its top edge
+        statsPanel.setBackground(new QuadBackgroundComponent(COLOR_PANEL_BG));
+
+        Label nameLabel = new Label(SessionStore.getUsername());
+        nameLabel.setColor(COLOR_GOLD);
+        nameLabel.setFontSize(15f);
+        statsPanel.addChild(nameLabel);
+
+        hpLabel = new Label("HP: —");
+        hpLabel.setColor(COLOR_HP);
+        statsPanel.addChild(hpLabel);
+
+        manaLabel = new Label("MP: —");
+        manaLabel.setColor(COLOR_MP);
+        statsPanel.addChild(manaLabel);
+
         statsPanel.setLocalTranslation(10, screenH - 10, 1);
     }
 
@@ -193,6 +214,15 @@ public class HUDAppState extends BaseAppState {
             2);
     }
 
+    private Geometry rpgQuad(float w, float h, ColorRGBA color) {
+        Geometry g = new Geometry("rq", new Quad(w, h));
+        Material m = new Material(am, "Common/MatDefs/Misc/Unshaded.j3md");
+        m.setColor("Color", color.clone());
+        if (color.a < 1f) m.getAdditionalRenderState().setBlendMode(RenderState.BlendMode.Alpha);
+        g.setMaterial(m);
+        return g;
+    }
+
     private Geometry quad(AssetManager am, int w, int h, ColorRGBA color) {
         Geometry g = new Geometry("q", new Quad(w, h));
         Material m = new Material(am, "Common/MatDefs/Misc/Unshaded.j3md");
@@ -230,22 +260,32 @@ public class HUDAppState extends BaseAppState {
 
     private void addArrowBtn(ArrowMesh.Dir dir, int col, int row, Runnable action) {
         float bx = BTN_MARGIN + col * (BTN_SIZE + BTN_GAP);
-        float by = BTN_MARGIN + row * (BTN_SIZE + BTN_GAP) + BTN_SIZE;  // Lemur top-left
+        float by = BTN_MARGIN + row * (BTN_SIZE + BTN_GAP) + BTN_SIZE;
 
-        // Lemur button for click detection — empty label, just the button background
+        // Lemur button top-left is at (bx, by), extends DOWN by BTN_SIZE.
+        // Quad origin is bottom-left, extends UP — so we offset by -BTN_SIZE in Y.
+        Geometry border = rpgQuad(BTN_SIZE + 6, BTN_SIZE + 6, COLOR_GOLD_DIM);
+        border.setLocalTranslation(bx - 3, by - BTN_SIZE - 3, -0.5f);
+        buttonsNode.attachChild(border);
+
+        Geometry fill = rpgQuad(BTN_SIZE, BTN_SIZE, COLOR_BTN_BG);
+        fill.setLocalTranslation(bx, by - BTN_SIZE, 0f);
+        buttonsNode.attachChild(fill);
+
+        // Lemur button — transparent bg, used only for click detection
         Button btn = new Button("");
+        btn.setBackground(new QuadBackgroundComponent(new ColorRGBA(0, 0, 0, 0)));
         btn.setPreferredSize(new Vector3f(BTN_SIZE, BTN_SIZE, 0));
-        btn.setLocalTranslation(bx, by, 0);
+        btn.setLocalTranslation(bx, by, 0.5f);
         btn.addClickCommands(src -> action.run());
         buttonsNode.attachChild(btn);
 
-        // Arrow geometry overlaid at button centre (Lemur top-left + half size → centre)
+        // Gold arrow symbol
         float cx = bx + BTN_SIZE * 0.5f;
         float cy = by - BTN_SIZE * 0.5f;
-
         Geometry arrow = new Geometry("arrow_" + dir, ArrowMesh.build(dir, BTN_SIZE * 0.56f));
         Material mat = new Material(am, "Common/MatDefs/Misc/Unshaded.j3md");
-        mat.setColor("Color", new ColorRGBA(0.95f, 0.92f, 1.0f, 1f));
+        mat.setColor("Color", COLOR_GOLD);
         mat.getAdditionalRenderState().setFaceCullMode(RenderState.FaceCullMode.Off);
         arrow.setMaterial(mat);
         arrow.setLocalTranslation(cx, cy, 1f);
@@ -259,16 +299,28 @@ public class HUDAppState extends BaseAppState {
         ActionSlot[] slots = ActionSlot.values();
         actionBtns = new Button[slots.length];
 
-        // 2 columns × 3 rows, anchored bottom-right
         int cols = 2;
         for (int i = 0; i < slots.length; i++) {
             int col = i % cols;
             int row = i / cols;
-            Button btn = new Button(slots[i].label);
-            btn.setPreferredSize(new Vector3f(BTN_SIZE, BTN_SIZE, 0));
             float x = screenW - BTN_MARGIN - (cols - col) * (BTN_SIZE + BTN_GAP) + BTN_GAP;
             float y = BTN_MARGIN + row * (BTN_SIZE + BTN_GAP) + BTN_SIZE;
-            btn.setLocalTranslation(x, y, 0);
+
+            // Same Quad-vs-Lemur origin correction: offset down by BTN_SIZE.
+            Geometry border = rpgQuad(BTN_SIZE + 6, BTN_SIZE + 6, COLOR_GOLD_DIM);
+            border.setLocalTranslation(x - 3, y - BTN_SIZE - 3, -0.5f);
+            actionNode.attachChild(border);
+
+            Geometry fill = rpgQuad(BTN_SIZE, BTN_SIZE, COLOR_BTN_BG);
+            fill.setLocalTranslation(x, y - BTN_SIZE, 0f);
+            actionNode.attachChild(fill);
+
+            Button btn = new Button(slots[i].label);
+            btn.setPreferredSize(new Vector3f(BTN_SIZE, BTN_SIZE, 0));
+            btn.setLocalTranslation(x, y, 0.5f);
+            btn.setBackground(new QuadBackgroundComponent(new ColorRGBA(0, 0, 0, 0)));
+            btn.setColor(COLOR_GOLD);
+            btn.setFontSize(12f);
             // TODO: wire to combat actions when combat system is ready
             actionBtns[i] = btn;
             actionNode.attachChild(btn);

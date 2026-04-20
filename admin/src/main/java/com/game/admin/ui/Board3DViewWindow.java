@@ -105,6 +105,12 @@ public class Board3DViewWindow {
 
     public Stage getStage() { return stage; }
 
+    /** Adjust camera pitch by delta degrees; clamped to [-30°, 60°]. W = look up, S = look down. */
+    public void adjustPitch(double delta) {
+        double cur = pitchRotate.getAngle();
+        pitchRotate.setAngle(Math.max(-30, Math.min(60, cur + delta)));
+    }
+
     /** Preview tile: first call snaps instantly, subsequent A/D turns animate. */
     public void positionPreviewCamera(int px, int pz, int facing) {
         if (camera == null) return;

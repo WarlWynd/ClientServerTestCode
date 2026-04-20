@@ -21,9 +21,14 @@ public class DungeonRenderer {
     public static Node buildScene(DungeonMap map, AssetManager assets) {
         Node root = new Node("dungeon");
 
-        Material floorMat = lit(assets, new ColorRGBA(0.40f, 0.35f, 0.30f, 1f));
-        Material wallMat  = lit(assets, new ColorRGBA(0.22f, 0.20f, 0.18f, 1f));
-        Material ceilMat  = lit(assets, new ColorRGBA(0.12f, 0.10f, 0.09f, 1f));
+        // Specular tones match admin Board3DViewWindow: wall=cool grey, floor=warm grey, ceil=dark
+        Material floorMat = textured(assets, "Stone", null,
+                new ColorRGBA(0.58f, 0.50f, 0.42f, 1f), 12f);
+        Material wallMat  = textured(assets, "Stone", null,
+                new ColorRGBA(0.45f, 0.50f, 0.58f, 1f), 32f);
+        Material ceilMat  = textured(assets, "Stone",
+                new ColorRGBA(0.22f, 0.22f, 0.22f, 1f),
+                new ColorRGBA(0.10f, 0.10f, 0.12f, 1f), 4f);
 
         float ts = DungeonMap.TILE_SIZE;
         float wh = DungeonMap.WALL_HEIGHT;
@@ -64,7 +69,8 @@ public class DungeonRenderer {
 
     private static Node buildPerimeterWalls(DungeonMap map, AssetManager assets) {
         Node walls = new Node("perimeterWalls");
-        Material mat = lit(assets, new ColorRGBA(0.35f, 0.32f, 0.28f, 1f));
+        Material mat = textured(assets, "Stone", null,
+                new ColorRGBA(0.45f, 0.50f, 0.58f, 1f), 32f);
 
         float ts   = DungeonMap.TILE_SIZE;
         float totalW = map.width * ts;   // world width  (X)
@@ -107,19 +113,17 @@ public class DungeonRenderer {
         return g;
     }
 
-    private static Material lit(AssetManager assets, ColorRGBA diffuse) {
+    private static Material textured(AssetManager assets, String texName,
+                                     ColorRGBA tint, ColorRGBA specular, float shininess) {
         Material m = new Material(assets, "Common/MatDefs/Light/Lighting.j3md");
-        m.setBoolean("UseMaterialColors", true);
-        m.setColor("Diffuse",  diffuse);
-        m.setColor("Ambient",  diffuse.mult(0.4f));
-        m.setColor("Specular", new ColorRGBA(0.15f, 0.12f, 0.08f, 1f));
-        m.setFloat("Shininess", 8f);
-        return m;
-    }
-
-    private static Material unshaded(AssetManager assets, ColorRGBA color) {
-        Material m = new Material(assets, "Common/MatDefs/Misc/Unshaded.j3md");
-        m.setColor("Color", color);
+        m.setTexture("DiffuseMap", ProceduralTextures.get(texName));
+        if (tint != null) {
+            m.setBoolean("UseMaterialColors", true);
+            m.setColor("Diffuse", tint);
+            m.setColor("Ambient", tint.mult(0.4f));
+        }
+        m.setColor("Specular", specular);
+        m.setFloat("Shininess", shininess);
         return m;
     }
 }

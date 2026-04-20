@@ -11,10 +11,13 @@ import com.game.client.entity.CharacterState;
 import com.jme3.app.Application;
 import com.jme3.app.SimpleApplication;
 import com.jme3.app.state.BaseAppState;
+import com.jme3.input.KeyInput;
+import com.jme3.input.controls.ActionListener;
+import com.jme3.input.controls.KeyTrigger;
 import com.jme3.light.AmbientLight;
-import com.jme3.light.DirectionalLight;
+import com.jme3.light.PointLight;
 import com.jme3.math.ColorRGBA;
-import com.jme3.math.Quaternion;
+import com.jme3.math.FastMath;
 import com.jme3.math.Vector3f;
 import com.jme3.renderer.Camera;
 import org.slf4j.Logger;
@@ -36,9 +39,7 @@ public class DungeonWorldAppState extends BaseAppState {
 
     private static final Logger log = LoggerFactory.getLogger(DungeonWorldAppState.class);
 
-    // Camera sits this far behind (+Z in player-local space) and above
-    private static final float CAM_BACK = 7f;
-    private static final float CAM_UP   = 4f;
+    private static final float EYE_H = 1.6f;
 
     private final NetworkAppState network;
     private SimpleApplication app;
@@ -51,6 +52,22 @@ public class DungeonWorldAppState extends BaseAppState {
     private CharacterManager       chars;
     private GridMovementController controller;
     private float                  walkTimer = 0f;
+    private PointLight             torchLight;
+
+    // Smooth camera interpolation
+    private static final float     CAM_SMOOTH = 15f;   // exponential decay factor
+    private final Vector3f         camPos     = new Vector3f();
+    private final Vector3f         camTarget  = new Vector3f();
+    private float                  camYaw     = 0f;
+    private float                  camYawTarget = 0f;
+    private float                  camPitch   = 0f;   // degrees; W=up(+), S=down(-)
+    private static final float     PITCH_STEP = 5f;
+    private static final float     PITCH_MAX  = 30f;
+    private boolean                firstSync  = true;
+
+    private static final String PITCH_UP   = "dw_pitch_up";
+    private static final String PITCH_DOWN = "dw_pitch_down";
+    private ActionListener      pitchListener;
 
     public DungeonWorldAppState(NetworkAppState network) {
         this.network = network;
@@ -69,13 +86,19 @@ public class DungeonWorldAppState extends BaseAppState {
         buildDungeon();
         spawnPlayer();
         attachMovement();
+        attachPitchInput();
         getStateManager().attach(new HUDAppState(network, map, localPlayer, controller));
 
         log.info("Dungeon world ready — player at ({}, {})", localPlayer.gridX, localPlayer.gridZ);
     }
 
     @Override
-    protected void cleanup(Application app) {}
+    protected void cleanup(Application app) {
+        var im = app.getInputManager();
+        if (pitchListener != null) im.removeListener(pitchListener);
+        for (String m : new String[]{PITCH_UP, PITCH_DOWN})
+            if (im.hasMapping(m)) im.deleteMapping(m);
+    }
 
     @Override protected void onEnable()  {}
     @Override protected void onDisable() {}
@@ -90,21 +113,21 @@ public class DungeonWorldAppState extends BaseAppState {
                 chars.updateEntity(localPlayer);
             }
         }
-        syncCamera();
+        smoothCamera(tpf);
     }
 
     // ── Setup ─────────────────────────────────────────────────────────────────
 
     private void setupLighting() {
-        // Warm torch-light feel: bright ambient so dungeon walls are visible,
-        // directional for shadow definition.
-        AmbientLight ambient = new AmbientLight(new ColorRGBA(0.65f, 0.58f, 0.50f, 1f));
+        // Dark ambient matching admin's 20% grey — dungeon is lit by torch only.
+        AmbientLight ambient = new AmbientLight(new ColorRGBA(0.20f, 0.18f, 0.14f, 1f));
         app.getRootNode().addLight(ambient);
 
-        DirectionalLight torch = new DirectionalLight();
-        torch.setDirection(new Vector3f(-0.4f, -1f, -0.6f).normalizeLocal());
-        torch.setColor(new ColorRGBA(1.0f, 0.85f, 0.60f, 1f));
-        app.getRootNode().addLight(torch);
+        // Warm point light that moves with the camera, matching admin's ffe8a8 torch.
+        torchLight = new PointLight();
+        torchLight.setColor(new ColorRGBA(1.10f, 0.91f, 0.58f, 1f));
+        torchLight.setRadius(DungeonMap.TILE_SIZE * 8);
+        app.getRootNode().addLight(torchLight);
     }
 
     private void buildDungeon() {
@@ -128,6 +151,7 @@ public class DungeonWorldAppState extends BaseAppState {
 
         chars = new CharacterManager(app);
         chars.addEntity(localPlayer);
+        chars.setVisible(localPlayer.id, false);
         syncCamera();
     }
 
@@ -136,30 +160,58 @@ public class DungeonWorldAppState extends BaseAppState {
         getStateManager().attach(controller);
     }
 
+    private void attachPitchInput() {
+        var im = app.getInputManager();
+        im.addMapping(PITCH_UP,   new KeyTrigger(KeyInput.KEY_PGUP));
+        im.addMapping(PITCH_DOWN, new KeyTrigger(KeyInput.KEY_PGDN));
+        pitchListener = this::onPitchAction;
+        im.addListener(pitchListener, PITCH_UP, PITCH_DOWN);
+    }
+
+    private void onPitchAction(String name, boolean isPressed, float tpf) {
+        if (!isPressed) return;
+        if (PITCH_UP.equals(name))   camPitch = Math.min( PITCH_MAX, camPitch + PITCH_STEP);
+        if (PITCH_DOWN.equals(name)) camPitch = Math.max(-PITCH_MAX, camPitch - PITCH_STEP);
+    }
+
     // ── Camera ────────────────────────────────────────────────────────────────
 
+    /** Sets the target the camera smoothly moves toward. First call snaps instantly. */
     private void syncCamera() {
-        float ts = DungeonMap.TILE_SIZE;
+        camTarget.set(map.worldX(localPlayer.gridX), EYE_H, map.worldZ(localPlayer.gridZ));
 
-        // Player world position (standing on floor)
-        Vector3f playerPos = new Vector3f(
-                map.worldX(localPlayer.gridX),
-                0f,
-                map.worldZ(localPlayer.gridZ));
+        // Shortest-path yaw so we never spin 270° when 90° is shorter.
+        float newYaw = localPlayer.facing.toYaw();
+        float delta  = newYaw - camYawTarget;
+        while (delta >  FastMath.PI) delta -= FastMath.TWO_PI;
+        while (delta < -FastMath.PI) delta += FastMath.TWO_PI;
+        camYawTarget += delta;
 
-        // Rotate the "behind + above" offset by player's facing yaw
-        Quaternion rot = new Quaternion();
-        rot.fromAngleAxis(localPlayer.facing.toYaw(), Vector3f.UNIT_Y);
+        if (firstSync) {
+            firstSync = false;
+            camPos.set(camTarget);
+            camYaw = camYawTarget;
+            applyCamera();
+        }
+    }
 
-        // In player-local space: +Z is behind (player faces -Z), +Y is up
-        Vector3f localOffset = new Vector3f(0, CAM_UP, CAM_BACK);
-        Vector3f worldOffset = rot.mult(localOffset);
+    private void smoothCamera(float tpf) {
+        float alpha = 1f - (float) Math.exp(-CAM_SMOOTH * tpf);
+        camPos.interpolateLocal(camTarget, alpha);
+        camYaw += (camYawTarget - camYaw) * alpha;
+        applyCamera();
+    }
 
+    private void applyCamera() {
         Camera cam = app.getCamera();
-        cam.setLocation(playerPos.add(worldOffset));
-
-        // Look at a point slightly above the player's torso
-        cam.lookAt(playerPos.add(0, 1.4f, 0), Vector3f.UNIT_Y);
+        cam.setLocation(camPos);
+        float pitchRad = camPitch * FastMath.DEG_TO_RAD;
+        float cosPitch = FastMath.cos(pitchRad);
+        float sinPitch = FastMath.sin(pitchRad);
+        cam.lookAtDirection(
+            new Vector3f(FastMath.sin(camYaw) * cosPitch, sinPitch, -FastMath.cos(camYaw) * cosPitch),
+            Vector3f.UNIT_Y);
+        if (torchLight != null) torchLight.setPosition(camPos);
     }
 
     // ── Events ────────────────────────────────────────────────────────────────

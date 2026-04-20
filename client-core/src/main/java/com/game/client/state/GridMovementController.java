@@ -11,8 +11,9 @@ import com.jme3.input.controls.KeyTrigger;
 /**
  * Translates keyboard input into discrete grid moves for the local player.
  *
- * W/S = step forward/backward  |  A/D = strafe left/right
- * Q/E = snap-turn 90° left/right
+ * W/Up = step forward  |  S/Down = step backward
+ * A/Left = turn left   |  D/Right = turn right
+ * Q/E = strafe left/right
  *
  * A short cooldown between moves prevents instant cross-room sliding
  * while still feeling responsive.
@@ -47,10 +48,10 @@ public class GridMovementController extends BaseAppState implements ActionListen
         var im = app.getInputManager();
         im.addMapping(FWD,  new KeyTrigger(KeyInput.KEY_W), new KeyTrigger(KeyInput.KEY_UP));
         im.addMapping(BACK, new KeyTrigger(KeyInput.KEY_S), new KeyTrigger(KeyInput.KEY_DOWN));
-        im.addMapping(SL,   new KeyTrigger(KeyInput.KEY_A));
-        im.addMapping(SR,   new KeyTrigger(KeyInput.KEY_D));
-        im.addMapping(TL,   new KeyTrigger(KeyInput.KEY_Q), new KeyTrigger(KeyInput.KEY_LEFT));
-        im.addMapping(TR,   new KeyTrigger(KeyInput.KEY_E), new KeyTrigger(KeyInput.KEY_RIGHT));
+        im.addMapping(TL,   new KeyTrigger(KeyInput.KEY_A), new KeyTrigger(KeyInput.KEY_LEFT));
+        im.addMapping(TR,   new KeyTrigger(KeyInput.KEY_D), new KeyTrigger(KeyInput.KEY_RIGHT));
+        im.addMapping(SL,   new KeyTrigger(KeyInput.KEY_Q));
+        im.addMapping(SR,   new KeyTrigger(KeyInput.KEY_E));
         im.addListener(this, FWD, BACK, SL, SR, TL, TR);
     }
 
