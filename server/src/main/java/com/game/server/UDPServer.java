@@ -33,7 +33,7 @@ public class UDPServer {
 
     private static final Logger log = LoggerFactory.getLogger(UDPServer.class);
 
-    private static final int  RECV_BUFFER_SIZE   = 4096;    // bytes
+    private static final int  RECV_BUFFER_SIZE   = 65507;   // max UDP payload; large enough for admin heightmap chunks
     private static final long PLAYER_TIMEOUT_MS  = 30_000;  // 30 s
 
     private final int port;
@@ -147,7 +147,13 @@ public class UDPServer {
                  ADMIN_RESTART_REQUEST,
                  ADMIN_DEPLOY_REQUEST,
                  ADMIN_SAVE_SETTINGS_REQUEST,
-                 ADMIN_GET_BOARDS_REQUEST -> adminHandler.dispatch(socket, packet, session, addr, port);
+                 ADMIN_GET_BOARDS_REQUEST,
+                 ADMIN_WORLD_LIST_REQUEST,
+                 ADMIN_WORLD_NEW_REQUEST,
+                 ADMIN_WORLD_DELETE_REQUEST,
+                 ADMIN_WORLD_PULL_REQUEST,
+                 ADMIN_WORLD_PUSH_CHUNK,
+                 ADMIN_WORLD_PUSH_DONE -> adminHandler.dispatch(socket, packet, session, addr, port);
             case INVENTORY_REQUEST           -> inventoryHandler.handleRequest(socket, packet, session, addr, port);
             case INVENTORY_GIVE_ITEM_REQUEST -> inventoryHandler.handleGiveItem(socket, packet, session, addr, port);
             case INVENTORY_EQUIP_REQUEST     -> inventoryHandler.handleEquip(socket, packet, session, addr, port);

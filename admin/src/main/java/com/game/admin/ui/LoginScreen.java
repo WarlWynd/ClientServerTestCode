@@ -130,7 +130,7 @@ public class LoginScreen {
             doLogin(emailField.getText(), passwordField.getText());
         });
 
-        stage.setScene(new Scene(root, 300, 260));
+        stage.setScene(new Scene(root, 280, 260));
         stage.show();
         Platform.runLater(emailField::requestFocus);
     }
@@ -176,7 +176,6 @@ public class LoginScreen {
                     packet.payload.get("sessionToken").asText(),
                     packet.payload.get("username").asText());
             stage.setResizable(true);
-            stage.setMaximized(true);
             new DashboardScreen(stage, client).show();
         });
     }

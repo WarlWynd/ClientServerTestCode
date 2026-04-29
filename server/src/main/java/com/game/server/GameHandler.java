@@ -6,11 +6,15 @@ import com.game.server.db.CharacterRepository;
 import com.game.server.db.InventoryRepository;
 import com.game.server.db.ServerSettingsRepository;
 import com.game.server.db.UserRepository;
+import com.game.server.db.WorldRepository;
 import com.game.server.model.PlayerState;
 import com.game.server.model.Session;
 import com.game.shared.Packet;
 import com.game.shared.PacketSerializer;
 import com.game.shared.PacketType;
+import com.game.shared.WorldConstants;
+import com.game.shared.WorldDef;
+import com.game.shared.WorldObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,12 +30,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * Tracks all connected players and handles game-related packets.
  *
  * State is kept in two parallel ConcurrentHashMaps keyed by session token:
- *   - players : token → PlayerState  (position, score, etc.)
- *   - clients  : token → ClientAddr  (IP + port, for broadcasting)
+ *   players : token → PlayerState  (3D position, score, stats)
+ *   clients : token → ClientAddr   (IP + port for broadcasting)
  *
- * After every mutation a full GAME_STATE snapshot is broadcast to all clients.
- * For a larger game you'd switch to delta-compression and fixed-rate ticks, but
- * this is clean and correct for a prototype.
+ * Active world: loaded lazily from the worlds table on first GAME_JOIN.
+ * Falls back to a flat default world if the table is empty.
+ * A WORLD_DEF packet (metadata only — no heightmap) is unicast to each
+ * joining client so they know the world dimensions, spawn point, and objects.
+ * Full heightmap delivery is handled separately (Phase 5).
  */
 public class GameHandler {
 
@@ -39,25 +45,25 @@ public class GameHandler {
 
     private record ClientAddr(InetAddress address, int port) {}
 
-    /** session token → live player state */
-    private final Map<String, PlayerState> players  = new ConcurrentHashMap<>();
-    /** session token → client network address */
-    private final Map<String, ClientAddr>  clients  = new ConcurrentHashMap<>();
+    private final Map<String, PlayerState> players = new ConcurrentHashMap<>();
+    private final Map<String, ClientAddr>  clients = new ConcurrentHashMap<>();
 
     private final CharacterRepository      charRepo     = new CharacterRepository();
     private final UserRepository           userRepo     = new UserRepository();
     private final InventoryRepository      invRepo      = new InventoryRepository();
     private final ServerSettingsRepository settingsRepo = new ServerSettingsRepository();
+    private final WorldRepository          worldRepo    = new WorldRepository();
 
-    /** Current committed game settings — loaded from DB on first use. */
     private volatile ServerSettingsRepository.Settings currentSettings = null;
+    private volatile WorldDef                          activeWorld     = null;
+
+    // ── Settings ──────────────────────────────────────────────────────────────
 
     public ServerSettingsRepository.Settings getSettings() {
         if (currentSettings == null) currentSettings = settingsRepo.load();
         return currentSettings;
     }
 
-    /** Called by AdminPacketHandler after a successful DB save — updates cached settings and broadcasts. */
     public void updateSettings(float gravity, float jumpStrength, float runSpeed,
                                boolean allowRememberPassword, boolean showTestNpc,
                                float testNpcX, float testNpcY,
@@ -78,13 +84,38 @@ public class GameHandler {
         broadcastSettings(socket);
     }
 
-    /**
-     * Records the client address immediately after a successful login.
-     * This ensures FORCE_LOGOUT can reach clients that are still on the login/
-     * character-creation screens and have not yet sent a GAME_JOIN.
-     */
     public void registerLoginAddress(String token, InetAddress addr, int port) {
         clients.put(token, new ClientAddr(addr, port));
+    }
+
+    // ── World ─────────────────────────────────────────────────────────────────
+
+    /** Returns the active world, loading it from DB on first call. Thread-safe. */
+    public WorldDef getActiveWorld() {
+        if (activeWorld == null) {
+            synchronized (this) {
+                if (activeWorld == null) {
+                    try {
+                        WorldDef loaded = worldRepo.findFirst();
+                        activeWorld = (loaded != null)
+                                ? loaded
+                                : WorldDef.createFlat("Default World", WorldConstants.TERRAIN_SIZE);
+                        log.info("Active world: '{}' ({}×{} heightmap)",
+                                activeWorld.name, activeWorld.heightmapSize, activeWorld.heightmapSize);
+                    } catch (Exception e) {
+                        log.warn("Failed to load world from DB, using flat default: {}", e.getMessage());
+                        activeWorld = WorldDef.createFlat("Default World", WorldConstants.TERRAIN_SIZE);
+                    }
+                }
+            }
+        }
+        return activeWorld;
+    }
+
+    /** Replaces the active world (called by admin tools when a world is selected). */
+    public void setActiveWorld(WorldDef world) {
+        this.activeWorld = world;
+        log.info("Active world changed to '{}'", world.name);
     }
 
     // ── Packet handlers ──────────────────────────────────────────────────────
@@ -98,6 +129,7 @@ public class GameHandler {
         clients.put(session.token(), new ClientAddr(addr, port));
         log.info("GAME_JOIN  user='{}' players_online={}", session.username(), players.size());
         sendSettings(socket, addr, port);
+        sendWorldDef(socket, addr, port);
         broadcastGameState(socket);
     }
 
@@ -110,23 +142,20 @@ public class GameHandler {
 
     public void handlePlayerUpdate(DatagramSocket socket, Packet in, Session session) throws Exception {
         PlayerState state = players.get(session.token());
-        if (state == null) return; // player not in game yet — ignore
+        if (state == null) return;
 
         float x     = in.payload.has("x")     ? (float) in.payload.get("x").asDouble()     : state.x;
         float y     = in.payload.has("y")     ? (float) in.payload.get("y").asDouble()     : state.y;
+        float z     = in.payload.has("z")     ? (float) in.payload.get("z").asDouble()     : state.z;
         int   score = in.payload.has("score") ?          in.payload.get("score").asInt()   : state.score;
 
-        // Clamp to world bounds (x: 0–3200, y: 0–2360 with y=0 at floor, y=2360 at sky)
-        x = Math.max(0f, Math.min(3200f, x));
-        y = Math.max(0f, Math.min(2360f, y));
+        WorldDef world    = getActiveWorld();
+        float    halfSize = world.worldSize() / 2f;
+        x = Math.max(-halfSize, Math.min(halfSize, x));
+        z = Math.max(-halfSize, Math.min(halfSize, z));
+        y = Math.max(0f,        Math.min(world.yScale, y));
 
-        state.update(x, y, score);
-
-        // Update client address in case of NAT rebinding
-        clients.put(session.token(), new ClientAddr(
-                clients.get(session.token()).address(), // keep existing — or update if you prefer
-                clients.get(session.token()).port()));
-
+        state.update(x, y, z, score);
         broadcastGameState(socket);
     }
 
@@ -134,17 +163,13 @@ public class GameHandler {
                            InetAddress addr, int port) throws Exception {
         Packet pong = new Packet(PacketType.PONG, in.sessionToken,
                 PacketSerializer.emptyPayload());
-        pong.timestamp = in.timestamp; // echo client's send time so RTT = now - timestamp
+        pong.timestamp = in.timestamp;
         byte[] data = PacketSerializer.serialize(pong);
         socket.send(new DatagramPacket(data, data.length, addr, port));
     }
 
-    // ── Called externally on timeout / logout ────────────────────────────────
+    // ── Force logout / eviction ───────────────────────────────────────────────
 
-    /**
-     * Sends FORCE_LOGOUT to any active game clients whose session tokens are in the list,
-     * then removes them from the game. Used to kick existing sessions on new login.
-     */
     public void forceLogoutTokens(List<String> tokens, DatagramSocket socket) {
         ObjectNode payload = PacketSerializer.mapper().createObjectNode();
         payload.put("message", "You have been logged out because your account signed in from another location.");
@@ -180,16 +205,58 @@ public class GameHandler {
         }
     }
 
-    // ── Settings delivery ────────────────────────────────────────────────────
+    // ── World delivery ────────────────────────────────────────────────────────
 
-    /** Sends current committed settings to a single client (called on GAME_JOIN). */
+    /**
+     * Sends a WORLD_DEF packet to a single client containing world metadata:
+     * name, dimensions, scales, spawn, texture layers, and placed objects.
+     *
+     * The heightmap is NOT included — it exceeds UDP limits. Heightmap
+     * delivery is handled separately via chunked packets (Phase 5).
+     */
+    private void sendWorldDef(DatagramSocket socket, InetAddress addr, int port) throws Exception {
+        WorldDef world = getActiveWorld();
+        ObjectNode payload = PacketSerializer.mapper().createObjectNode();
+        payload.put("id",            world.id);
+        payload.put("name",          world.name);
+        payload.put("heightmapSize", world.heightmapSize);
+        payload.put("xzScale",       world.xzScale);
+        payload.put("yScale",        world.yScale);
+        payload.put("spawnX",        world.spawnX);
+        payload.put("spawnY",        world.spawnY);
+        payload.put("spawnZ",        world.spawnZ);
+
+        ArrayNode layers = payload.putArray("textureLayers");
+        if (world.textureLayers != null)
+            for (String l : world.textureLayers) layers.add(l);
+
+        ArrayNode objects = payload.putArray("objects");
+        if (world.objects != null) {
+            for (WorldObject obj : world.objects) {
+                ObjectNode o = objects.addObject();
+                o.put("instanceId", obj.instanceId);
+                o.put("modelId",    obj.modelId);
+                o.put("x",         obj.x);
+                o.put("y",         obj.y);
+                o.put("z",         obj.z);
+                o.put("yaw",       obj.yaw);
+                o.put("scale",     obj.scale);
+            }
+        }
+
+        byte[] data = PacketSerializer.serialize(new Packet(PacketType.WORLD_DEF, null, payload));
+        socket.send(new DatagramPacket(data, data.length, addr, port));
+        log.debug("WORLD_DEF sent to {}:{} — world='{}'", addr.getHostAddress(), port, world.name);
+    }
+
+    // ── Settings delivery ─────────────────────────────────────────────────────
+
     private void sendSettings(DatagramSocket socket, InetAddress addr, int port) throws Exception {
         byte[] data = PacketSerializer.serialize(
                 new Packet(PacketType.SERVER_SETTINGS, null, buildSettingsPayload()));
         socket.send(new DatagramPacket(data, data.length, addr, port));
     }
 
-    /** Broadcasts current committed settings to all connected clients. */
     private void broadcastSettings(DatagramSocket socket) throws Exception {
         byte[] data = PacketSerializer.serialize(
                 new Packet(PacketType.SERVER_SETTINGS, null, buildSettingsPayload()));
@@ -220,7 +287,7 @@ public class GameHandler {
         return node;
     }
 
-    // ── Broadcast ────────────────────────────────────────────────────────────
+    // ── Broadcast ─────────────────────────────────────────────────────────────
 
     public void broadcastNotice(DatagramSocket socket, String message) throws Exception {
         broadcastNotice(socket, message, 0);
@@ -240,14 +307,13 @@ public class GameHandler {
     private void broadcastGameState(DatagramSocket socket) throws Exception {
         byte[] data = PacketSerializer.serialize(
                 new Packet(PacketType.GAME_STATE, null, buildSnapshot()));
-
         for (ClientAddr ci : clients.values()) {
             socket.send(new DatagramPacket(data, data.length, ci.address(), ci.port()));
         }
     }
 
     private ObjectNode buildSnapshot() {
-        ObjectNode root      = PacketSerializer.mapper().createObjectNode();
+        ObjectNode root       = PacketSerializer.mapper().createObjectNode();
         ArrayNode  playersArr = root.putArray("players");
 
         for (Map.Entry<String, PlayerState> e : players.entrySet()) {
@@ -259,6 +325,7 @@ public class GameHandler {
             node.put("characterName", p.characterName);
             node.put("x",             p.x);
             node.put("y",             p.y);
+            node.put("z",             p.z);
             node.put("score",         p.score);
         }
 
@@ -267,7 +334,10 @@ public class GameHandler {
         return root;
     }
 
-    /** Removes a player by username. Returns the username if found, empty otherwise. */
+    // ── Accessors ─────────────────────────────────────────────────────────────
+
+    public Map<String, PlayerState> getPlayers() { return players; }
+
     public Optional<String> kickByUsername(String username, DatagramSocket socket) {
         String token = players.entrySet().stream()
                 .filter(e -> e.getValue().username.equals(username))
@@ -277,8 +347,4 @@ public class GameHandler {
         removePlayer(token, socket);
         return Optional.of(username);
     }
-
-    // ── Accessors ────────────────────────────────────────────────────────────
-
-    public Map<String, PlayerState> getPlayers() { return players; }
 }

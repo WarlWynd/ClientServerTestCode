@@ -37,6 +37,7 @@ public class DashboardScreen {
     private final ObservableList<PlayerRow> rows         = FXCollections.observableArrayList();
     private final FilteredList<PlayerRow>   filteredRows = new FilteredList<>(rows, p -> true);
     private Timeline ticker;
+    private WorldEditorPanel worldEditor;
 
     public DashboardScreen(Stage stage, AdminUDPClient client) {
         this.stage  = stage;
@@ -51,7 +52,7 @@ public class DashboardScreen {
                 buildItemDevTab(),
                 buildSpellDevTab(),
                 buildQuestDevTab(),
-                buildBoardDevTab(),
+                buildWorldDevTab(),
                 buildAdminTilesTab()
         );
         tabs.getStyleClass().add("tab-pane-dark");
@@ -62,12 +63,14 @@ public class DashboardScreen {
         root.setStyle("-fx-background-color: #1a1a2e;");
         VBox.setVgrow(tabs, Priority.ALWAYS);
 
-        Scene scene = new Scene(root);
+        Scene scene = new Scene(root, 1200, 740);
         applyDarkTheme(scene);
 
         stage.setScene(scene);
         stage.setTitle("Admin Console — " + AdminSession.getUsername());
+        stage.setResizable(true);
         stage.show();
+        stage.setMaximized(true);
 
         ticker = new Timeline(new KeyFrame(Duration.seconds(1), e -> requestPlayerList()));
         ticker.setCycleCount(Timeline.INDEFINITE);
@@ -189,8 +192,9 @@ public class DashboardScreen {
         return tab;
     }
 
-    private Tab buildBoardDevTab() {
-        Tab tab = new Tab("🗺  Board Dev", new BoardDevPanel().build());
+    private Tab buildWorldDevTab() {
+        worldEditor = new WorldEditorPanel(client);
+        Tab tab = new Tab("🌍  World Dev", worldEditor.build());
         tab.setClosable(false);
         return tab;
     }
@@ -372,6 +376,11 @@ public class DashboardScreen {
                         : "Admin change failed: " + packet.payload.get("message").asText();
                 showStatus(msg, ok);
             });
+            case ADMIN_WORLD_LIST_RESPONSE,
+                 ADMIN_WORLD_NEW_RESPONSE,
+                 ADMIN_WORLD_DELETE_RESPONSE,
+                 ADMIN_WORLD_PULL_CHUNK,
+                 ADMIN_WORLD_PUSH_RESPONSE -> { if (worldEditor != null) worldEditor.onPacket(packet); }
             case ERROR -> Platform.runLater(() ->
                     showStatus("Error: " + packet.payload.get("message").asText(), false));
         }

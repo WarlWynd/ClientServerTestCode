@@ -37,6 +37,9 @@ public enum PacketType {
     DUNGEON_MAP,       // server → client: tile grid for the current level
     ENTITY_STATE,      // server → client: all entity positions, facings, states
 
+    // ── Open World ───────────────────────────────────────────────────────────
+    WORLD_DEF,         // server → client: full WorldDef (heightmap + objects)
+
     // ── Server broadcasts ────────────────────────────────────────────────────
     SERVER_NOTICE,
     SERVER_SETTINGS,
@@ -62,6 +65,17 @@ public enum PacketType {
     ADMIN_SET_DEV_RESPONSE,
     ADMIN_GET_BOARDS_REQUEST,
     ADMIN_GET_BOARDS_RESPONSE,
+    ADMIN_WORLD_LIST_REQUEST,
+    ADMIN_WORLD_LIST_RESPONSE,
+    ADMIN_WORLD_NEW_REQUEST,
+    ADMIN_WORLD_NEW_RESPONSE,
+    ADMIN_WORLD_DELETE_REQUEST,
+    ADMIN_WORLD_DELETE_RESPONSE,
+    ADMIN_WORLD_PULL_REQUEST,
+    ADMIN_WORLD_PULL_CHUNK,
+    ADMIN_WORLD_PUSH_CHUNK,
+    ADMIN_WORLD_PUSH_DONE,
+    ADMIN_WORLD_PUSH_RESPONSE,
 
     // ── Inventory ────────────────────────────────────────────────────────
     INVENTORY_REQUEST,

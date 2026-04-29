@@ -1,34 +1,49 @@
 package com.game.client.state;
 
+import com.game.client.world.WorldMovementController;
+import com.game.client.world.WorldRenderer;
+import com.game.shared.WorldConstants;
+import com.game.shared.WorldDef;
 import com.jme3.app.Application;
 import com.jme3.app.SimpleApplication;
 import com.jme3.app.state.BaseAppState;
 import com.jme3.light.AmbientLight;
 import com.jme3.light.DirectionalLight;
 import com.jme3.math.ColorRGBA;
+import com.jme3.math.Vector2f;
 import com.jme3.math.Vector3f;
 import com.jme3.scene.Node;
 import com.jme3.terrain.geomipmap.TerrainQuad;
-import com.jme3.terrain.heightmap.AbstractHeightMap;
-import com.jme3.terrain.heightmap.ImageBasedHeightMap;
-import com.jme3.texture.Texture;
 import com.jme3.util.SkyFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 3D open world — terrain, lighting, sky dome, and camera.
+ * Open 3D world state — terrain, lighting, sky, and character movement.
  *
- * Attaches HUDAppState once the world is ready.
+ * Owns the scene graph for the world and delegates all player input and
+ * kinematic movement to WorldMovementController.
+ *
+ * WorldAppState() — flat default world for testing.
+ * WorldAppState(def) — load a WorldDef received from the server.
  */
 public class WorldAppState extends BaseAppState {
 
     private static final Logger log = LoggerFactory.getLogger(WorldAppState.class);
 
-    private SimpleApplication app;
-    private Node worldNode;
+    private final WorldDef def;
+
+    private SimpleApplication    app;
+    private Node                 worldNode;
+    private TerrainQuad          terrain;
+    private WorldMovementController controller;
 
     public WorldAppState() {
+        this(WorldDef.createFlat("Default World", WorldConstants.TERRAIN_SIZE));
+    }
+
+    public WorldAppState(WorldDef def) {
+        this.def = def;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -36,21 +51,27 @@ public class WorldAppState extends BaseAppState {
     @Override
     protected void initialize(Application application) {
         this.app = (SimpleApplication) application;
-        worldNode = new Node("world");
+        app.getFlyByCamera().setEnabled(false); // WorldMovementController owns all input
 
         setupLighting();
-        setupTerrain();
         setupSky();
-        setupCamera();
 
+        worldNode = WorldRenderer.buildScene(def, app.getAssetManager(), app.getCamera());
+        terrain   = (TerrainQuad) worldNode.getChild("terrain");
         app.getRootNode().attachChild(worldNode);
 
-        log.info("World loaded.");
+        float spawnY = sampleHeight(def.spawnX, def.spawnZ) + WorldMovementController.EYE_HEIGHT;
+        controller = new WorldMovementController(terrain, new Vector3f(def.spawnX, spawnY, def.spawnZ));
+        getStateManager().attach(controller);
+
+        log.info("World '{}' ready — {}×{} heightmap, xzScale={} yScale={}",
+                def.name, def.heightmapSize, def.heightmapSize, def.xzScale, def.yScale);
     }
 
     @Override
     protected void cleanup(Application app) {
-        if (worldNode != null) worldNode.removeFromParent();
+        if (controller != null) getStateManager().detach(controller);
+        if (worldNode   != null) worldNode.removeFromParent();
     }
 
     @Override protected void onEnable()  {}
@@ -60,27 +81,13 @@ public class WorldAppState extends BaseAppState {
 
     private void setupLighting() {
         AmbientLight ambient = new AmbientLight();
-        ambient.setColor(ColorRGBA.White.mult(0.4f));
+        ambient.setColor(ColorRGBA.White.mult(0.45f));
         app.getRootNode().addLight(ambient);
 
         DirectionalLight sun = new DirectionalLight();
-        sun.setDirection(new Vector3f(-0.5f, -1f, -0.5f).normalizeLocal());
+        sun.setDirection(new Vector3f(-0.6f, -1f, -0.4f).normalizeLocal());
         sun.setColor(ColorRGBA.White.mult(1.2f));
         app.getRootNode().addLight(sun);
-    }
-
-    private void setupTerrain() {
-        // Flat placeholder terrain — replace with HeightMap once assets are ready
-        com.jme3.scene.shape.Box ground = new com.jme3.scene.shape.Box(512, 0.5f, 512);
-        com.jme3.scene.Geometry groundGeo = new com.jme3.scene.Geometry("ground", ground);
-
-        com.jme3.material.Material mat = new com.jme3.material.Material(
-                app.getAssetManager(), "Common/MatDefs/Misc/Unshaded.j3md");
-        mat.setColor("Color", new ColorRGBA(0.2f, 0.5f, 0.2f, 1f));
-        groundGeo.setMaterial(mat);
-        groundGeo.setLocalTranslation(0, -0.5f, 0);
-
-        worldNode.attachChild(groundGeo);
     }
 
     private void setupSky() {
@@ -90,17 +97,15 @@ public class WorldAppState extends BaseAppState {
                             "Textures/Sky/Bright/BrightSky.dds",
                             SkyFactory.EnvMapType.CubeMap));
         } catch (Exception e) {
-            // Sky texture not yet present — silently skip
             log.debug("Sky texture not found, skipping sky dome: {}", e.getMessage());
         }
     }
 
-    private void setupCamera() {
-        app.getCamera().setLocation(new Vector3f(0, 10, 30));
-        app.getCamera().lookAt(Vector3f.ZERO, Vector3f.UNIT_Y);
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-        app.getFlyByCamera().setEnabled(true);
-        app.getFlyByCamera().setMoveSpeed(20f);
-        app.getFlyByCamera().setRotationSpeed(2f);
+    private float sampleHeight(float x, float z) {
+        if (terrain == null) return 0f;
+        float h = terrain.getHeight(new Vector2f(x, z));
+        return Float.isNaN(h) ? 0f : h;
     }
 }

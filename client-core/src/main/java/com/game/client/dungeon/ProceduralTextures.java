@@ -5,6 +5,9 @@ import com.jme3.texture.Texture2D;
 import com.jme3.texture.image.ColorSpace;
 import com.jme3.util.BufferUtils;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +26,11 @@ public class ProceduralTextures {
     }
 
     private static Texture2D generate(String name) {
+        String base = "/textures/" + name.toLowerCase().replace(" ", "_");
+        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
+            Texture2D loaded = loadImage(base + ext);
+            if (loaded != null) return loaded;
+        }
         return switch (name) {
             case "Stone"       -> stone();
             case "Brick"       -> brick();
@@ -32,8 +40,11 @@ public class ProceduralTextures {
             case "Marble"      -> marble();
             case "Wood Planks" -> woodPlanks();
             case "Dirt"        -> dirt();
-            case "Grass"       -> grass();
-            default            -> stone();
+            case "Grass"          -> grass();
+            case "Ancient Tunnel" -> ancientTunnel();
+            case "Castle"        -> brick();
+            case "Dungeon Wall"  -> cave();
+            default              -> stone();
         };
     }
 
@@ -178,6 +189,91 @@ public class ProceduralTextures {
             p.set(x, y, clamp(42 + (int)(n * 18)), clamp(112 + (int)(n * 32) + (int)blade), clamp(28 + (int)(n * 10)));
         }
         return p.toTexture();
+    }
+
+    private static Texture2D ancientTunnel() {
+        Pixels p = new Pixels();
+        int[] blockW = {48, 52, 44, 56, 50};
+        int[] blockH = {36, 40, 34, 38, 42};
+        for (int y = 0; y < S; y++) {
+            for (int x = 0; x < S; x++) {
+                int rowEst = y / 38;
+                int bH     = blockH[rowEst % blockH.length];
+                int row    = y / bH;
+                int offX   = (row % 2 == 0) ? 0 : 26;
+                int bW     = blockW[(row + x / 50) % blockW.length];
+                int lx     = (x + offX) % bW;
+                int ly     = y % bH;
+                int mortar = 2;
+                boolean isMortar   = lx < mortar || lx >= bW - mortar || ly < mortar || ly >= bH - mortar;
+                boolean nearMortar = lx < 5 || lx >= bW - 5 || ly < 5 || ly >= bH - 5;
+
+                int blockId = (x + offX) / bW * 7 + row * 31;
+                float age   = fbm(x * 0.022f, y * 0.022f, 4321) * 38;
+                int base    = clamp(88 + hash(blockId, 3) % 18 + (int) age);
+                int r = clamp(base + 12), g = clamp(base + 6), b = clamp(base - 4);
+
+                if (isMortar) {
+                    int mv = clamp(52 + (int)(fbm(x * 0.08f, y * 0.08f, 999) * 14));
+                    p.set(x, y, mv - 2, mv, mv + 3);
+                    continue;
+                }
+
+                float stain = fbm(x * 0.038f, y * 0.038f, 7777);
+                if (stain > 0.68f) { r = clamp(r - 28); g = clamp(g - 22); b = clamp(b - 18); }
+
+                float moss = fbm(x * 0.055f, y * 0.055f, 2222);
+                if (moss > 0.64f && nearMortar) {
+                    float m = (moss - 0.64f) * 2.8f;
+                    r = clamp((int)(r * (1 - m) + 42  * m));
+                    g = clamp((int)(g * (1 - m) + 88  * m));
+                    b = clamp((int)(b * (1 - m) + 34  * m));
+                }
+
+                float drip = smoothNoise(x * 0.18f, y * 0.028f, 5555);
+                if (drip > 0.72f) { r = clamp(r - 18); g = clamp(g - 14); b = clamp(b - 8); }
+
+                float crack = fbm(x * 0.12f + (float)Math.sin(y * 0.07f) * 3, y * 0.09f, 3333);
+                if (crack > 0.80f) { r = clamp(r - 35); g = clamp(g - 30); b = clamp(b - 25); }
+
+                int chisel = Math.abs(((x * 5 - y * 2) % 41) - 20);
+                if (chisel < 1 && !nearMortar) { r = clamp(r - 12); g = clamp(g - 10); b = clamp(b - 8); }
+
+                if (hash(blockId, 17) % 12 == 0) {
+                    int gx = lx - bW / 2, gy = ly - bH / 2;
+                    if (Math.abs(gx) < 8 && Math.abs(gy) < 8 && (Math.abs(gx) < 1 || Math.abs(gy) < 1)) {
+                        r = clamp(r - 20); g = clamp(g - 16); b = clamp(b - 12);
+                    }
+                }
+
+                p.set(x, y, r, g, b);
+            }
+        }
+        return p.toTexture();
+    }
+
+    private static Texture2D loadImage(String resource) {
+        try (InputStream is = ProceduralTextures.class.getResourceAsStream(resource)) {
+            if (is == null) return null;
+            BufferedImage bi = ImageIO.read(is);
+            if (bi == null) return null;
+            int w = bi.getWidth(), h = bi.getHeight();
+            ByteBuffer buf = BufferUtils.createByteBuffer(w * h * 4);
+            for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+                int argb = bi.getRGB(x, y);
+                buf.put((byte)((argb >> 16) & 0xFF));
+                buf.put((byte)((argb >>  8) & 0xFF));
+                buf.put((byte)( argb        & 0xFF));
+                buf.put((byte)((argb >> 24) & 0xFF));
+            }
+            buf.flip();
+            Image img = new Image(Image.Format.RGBA8, w, h, buf, ColorSpace.sRGB);
+            Texture2D tex = new Texture2D(img);
+            tex.setWrap(com.jme3.texture.Texture.WrapMode.Repeat);
+            return tex;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ── Noise ─────────────────────────────────────────────────────────────────

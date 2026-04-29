@@ -1,7 +1,7 @@
 package com.game.client;
 
-import com.game.client.state.DungeonWorldAppState;
 import com.game.client.state.NetworkAppState;
+import com.game.client.state.WorldAppState;
 import com.jme3.app.SimpleApplication;
 import com.jme3.math.ColorRGBA;
 import com.simsilica.lemur.Button;
@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  *
  * Boot order:
  *   1. NetworkAppState      — UDP connection lifecycle
- *   2. DungeonWorldAppState — 3D world (login already completed via JavaFX LoginWindow)
+ *   2. WorldAppState        — open 3D world (login already completed via JavaFX LoginWindow)
  */
 public class ClientMain extends SimpleApplication {
 
@@ -28,8 +28,6 @@ public class ClientMain extends SimpleApplication {
 
     @Override
     public void simpleInitApp() {
-        flyCam.setEnabled(false);
-
         // Prevent Escape from killing the app
         inputManager.deleteMapping(INPUT_MAPPING_EXIT);
 
@@ -37,7 +35,7 @@ public class ClientMain extends SimpleApplication {
         applyStyles();
 
         NetworkAppState network = new NetworkAppState();
-        stateManager.attachAll(network, new DungeonWorldAppState(network));
+        stateManager.attachAll(network, new WorldAppState());
     }
 
     @Override

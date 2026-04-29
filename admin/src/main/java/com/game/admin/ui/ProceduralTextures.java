@@ -21,9 +21,11 @@ public class ProceduralTextures {
     }
 
     private static Image generate(String name) {
-        String res = "/textures/" + name.toLowerCase().replace(" ", "_") + ".png";
-        var url = ProceduralTextures.class.getResource(res);
-        if (url != null) return new Image(url.toExternalForm());
+        String base = "/textures/" + name.toLowerCase().replace(" ", "_");
+        for (String ext : new String[]{".png", ".jpg", ".jpeg"}) {
+            var url = ProceduralTextures.class.getResource(base + ext);
+            if (url != null) return new Image(url.toExternalForm());
+        }
         return switch (name) {
             case "Stone"       -> stone();
             case "Brick"       -> brick();
@@ -33,8 +35,11 @@ public class ProceduralTextures {
             case "Marble"      -> marble();
             case "Wood Planks" -> woodPlanks();
             case "Dirt"        -> dirt();
-            case "Grass"       -> grass();
-            default            -> stone();
+            case "Grass"          -> grass();
+            case "Ancient Tunnel" -> ancientTunnel();
+            case "Castle"        -> brick();
+            case "Dungeon Wall"  -> cave();
+            default              -> stone();
         };
     }
 
@@ -218,6 +223,78 @@ public class ProceduralTextures {
                 pw.setArgb(x, y, rgb(clamp(42  + (int)(n * 18)),
                                      clamp(112 + (int)(n * 32) + (int)blade),
                                      clamp(28  + (int)(n * 10))));
+            }
+        }
+        return img;
+    }
+
+    private static WritableImage ancientTunnel() {
+        WritableImage img = img();
+        PixelWriter pw = img.getPixelWriter();
+        // Stone block grid — large irregular blocks
+        int[] blockW = {48, 52, 44, 56, 50};
+        int[] blockH = {36, 40, 34, 38, 42};
+        for (int y = 0; y < S; y++) {
+            for (int x = 0; x < S; x++) {
+                // Determine block cell using staggered rows
+                int rowEst = y / 38;
+                int bH     = blockH[rowEst % blockH.length];
+                int row    = y / bH;
+                int offX   = (row % 2 == 0) ? 0 : 26;
+                int bW     = blockW[(row + x / 50) % blockW.length];
+                int lx     = (x + offX) % bW;
+                int ly     = y % bH;
+                int mortar = 2;
+                boolean isMortar = lx < mortar || lx >= bW - mortar || ly < mortar || ly >= bH - mortar;
+
+                // Base stone color — aged limestone, warm grey-tan
+                int blockId = (x + offX) / bW * 7 + row * 31;
+                float age   = fbm(x * 0.022f, y * 0.022f, 4321) * 38;
+                int base    = clamp(88 + hash(blockId, 3) % 18 + (int) age);
+                int r = clamp(base + 12), g = clamp(base + 6), b = clamp(base - 4);
+
+                if (isMortar) {
+                    // Mortar: darker, slightly cooler
+                    int mv = clamp(52 + (int)(fbm(x * 0.08f, y * 0.08f, 999) * 14));
+                    pw.setArgb(x, y, rgb(mv - 2, mv, mv + 3));
+                    continue;
+                }
+
+                // Age staining — dark blotches from centuries of moisture
+                float stain = fbm(x * 0.038f, y * 0.038f, 7777);
+                if (stain > 0.68f) { r = clamp(r - 28); g = clamp(g - 22); b = clamp(b - 18); }
+
+                // Moss patches — greenish, clusters near mortar lines
+                float moss = fbm(x * 0.055f, y * 0.055f, 2222);
+                boolean nearMortar = lx < 5 || lx >= bW - 5 || ly < 5 || ly >= bH - 5;
+                if (moss > 0.64f && nearMortar) {
+                    float m = (moss - 0.64f) * 2.8f;
+                    r = clamp((int)(r * (1 - m) + 42  * m));
+                    g = clamp((int)(g * (1 - m) + 88  * m));
+                    b = clamp((int)(b * (1 - m) + 34  * m));
+                }
+
+                // Water stain streaks — vertical dark drips
+                float drip = smoothNoise(x * 0.18f, y * 0.028f, 5555);
+                if (drip > 0.72f) { r = clamp(r - 18); g = clamp(g - 14); b = clamp(b - 8); }
+
+                // Surface cracks — irregular fracture lines across blocks
+                float crack = fbm(x * 0.12f + (float)Math.sin(y * 0.07f) * 3, y * 0.09f, 3333);
+                if (crack > 0.80f) { r = clamp(r - 35); g = clamp(g - 30); b = clamp(b - 25); }
+
+                // Chisel marks — diagonal tool lines on block faces
+                int chisel = Math.abs(((x * 5 - y * 2) % 41) - 20);
+                if (chisel < 1 && !nearMortar) { r = clamp(r - 12); g = clamp(g - 10); b = clamp(b - 8); }
+
+                // Rare carved glyph hint — very faint cross-hatch in a few blocks
+                if (hash(blockId, 17) % 12 == 0) {
+                    int gx = lx - bW / 2, gy = ly - bH / 2;
+                    if (Math.abs(gx) < 8 && Math.abs(gy) < 8 && (Math.abs(gx) < 1 || Math.abs(gy) < 1)) {
+                        r = clamp(r - 20); g = clamp(g - 16); b = clamp(b - 12);
+                    }
+                }
+
+                pw.setArgb(x, y, rgb(r, g, b));
             }
         }
         return img;

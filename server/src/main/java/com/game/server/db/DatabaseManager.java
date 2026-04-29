@@ -124,6 +124,29 @@ public final class DatabaseManager {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             """;
 
+    private static final String DDL_WORLDS = """
+            CREATE TABLE IF NOT EXISTS worlds (
+                id              BIGINT        AUTO_INCREMENT PRIMARY KEY,
+                owner_user_id   BIGINT        NOT NULL,
+                name            VARCHAR(100)  NOT NULL,
+                heightmap_size  INT           NOT NULL DEFAULT 257,
+                xz_scale        FLOAT         NOT NULL DEFAULT 4.0,
+                y_scale         FLOAT         NOT NULL DEFAULT 200.0,
+                texture_layers  VARCHAR(200)  NOT NULL DEFAULT 'grass,dirt,rock,snow',
+                spawn_x         FLOAT         NOT NULL DEFAULT 0.0,
+                spawn_y         FLOAT         NOT NULL DEFAULT 0.0,
+                spawn_z         FLOAT         NOT NULL DEFAULT 0.0,
+                heightmap       MEDIUMBLOB    NULL,
+                objects         MEDIUMTEXT    NULL,
+                created_at      TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+                updated_at      TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+                                              ON UPDATE CURRENT_TIMESTAMP,
+                CONSTRAINT fk_world_owner
+                    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """;
+
     private static final String DDL_CHARACTER_INVENTORY = """
             CREATE TABLE IF NOT EXISTS character_inventory (
                 id           BIGINT       AUTO_INCREMENT PRIMARY KEY,
@@ -220,6 +243,8 @@ public final class DatabaseManager {
             stmt.execute(DDL_BOARDS);
             stmt.execute(DDL_BOARD_PROGRESS);
             stmt.execute(DDL_CHARACTER_INVENTORY);
+            stmt.execute(DDL_WORLDS);
+            addColumnIfMissing(conn, "ServerSettings", "starting_world_id", "BIGINT NULL DEFAULT NULL");
         } catch (SQLException e) {
             throw new RuntimeException("Failed to initialise database schema.", e);
         }
